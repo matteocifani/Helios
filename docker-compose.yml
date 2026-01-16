@@ -1,0 +1,60 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# HELIOS PROJECT - Docker Compose Configuration
+# Complete stack: Dashboard + Integration with n8n
+# ═══════════════════════════════════════════════════════════════════════════════
+
+version: '3.8'
+
+services:
+  # ═══════════════════════════════════════════════════════════════════════════
+  # FluidView Dashboard (Streamlit)
+  # ═══════════════════════════════════════════════════════════════════════════
+  helios_dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: helios_fluidview
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+      - N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL:-http://n8n:5678/webhook/chat}
+      - MAPBOX_TOKEN=${MAPBOX_TOKEN:-}
+      - TZ=Europe/Rome
+    volumes:
+      - ./data:/app/data:ro  # Optional: local data files
+    networks:
+      - helios_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  helios_net:
+    driver: bridge
+    name: helios_network
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# NOTES:
+# 
+# This compose file is designed to work alongside your existing n8n setup.
+# If n8n is on the same Docker network, use:
+#   N8N_WEBHOOK_URL=http://n8n_helios_engine:5678/webhook/chat
+#
+# If n8n is exposed via Cloudflare Tunnel, use:
+#   N8N_WEBHOOK_URL=https://your-tunnel-url/webhook/chat
+#
+# To start:
+#   docker compose up -d
+#
+# To view logs:
+#   docker compose logs -f helios_dashboard
+#
+# To rebuild after changes:
+#   docker compose up -d --build
+# ═══════════════════════════════════════════════════════════════════════════════
