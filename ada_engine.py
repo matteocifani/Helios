@@ -80,9 +80,9 @@ class ADAEngine:
             "risk_assessment": self.tool_risk_assessment,
             "solar_potential_calc": self.tool_solar_potential,
             "doc_retriever_rag": self.tool_rag_retriever,
-            "premium_calculator": self.tool_premium_calculator
+            "premium_calculator": self.tool_premium_calculator,
+            "database_explorer": self.tool_database_explorer
         }
-        
         # Tool definitions for Claude (OpenAI-compatible format for OpenRouter)
         self.tool_definitions = [
             {
@@ -197,6 +197,33 @@ class ADAEngine:
                             }
                         },
                         "required": ["risk_score", "product_type"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "database_explorer",
+                    "description": "General purpose database tool. Use this to query tables directly when no specific tool matches. Allows counting records or listing details. useful for questions like 'quante case ha', 'elenca i sinistri', etc.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "table_name": {
+                                "type": "string",
+                                "description": "Table to query",
+                                "enum": ["clienti", "abitazioni", "polizze", "sinistri", "interactions"]
+                            },
+                            "client_id": {
+                                "type": "integer",
+                                "description": "Optional client ID filter"
+                            },
+                            "limit": {
+                                "type": "integer",
+                                "description": "Max records to return (default 10)",
+                                "default": 10
+                            }
+                        },
+                        "required": ["table_name"]
                     }
                 }
             }
@@ -418,22 +445,14 @@ CONTESTO CLIENTE:
         """Tool: Get client profile."""
         print(f"[DEBUG] Executing tool_client_profile for {client_id}")
         try:
-            response = self.supabase.rpc(
-                "get_client_profile",
-                {"p_client_id": client_id}
-            ).execute()
-            
-            if response.data and len(response.data) > 0:
-                return {"profile": response.data}
-
-            # Fallback: manual query
+            # Simple direct queries for reliability
             client = self.supabase.table("clienti").select("*").eq("codice_cliente", client_id).single().execute()
             abit = self.supabase.table("abitazioni").select("*").eq("codice_cliente", client_id).execute()
             
             return {
                 "profile": {
                     "cliente": client.data,
-                    "abitazione": abit.data[0] if abit.data else None
+                    "abitazioni": abit.data if abit.data else []
                 }
             }
             
@@ -634,3 +653,25 @@ CONTESTO CLIENTE:
                 "coverage_factor": round(coverage_factor, 2)
             }
         }
+
+    def tool_database_explorer(self, table_name: str, client_id: Optional[int] = None, limit: int = 10) -> Dict:
+        """Tool: Generic database explorer."""
+        print(f"[DEBUG] Executing tool_database_explorer on {table_name}")
+        try:
+            query = self.supabase.table(table_name).select("*")
+            
+            if client_id:
+                query = query.eq("codice_cliente", client_id)
+            
+            response = query.limit(limit).execute()
+            
+            return {
+                "table": table_name,
+                "count": len(response.data),
+                "data": response.data,
+                "message": f"Retrieved {len(response.data)} records from {table_name}"
+            }
+            
+        except Exception as e:
+            print(f"[ERROR] tool_database_explorer: {e}")
+            return {"error": str(e)}
