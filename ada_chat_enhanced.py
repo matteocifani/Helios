@@ -7,34 +7,43 @@
 
 import os
 import streamlit as st
-from typing import Optional, List, Dict
+from typing import Dict
 from dotenv import load_dotenv
+
+# Import production ADA engine
+print("📦 Importing ada_engine (production version)...")
 from ada_engine import ADAEngine
 
 load_dotenv()
 
 
-def init_ada_engine():
+def init_ada_engine() -> None:
     """Initialize A.D.A. engine with Supabase connection."""
     if "ada_engine" not in st.session_state:
         try:
+            print("=" * 80)
+            print("🔧 INITIALIZING A.D.A. ENGINE")
+            print("=" * 80)
+
             # Import here to avoid circular dependency
             from db_utils import get_supabase_client
-            
+
             supabase = get_supabase_client()
             if supabase:
                 st.session_state.ada_engine = ADAEngine(supabase)
                 st.session_state.ada_mode = "python"  # Using Python engine
+                print("✅ A.D.A. Engine initialized successfully")
             else:
                 st.session_state.ada_engine = None
                 st.session_state.ada_mode = "fallback"
+                print("❌ Supabase connection failed, using fallback mode")
         except Exception as e:
             st.error(f"⚠️ Errore inizializzazione A.D.A.: {e}")
             st.session_state.ada_engine = None
             st.session_state.ada_mode = "fallback"
 
 
-def render_ada_chat():
+def render_ada_chat() -> None:
     """
     Render the A.D.A. chat interface with Python engine.
     """
@@ -133,7 +142,7 @@ def get_ada_response(prompt: str) -> Dict:
 
 
 def get_welcome_message() -> str:
-    """Generate welcome message for A.D.A."""
+    """Generate welcome message for A.D.A. chatbot."""
     return """Ciao! Sono **A.D.A.**, il tuo Augmented Digital Advisor. 🌞
 
 Posso aiutarti a:
@@ -148,8 +157,13 @@ Come posso assisterti oggi?"""
 
 def get_local_response(prompt: str) -> str:
     """
-    Generate a local response when engine is not available.
-    Enhanced fallback with better responses.
+    Generate local fallback response when A.D.A. engine is not available.
+
+    Args:
+        prompt: User's message
+
+    Returns:
+        Contextual help message based on keywords in prompt
     """
     prompt_lower = prompt.lower()
     

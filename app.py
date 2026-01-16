@@ -8,13 +8,19 @@
 
 import streamlit as st
 import pandas as pd
-import numpy as np
 import pydeck as pdk
 from datetime import datetime
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from ada_chat_enhanced import render_ada_chat
+
+# Import constants
+from constants import (
+    DEFAULT_SEISMIC_ZONE,
+    SEISMIC_ZONE_COLORS,
+    ABITAZIONI_COLUMNS,
+)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CONFIGURAZIONE PAGINA
@@ -394,92 +400,83 @@ st.markdown("""
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# DATA SIMULATION (Replace with Supabase connection)
+# DATA LOADING FROM SUPABASE
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @st.cache_data(ttl=300)
 def load_data():
     """
-    Simulated data based on Helios project specifications.
-    In production, replace with Supabase queries.
+    Load real data from Supabase.
     """
-    np.random.seed(42)
-    n_abitazioni = 3634
-    
-    # Italian cities with coordinates (weighted distribution)
-    cities = {
-        'Milano': (45.4642, 9.1900, 2), 'Roma': (41.9028, 12.4964, 2),
-        'Napoli': (40.8518, 14.2681, 1), 'Torino': (45.0703, 7.6869, 3),
-        'Palermo': (38.1157, 13.3615, 2), 'Genova': (44.4056, 8.9463, 3),
-        'Bologna': (44.4949, 11.3426, 3), 'Firenze': (43.7696, 11.2558, 2),
-        'Bari': (41.1171, 16.8719, 3), 'Catania': (37.5079, 15.0830, 1),
-        'Venezia': (45.4408, 12.3155, 4), 'Verona': (45.4384, 10.9916, 3),
-        'Messina': (38.1938, 15.5540, 1), "L'Aquila": (42.3498, 13.3995, 1),
-        'Amatrice': (42.6286, 13.2868, 1), 'Norcia': (42.7931, 13.0927, 1)
-    }
-    
-    city_names = list(cities.keys())
-    weights = [0.15, 0.18, 0.12, 0.08, 0.06, 0.05, 0.07, 0.06, 0.05, 0.04, 
-               0.03, 0.03, 0.02, 0.02, 0.02, 0.02]
-    
-    selected_cities = np.random.choice(city_names, n_abitazioni, p=weights)
-    
-    data = []
-    for i, city in enumerate(selected_cities):
-        lat, lon, zona_sismica = cities[city]
-        # Add jitter for realistic distribution
-        lat += np.random.normal(0, 0.05)
-        lon += np.random.normal(0, 0.05)
-        
-        # Risk calculation based on seismic zone and random factors
-        base_risk = (5 - zona_sismica) * 20  # Zone 1 = high risk
-        hydro_risk = np.random.choice([0, 10, 25, 40], p=[0.5, 0.25, 0.15, 0.1])
-        risk_score = min(100, base_risk + hydro_risk + np.random.randint(-10, 20))
-        
-        # Risk category
-        if risk_score >= 80:
-            risk_category = 'Critico'
-        elif risk_score >= 60:
-            risk_category = 'Alto'
-        elif risk_score >= 40:
-            risk_category = 'Medio'
-        else:
-            risk_category = 'Basso'
-        
-        # Hydrogeological risk
-        hydro_labels = ['Nessuno', 'Alluvione P1', 'Alluvione P2/P3', 'Frana']
-        hydro_idx = np.random.choice([0, 1, 2, 3], p=[0.55, 0.2, 0.15, 0.1])
-        
-        data.append({
-            'id': f'HAB{str(i+1).zfill(5)}',
-            'codice_cliente': f'CLI{str(np.random.randint(1000, 9999))}',
-            'citta': city,
-            'latitudine': lat,
-            'longitudine': lon,
-            'zona_sismica': zona_sismica,
-            'rischio_idrogeologico': hydro_labels[hydro_idx],
-            'risk_score': risk_score,
-            'risk_category': risk_category,
-            'solar_potential_kwh': np.random.randint(2800, 4500) if np.random.random() > 0.3 else None,
-            'premio_attuale': np.random.randint(280, 650),
-            'clv': np.random.randint(5000, 45000),
-            'churn_probability': round(np.random.uniform(0.05, 0.45), 2)
-        })
-    
-    return pd.DataFrame(data)
+    from db_utils import fetch_abitazioni, fetch_clienti
+
+    # Fetch data
+    df_abitazioni = fetch_abitazioni()
+    df_clienti = fetch_clienti()
+
+    if df_abitazioni.empty:
+        # If no data is found, return empty dataframe with expected columns to avoid crashes
+        return pd.DataFrame(columns=ABITAZIONI_COLUMNS)
+
+    # Merge data
+    # We want details of the habitation, enriched with client info (CLV, churn)
+
+    # Rename clv_stimato to clv for compatibility
+    if not df_clienti.empty:
+        df_clienti = df_clienti.rename(columns={'clv_stimato': 'clv'})
+
+        # Select only necessary columns from client to avoid duplicates/conflicts
+        client_cols = ['codice_cliente', 'clv', 'churn_probability']
+        # Filter only existing columns
+        client_cols = [c for c in client_cols if c in df_clienti.columns]
+
+        df_clienti_subset = df_clienti[client_cols]
+
+        # Merge on codice_cliente
+        df = df_abitazioni.merge(df_clienti_subset, on='codice_cliente', how='left')
+    else:
+        # No client data available, use abitazioni only
+        df = df_abitazioni
+        df['clv'] = 0
+        df['churn_probability'] = 0.0
+
+    # Ensure numeric types with protection against invalid values
+    df['risk_score'] = pd.to_numeric(df['risk_score'], errors='coerce').fillna(0)
+    df['clv'] = pd.to_numeric(df['clv'], errors='coerce').fillna(0)
+    df['churn_probability'] = pd.to_numeric(df['churn_probability'], errors='coerce').fillna(0)
+    df['zona_sismica'] = pd.to_numeric(df['zona_sismica'], errors='coerce').fillna(DEFAULT_SEISMIC_ZONE)
+
+    # Fill missing values
+    df['risk_category'] = df['risk_category'].fillna('Non valutato')
+    df['citta'] = df['citta'].fillna('Sconosciuta')
+
+    # Normalize City Names (Title Case)
+    df['citta'] = df['citta'].astype(str).str.title()
+
+    return df
 
 
 def get_risk_stats(df):
     """Calculate risk distribution statistics."""
     stats = df['risk_category'].value_counts()
+    # Protect against division by zero and NaN
+    total = len(df)
+    if total > 0:
+        avg_score = df['risk_score'].mean()
+        avg_score = round(avg_score, 1) if not pd.isna(avg_score) else 0
+        high_risk_pct = round((stats.get('Critico', 0) + stats.get('Alto', 0)) / total * 100, 1)
+    else:
+        avg_score = 0
+        high_risk_pct = 0
+
     return {
         'critico': stats.get('Critico', 0),
         'alto': stats.get('Alto', 0),
         'medio': stats.get('Medio', 0),
         'basso': stats.get('Basso', 0),
-        'total': len(df),
-        'avg_score': round(df['risk_score'].mean(), 1),
-        'high_risk_pct': round((stats.get('Critico', 0) + stats.get('Alto', 0)) / len(df) * 100, 1)
+        'total': total,
+        'avg_score': avg_score,
+        'high_risk_pct': high_risk_pct
     }
 
 
@@ -565,6 +562,10 @@ st.markdown("""
 # Divider
 st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
 
+# Warning if no results match filters
+if len(filtered_df) == 0:
+    st.warning("⚠️ Nessuna abitazione corrisponde ai filtri selezionati. Prova a modificare i criteri nella sidebar.")
+
 # Get stats
 stats = get_risk_stats(filtered_df)
 
@@ -598,14 +599,28 @@ with col3:
 
 with col4:
     solar_coverage = filtered_df['solar_potential_kwh'].notna().sum()
+    # Protect against division by zero when filtered_df is empty
+    if len(filtered_df) > 0:
+        coverage_pct = round(solar_coverage / len(filtered_df) * 100)
+    else:
+        coverage_pct = 0
+
     st.metric(
         label="☀️ Potenziale Solare",
         value=f"{solar_coverage:,}",
-        delta=f"{round(solar_coverage/len(filtered_df)*100)}% analizzati"
+        delta=f"{coverage_pct}% analizzati"
     )
 
 with col5:
-    avg_clv = filtered_df['clv'].mean()
+    # Protect against NaN when filtered_df is empty
+    if len(filtered_df) > 0:
+        avg_clv = filtered_df['clv'].mean()
+        # Handle NaN case (if all CLV values are missing)
+        if pd.isna(avg_clv):
+            avg_clv = 0
+    else:
+        avg_clv = 0
+
     st.metric(
         label="💎 CLV Medio",
         value=f"€{avg_clv:,.0f}",
@@ -668,12 +683,19 @@ with tab1:
         map_df['color_g'] = ((100 - map_df['risk_score']) * 2.55).astype(int)
         map_df['color_b'] = 50
     elif color_by == "Zona Sismica":
-        zone_colors = {1: [255, 69, 58], 2: [255, 159, 10], 3: [255, 214, 10], 4: [48, 209, 88]}
-        map_df['color_r'] = map_df['zona_sismica'].map(lambda x: zone_colors[x][0])
-        map_df['color_g'] = map_df['zona_sismica'].map(lambda x: zone_colors[x][1])
-        map_df['color_b'] = map_df['zona_sismica'].map(lambda x: zone_colors[x][2])
+        # Fill missing zona_sismica with default before mapping to prevent KeyError
+        map_df['zona_sismica'] = map_df['zona_sismica'].fillna(DEFAULT_SEISMIC_ZONE).astype(int)
+        map_df['color_r'] = map_df['zona_sismica'].map(lambda x: SEISMIC_ZONE_COLORS.get(x, SEISMIC_ZONE_COLORS[DEFAULT_SEISMIC_ZONE])[0])
+        map_df['color_g'] = map_df['zona_sismica'].map(lambda x: SEISMIC_ZONE_COLORS.get(x, SEISMIC_ZONE_COLORS[DEFAULT_SEISMIC_ZONE])[1])
+        map_df['color_b'] = map_df['zona_sismica'].map(lambda x: SEISMIC_ZONE_COLORS.get(x, SEISMIC_ZONE_COLORS[DEFAULT_SEISMIC_ZONE])[2])
     elif color_by == "CLV":
-        clv_norm = (map_df['clv'] - map_df['clv'].min()) / (map_df['clv'].max() - map_df['clv'].min())
+        # Avoid division by zero when all CLV values are equal
+        clv_min = map_df['clv'].min()
+        clv_max = map_df['clv'].max()
+        if clv_max > clv_min:
+            clv_norm = (map_df['clv'] - clv_min) / (clv_max - clv_min)
+        else:
+            clv_norm = pd.Series([0.5] * len(map_df), index=map_df.index)  # Neutral color if all equal
         map_df['color_r'] = (255 * (1 - clv_norm)).astype(int)
         map_df['color_g'] = (215 * clv_norm).astype(int)
         map_df['color_b'] = 100
@@ -690,9 +712,19 @@ with tab1:
     }
     
     # Create PyDeck map
+    # Protect against NaN when filtered_df is empty - use center of Italy as fallback
+    if len(filtered_df) > 0:
+        center_lat = filtered_df['latitudine'].mean()
+        center_lon = filtered_df['longitudine'].mean()
+        # Handle NaN if all coordinates are missing
+        if pd.isna(center_lat) or pd.isna(center_lon):
+            center_lat, center_lon = 41.9028, 12.4964  # Rome
+    else:
+        center_lat, center_lon = 41.9028, 12.4964  # Rome as default
+
     view_state = pdk.ViewState(
-        latitude=filtered_df['latitudine'].mean(),
-        longitude=filtered_df['longitudine'].mean(),
+        latitude=center_lat,
+        longitude=center_lon,
         zoom=5.5,
         pitch=45,
         bearing=0
@@ -732,7 +764,6 @@ with tab1:
                     <hr style="border-color: rgba(255,255,255,0.1); margin: 8px 0;">
                     <span style="color: #F0F6FC;">🎯 Risk Score: <b>{risk_score}</b></span><br>
                     <span style="color: #F0F6FC;">🌍 Zona Sismica: <b>{zona_sismica}</b></span><br>
-                    <span style="color: #F0F6FC;">💧 Idrogeo: {rischio_idrogeologico}</span><br>
                     <span style="color: #F0F6FC;">💎 CLV: €{clv}</span>
                 </div>
             """,
@@ -907,26 +938,28 @@ with tab2:
         st.plotly_chart(fig_scatter, use_container_width=True)
     
     with analytics_col4:
-        # Hydrogeological Risk Breakdown
-        hydro_counts = filtered_df['rischio_idrogeologico'].value_counts()
-        
-        fig_hydro = go.Figure(data=[go.Bar(
-            y=hydro_counts.index,
-            x=hydro_counts.values,
+        # Churn Probability Distribution
+        churn_bins = pd.cut(filtered_df['churn_probability'], bins=[0, 0.2, 0.4, 0.6, 0.8, 1.0],
+                           labels=['Molto Basso', 'Basso', 'Medio', 'Alto', 'Molto Alto'])
+        churn_counts = churn_bins.value_counts().sort_index()
+
+        fig_churn = go.Figure(data=[go.Bar(
+            y=churn_counts.index.astype(str),
+            x=churn_counts.values,
             orientation='h',
             marker=dict(
-                color=['#30D158', '#0A84FF', '#5E5CE6', '#FF453A'][:len(hydro_counts)],
+                color=['#30D158', '#0A84FF', '#FFD60A', '#FF9F0A', '#FF453A'][:len(churn_counts)],
                 line=dict(color='rgba(255,255,255,0.2)', width=1)
             ),
-            text=hydro_counts.values,
+            text=churn_counts.values,
             textposition='outside',
             textfont=dict(family='JetBrains Mono', size=11, color='#F0F6FC'),
-            hovertemplate="<b>%{y}</b><br>%{x:,} abitazioni<extra></extra>"
+            hovertemplate="<b>%{y}</b><br>%{x:,} clienti<extra></extra>"
         )])
-        
-        fig_hydro.update_layout(
+
+        fig_churn.update_layout(
             title=dict(
-                text="Rischio Idrogeologico",
+                text="Distribuzione Churn Probability",
                 font=dict(family='Outfit', size=18, color='#F0F6FC'),
                 x=0.5
             ),
@@ -945,8 +978,8 @@ with tab2:
             height=400,
             margin=dict(t=60, b=40, l=120, r=60)
         )
-        
-        st.plotly_chart(fig_hydro, use_container_width=True)
+
+        st.plotly_chart(fig_churn, use_container_width=True)
     
     st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
     

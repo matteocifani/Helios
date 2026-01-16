@@ -1,20 +1,25 @@
 # 🐍 A.D.A. PYTHON ENGINE - Guida Rapida
 
+**✅ AGGIORNATO: Gennaio 2026 - Versione Production**
+
 ## ✅ SETUP (5 minuti)
 
-### 1. Copia i File
+### 1. File del Progetto
 
-Nella cartella del tuo progetto Streamlit, sostituisci/aggiungi:
+Struttura attuale del progetto:
 
 ```
 helios_dashboard/
-├── ada_engine.py          # ← NUOVO (core engine)
-├── ada_chat_enhanced.py   # ← SOSTITUISCE ada_chat.py
-├── db_utils.py            # ← Mantieni quello esistente
-├── app.py                 # ← Aggiorna l'import
-├── requirements.txt       # ← Aggiorna
-└── .env                   # ← Aggiungi OPENROUTER_API_KEY
+├── ada_engine.py          # ✅ Core engine (production version)
+├── ada_chat_enhanced.py   # ✅ UI Streamlit per A.D.A.
+├── constants.py           # ✅ NUOVO - Costanti centralizzate
+├── db_utils.py            # ✅ Database layer con error handling migliorato
+├── app.py                 # ✅ Main dashboard
+├── requirements.txt       # ✅ Dipendenze Python
+└── .env                   # ✅ Credenziali (OPENROUTER_API_KEY, SUPABASE_URL, SUPABASE_KEY)
 ```
+
+**Nota**: I file `ada_engine_v2.py` e `test_import.py` sono stati rimossi (duplicati non necessari).
 
 ### 2. Aggiorna .env
 
@@ -61,6 +66,8 @@ streamlit run app.py
 3. Scrivi: **"Analizza il rischio del cliente 100"**
 4. Attendi 5-15 secondi
 5. Dovresti ricevere una risposta con dati reali dal database!
+
+**Nuovo**: Il sistema ora include gestione errori migliorata e retry automatici per maggiore affidabilità.
 
 ---
 

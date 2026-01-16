@@ -17,7 +17,47 @@ from typing import Optional, Dict, List, Any
 from datetime import datetime
 from dotenv import load_dotenv
 
+# Import constants
+from constants import (
+    BASE_PREMIUMS,
+    DEFAULT_BASE_PREMIUM,
+    DEFAULT_COVERAGE_AMOUNT,
+    SEISMIC_ZONES,
+    DEFAULT_SEISMIC_ZONE,
+    HYDRO_RISK_P3_THRESHOLD,
+    HYDRO_RISK_P2_THRESHOLD,
+    FLOOD_RISK_P4_THRESHOLD,
+    FLOOD_RISK_P3_THRESHOLD,
+    HYDRO_RISK_SCORE_HIGH,
+    HYDRO_RISK_SCORE_MEDIUM,
+    HYDRO_RISK_SCORE_LOW,
+    FLOOD_RISK_SCORE_CRITICAL,
+    FLOOD_RISK_SCORE_HIGH,
+    FLOOD_RISK_SCORE_LOW,
+    SOLAR_KWH_PER_KWP_NORTH,
+    SOLAR_KWH_PER_KWP_CENTER,
+    SOLAR_KWH_PER_KWP_SOUTH,
+    SOLAR_DEFAULT_SYSTEM_SIZE_KW,
+    SOLAR_SYSTEM_EFFICIENCY,
+    SOLAR_ELECTRICITY_PRICE_EUR_KWH,
+    SOLAR_FIXED_ANNUAL_COST,
+    SOLAR_AVERAGE_HOME_CONSUMPTION_KWH,
+    SOLAR_SYSTEM_COST_EUR,
+    SOLAR_LATITUDE_NORTH_THRESHOLD,
+    SOLAR_LATITUDE_CENTER_THRESHOLD,
+    API_TIMEOUT_DEFAULT,
+    API_TIMEOUT_EMBEDDING,
+    MAX_CONVERSATION_HISTORY,
+    ADA_SYSTEM_PROMPT,
+    get_seismic_zone_info,
+)
+
 load_dotenv()
+
+# VERIFY MODULE IS LOADED
+print("=" * 80)
+print("🔄 ADA_ENGINE.PY LOADED - PRODUCTION VERSION")
+print("=" * 80)
 
 
 class ADAEngine:
@@ -26,9 +66,12 @@ class ADAEngine:
     """
     
     def __init__(self, supabase_client):
+        print("🎯 ADAEngine.__init__() called - Using FIXED version with tool calling")
         self.supabase = supabase_client
         self.openrouter_key = os.getenv("OPENROUTER_API_KEY")
         self.model = "anthropic/claude-3.5-sonnet"
+        print(f"🔑 OpenRouter API Key present: {bool(self.openrouter_key)}")
+        print(f"📡 Model: {self.model}")
         
         # Tool registry
         self.tools = {
@@ -40,103 +83,121 @@ class ADAEngine:
             "premium_calculator": self.tool_premium_calculator
         }
         
-        # Tool definitions for Claude
+        # Tool definitions for Claude (OpenAI-compatible format for OpenRouter)
         self.tool_definitions = [
             {
-                "name": "client_profile_lookup",
-                "description": "Get complete profile for a specific client including demographics, risk score, CLV, and property details. Use when user asks about a specific client.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "client_id": {
-                            "type": "integer",
-                            "description": "Client ID (codice_cliente)"
-                        }
-                    },
-                    "required": ["client_id"]
-                }
-            },
-            {
-                "name": "policy_status_check",
-                "description": "Get all active insurance policies for a client. Use when user asks about current policies or coverage.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "client_id": {
-                            "type": "integer",
-                            "description": "Client ID"
-                        }
-                    },
-                    "required": ["client_id"]
-                }
-            },
-            {
-                "name": "risk_assessment",
-                "description": "Analyze comprehensive risk profile including seismic, hydrogeological, and flood risk. Returns risk score 0-100 and category.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "client_id": {
-                            "type": "integer",
-                            "description": "Client ID to assess property risk"
-                        }
-                    },
-                    "required": ["client_id"]
-                }
-            },
-            {
-                "name": "solar_potential_calc",
-                "description": "Calculate solar energy production potential. Returns annual kWh, ROI estimate, and savings.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "client_id": {
-                            "type": "integer",
-                            "description": "Client ID for property location"
-                        }
-                    },
-                    "required": ["client_id"]
-                }
-            },
-            {
-                "name": "doc_retriever_rag",
-                "description": "Search historical client interactions using semantic search. Returns relevant past conversations, claims, or notes.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "client_id": {
-                            "type": "integer",
-                            "description": "Client ID"
+                "type": "function",
+                "function": {
+                    "name": "client_profile_lookup",
+                    "description": "Get client demographics, age, profession, income, CLV, and property information. Use ONLY for questions about client personal info, NOT for policies. Keywords: profilo, età, professione, reddito, informazioni personali.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "client_id": {
+                                "type": "integer",
+                                "description": "Client ID (codice_cliente)"
+                            }
                         },
-                        "query": {
-                            "type": "string",
-                            "description": "Search query for semantic search"
-                        }
-                    },
-                    "required": ["client_id", "query"]
+                        "required": ["client_id"]
+                    }
                 }
             },
             {
-                "name": "premium_calculator",
-                "description": "Calculate insurance premium quote based on risk score, product type, and coverage amount.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "risk_score": {
-                            "type": "number",
-                            "description": "Risk score 0-100"
+                "type": "function",
+                "function": {
+                    "name": "policy_status_check",
+                    "description": "Get ALL active insurance policies for a client with details (product name, premium, expiration date). Use this tool when user asks about policies, polizze, coverage, coperture, contratti. Keywords: polizze, polizza, policies, copertura, contratti, assicurazione.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "client_id": {
+                                "type": "integer",
+                                "description": "Client ID"
+                            }
                         },
-                        "product_type": {
-                            "type": "string",
-                            "description": "Product: NatCat, CasaSerena, FuturoSicuro, etc.",
-                            "enum": ["NatCat", "CasaSerena", "FuturoSicuro", "InvestimentoFlessibile", "SaluteProtetta", "GreenHome", "Multiramo"]
+                        "required": ["client_id"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "risk_assessment",
+                    "description": "Analyze comprehensive risk profile including seismic, hydrogeological, and flood risk. Returns risk score 0-100 and category.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "client_id": {
+                                "type": "integer",
+                                "description": "Client ID to assess property risk"
+                            }
                         },
-                        "coverage_amount": {
-                            "type": "number",
-                            "description": "Coverage amount in euros (default 100000)"
-                        }
-                    },
-                    "required": ["risk_score", "product_type"]
+                        "required": ["client_id"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "solar_potential_calc",
+                    "description": "Calculate solar energy production potential. Returns annual kWh, ROI estimate, and savings.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "client_id": {
+                                "type": "integer",
+                                "description": "Client ID for property location"
+                            }
+                        },
+                        "required": ["client_id"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "doc_retriever_rag",
+                    "description": "Search historical client interactions using semantic search. Returns relevant past conversations, claims, or notes.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "client_id": {
+                                "type": "integer",
+                                "description": "Client ID"
+                            },
+                            "query": {
+                                "type": "string",
+                                "description": "Search query for semantic search"
+                            }
+                        },
+                        "required": ["client_id", "query"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "premium_calculator",
+                    "description": "Calculate insurance premium quote based on risk score, product type, and coverage amount.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "risk_score": {
+                                "type": "number",
+                                "description": "Risk score 0-100"
+                            },
+                            "product_type": {
+                                "type": "string",
+                                "description": "Product: NatCat, CasaSerena, FuturoSicuro, etc.",
+                                "enum": ["NatCat", "CasaSerena", "FuturoSicuro", "InvestimentoFlessibile", "SaluteProtetta", "GreenHome", "Multiramo"]
+                            },
+                            "coverage_amount": {
+                                "type": "number",
+                                "description": "Coverage amount in euros (default 100000)"
+                            }
+                        },
+                        "required": ["risk_score", "product_type"]
+                    }
                 }
             }
         ]
@@ -162,9 +223,20 @@ class ADAEngine:
             
             # Call Claude with tools
             response = self._call_claude(messages)
-            
+
+            # DEBUG: Log response structure
+            print(f"[DEBUG] API Response keys: {list(response.keys())}")
+            if "choices" in response:
+                choice = response["choices"][0]
+                print(f"[DEBUG] Finish reason: {choice.get('finish_reason')}")
+                if choice.get("finish_reason") == "tool_calls":
+                    tool_calls = choice.get("message", {}).get("tool_calls", [])
+                    print(f"[DEBUG] Tool calls detected: {[tc['function']['name'] for tc in tool_calls]}")
+
             # Process tool calls if any
-            if response.get("stop_reason") == "tool_use":
+            choice = response.get("choices", [{}])[0]
+            if choice.get("finish_reason") == "tool_calls":
+                print("[DEBUG] Processing tool calls...")
                 response = self._process_tool_calls(response, messages)
             
             # Extract final response
@@ -236,7 +308,7 @@ CONTESTO CLIENTE:
         
         # Add history if present
         if history:
-            for msg in history[-5:]:  # Last 5 messages only
+            for msg in history[-MAX_CONVERSATION_HISTORY:]:  # Last N messages only
                 messages.append({
                     "role": msg.get("role", "user"),
                     "content": msg.get("content", "")
@@ -245,7 +317,7 @@ CONTESTO CLIENTE:
         # Add current message with context
         current_content = message
         if context:
-            current_content = f"{context}\\n\\nRichiesta: {message}"
+            current_content = f"{context}\n\nRichiesta: {message}"
         
         messages.append({
             "role": "user",
@@ -278,7 +350,7 @@ CONTESTO CLIENTE:
             "max_tokens": 2000
         }
         
-        response = requests.post(url, headers=headers, json=payload, timeout=60)
+        response = requests.post(url, headers=headers, json=payload, timeout=API_TIMEOUT_DEFAULT)
         response.raise_for_status()
         
         return response.json()
@@ -318,41 +390,25 @@ CONTESTO CLIENTE:
         return message.get("content", "Nessuna risposta generata.")
     
     def _extract_tools_used(self, response: Dict) -> List[str]:
-        """Extract list of tools used."""
-        # This would need more sophisticated parsing of the full conversation
-        # For now, return empty list
-        return []
+        """Extract list of tools used from response."""
+        tools = []
+
+        # Check if response has choices with tool_calls
+        if "choices" in response:
+            for choice in response["choices"]:
+                message = choice.get("message", {})
+                tool_calls = message.get("tool_calls", [])
+
+                for tool_call in tool_calls:
+                    tool_name = tool_call.get("function", {}).get("name")
+                    if tool_name:
+                        tools.append(tool_name)
+
+        return tools
     
     def _get_system_prompt(self) -> str:
-        """Get system prompt for A.D.A."""
-        return """Sei A.D.A., l'assistente AI avanzato di Generali Italia per il progetto Helios.
-Sei uno strumento interno utilizzato da AGENTI ASSICURATIVI AUTORIZZATI.
-Hai PIENO ACCESSO a tutti i dati del cliente e PUOI visualizzare polizze, preventivi e dati sensibili.
-
-❌ NON chiedere MAI "sei il titolare?" o "verifica la tua identità". L'utente è un agente autorizzato.
-✅ USA SEMPRE i tools forniti per rispondere alle domande.
-✅ Se l'utente chiede "Quali polizze ha il cliente X?", usa SUBITO il tool policy_status_check.
-
-CLIENT ID:
-Se l'utente specifica un ID numerico (es. 9501), usalo direttamente nei tools come integer.
-Se usi client_profile_lookup, ricorda che il parametro è `client_id` (int).
-
-CAPACITÀ:
-- Analisi rischio sismico, idrogeologico, alluvioni
-- Valutazione potenziale fotovoltaico
-- Consulenza polizze personalizzate
-- Calcolo preventivi NatCat
-- Raccomandazioni Next Best Offer
-
-REGOLE:
-1. USA SEMPRE i tools per dati attuali
-2. Se dati insufficienti, chiedi chiarimenti sull'ID cliente
-3. Rispondi in italiano professionale ma friendly
-
-FORMATO NUMERI:
-- Risk score: 0-100 (Basso <40, Medio 40-59, Alto 60-79, Critico ≥80)
-- Importi: separatore migliaia (€15.000)
-- Percentuali: 1 decimale (85.3%)"""
+        """Get system prompt for A.D.A. from constants."""
+        return ADA_SYSTEM_PROMPT
 
     # ========================================================================
     # TOOLS IMPLEMENTATION
@@ -367,9 +423,9 @@ FORMATO NUMERI:
                 {"p_client_id": client_id}
             ).execute()
             
-            if response.data:
+            if response.data and len(response.data) > 0:
                 return {"profile": response.data}
-            
+
             # Fallback: manual query
             client = self.supabase.table("clienti").select("*").eq("codice_cliente", client_id).single().execute()
             abit = self.supabase.table("abitazioni").select("*").eq("codice_cliente", client_id).execute()
@@ -389,29 +445,46 @@ FORMATO NUMERI:
         """Tool: Get active policies."""
         print(f"[DEBUG] Executing tool_policy_status for {client_id}")
         try:
-            # Utilizziamo * per evitare errori di colonne mancanti e filtriamo in Python se necessario
+            # Query all policies for this client
             response = self.supabase.table("polizze").select("*").eq("codice_cliente", client_id).execute()
-            
-            print(f"[DEBUG] Found {len(response.data)} policies")
-            
-            # Map columns for AI clarity if needed, or just return raw data
+
+            print(f"[DEBUG] Found {len(response.data)} policies in database")
+
+            if not response.data or len(response.data) == 0:
+                print(f"[DEBUG] No policies found for client {client_id}")
+                return {
+                    "policies": [],
+                    "count": 0,
+                    "message": f"Nessuna polizza trovata per il cliente {client_id}"
+                }
+
+            # Map columns with ALL important details
             policies = []
             for p in response.data:
-                policies.append({
+                policy_data = {
                     "prodotto": p.get("prodotto"),
-                    "area": p.get("area_bisogno"),
+                    "area_bisogno": p.get("area_bisogno"),
+                    "stato": p.get("stato_polizza"),
+                    "data_emissione": p.get("data_emissione"),
                     "data_scadenza": p.get("data_scadenza"),
-                    "premio": p.get("premio_ricorrente") or p.get("premio_totale_annuo")
-                })
-                
+                    "premio_ricorrente": p.get("premio_ricorrente"),
+                    "premio_unico": p.get("premio_unico"),
+                    "premio_totale_annuo": p.get("premio_totale_annuo"),
+                    "capitale_rivalutato": p.get("capitale_rivalutato"),
+                    "massimale": p.get("massimale")
+                }
+                policies.append(policy_data)
+                print(f"[DEBUG] Policy: {policy_data['prodotto']} - {policy_data['stato']}")
+
             return {
                 "policies": policies,
-                "count": len(policies)
+                "count": len(policies),
+                "message": f"Trovate {len(policies)} polizze per il cliente {client_id}"
             }
-            
+
         except Exception as e:
             print(f"[ERROR] tool_policy_status: {e}")
-            return {"error": str(e)}
+            return {"error": str(e), "policies": [], "count": 0}
     
     def tool_risk_assessment(self, client_id: int) -> Dict:
         """Tool: Assess property risk."""
@@ -423,19 +496,28 @@ FORMATO NUMERI:
             ).eq("codice_cliente", client_id).single().execute()
             
             data = response.data
-            
-            # Calculate breakdown
-            seismic_map = {
-                "1": {"level": "Molto Alto", "score": 90},
-                "2": {"level": "Alto", "score": 70},
-                "3": {"level": "Medio", "score": 40},
-                "4": {"level": "Basso", "score": 15}
-            }
-            
-            seismic = seismic_map.get(str(data.get("zona_sismica", "")), {"level": "Non valutato", "score": 0})
-            
-            hydro_score = 80 if data.get("hydro_risk_p3", 0) > 5 else 50 if data.get("hydro_risk_p2", 0) > 5 else 20
-            flood_score = 90 if data.get("flood_risk_p4", 0) > 10 else 60 if data.get("flood_risk_p3", 0) > 10 else 25
+
+            # Calculate breakdown using constants
+            zona = data.get("zona_sismica", DEFAULT_SEISMIC_ZONE)
+            seismic = get_seismic_zone_info(zona)
+
+            # Hydrogeological risk scoring using constants
+            hydro_risk_p3 = data.get("hydro_risk_p3", 0)
+            hydro_risk_p2 = data.get("hydro_risk_p2", 0)
+            hydro_score = (
+                HYDRO_RISK_SCORE_HIGH if hydro_risk_p3 > HYDRO_RISK_P3_THRESHOLD
+                else HYDRO_RISK_SCORE_MEDIUM if hydro_risk_p2 > HYDRO_RISK_P2_THRESHOLD
+                else HYDRO_RISK_SCORE_LOW
+            )
+
+            # Flood risk scoring using constants
+            flood_risk_p4 = data.get("flood_risk_p4", 0)
+            flood_risk_p3 = data.get("flood_risk_p3", 0)
+            flood_score = (
+                FLOOD_RISK_SCORE_CRITICAL if flood_risk_p4 > FLOOD_RISK_P4_THRESHOLD
+                else FLOOD_RISK_SCORE_HIGH if flood_risk_p3 > FLOOD_RISK_P3_THRESHOLD
+                else FLOOD_RISK_SCORE_LOW
+            )
             
             return {
                 "risk_score": data.get("risk_score", 0),
@@ -473,20 +555,23 @@ FORMATO NUMERI:
                     "source": "cached"
                 }
             
-            # Otherwise estimate
+            # Otherwise estimate using constants
             lat = data.get("latitudine", 42)
-            kwh_per_kwp = 1400 if lat > 42 else 1500 if lat > 40 else 1600
-            system_size = 3
-            kwh_annual = int(system_size * kwh_per_kwp * 0.85)
-            
-            savings = int(kwh_annual * 0.25 - 100)
-            coverage = min(100, int((kwh_annual / 3500) * 100))
+            kwh_per_kwp = (
+                SOLAR_KWH_PER_KWP_NORTH if lat > SOLAR_LATITUDE_NORTH_THRESHOLD
+                else SOLAR_KWH_PER_KWP_CENTER if lat > SOLAR_LATITUDE_CENTER_THRESHOLD
+                else SOLAR_KWH_PER_KWP_SOUTH
+            )
+            kwh_annual = int(SOLAR_DEFAULT_SYSTEM_SIZE_KW * kwh_per_kwp * SOLAR_SYSTEM_EFFICIENCY)
+
+            savings = int(kwh_annual * SOLAR_ELECTRICITY_PRICE_EUR_KWH - SOLAR_FIXED_ANNUAL_COST)
+            coverage = min(100, int((kwh_annual / SOLAR_AVERAGE_HOME_CONSUMPTION_KWH) * 100))
             
             return {
                 "kwh_annual": kwh_annual,
                 "savings_euro": savings,
                 "coverage_percent": coverage,
-                "roi_years": round(6000 / savings, 1) if savings > 0 else 99,
+                "roi_years": round(SOLAR_SYSTEM_COST_EUR / savings, 1) if savings > 0 else 99,
                 "location": data.get("citta"),
                 "source": "estimated"
             }
@@ -509,7 +594,7 @@ FORMATO NUMERI:
                     "model": "openai/text-embedding-3-small",
                     "input": query
                 },
-                timeout=30
+                timeout=API_TIMEOUT_EMBEDDING
             )
             
             embedding = emb_response.json()["data"][0]["embedding"]
@@ -528,21 +613,11 @@ FORMATO NUMERI:
         except Exception as e:
             return {"error": str(e), "documents": []}
     
-    def tool_premium_calculator(self, risk_score: float, product_type: str, coverage_amount: float = 100000) -> Dict:
-        """Tool: Calculate premium."""
-        base_premiums = {
-            "NatCat": 650,
-            "CasaSerena": 380,
-            "FuturoSicuro": 1200,
-            "InvestimentoFlessibile": 800,
-            "SaluteProtetta": 950,
-            "GreenHome": 520,
-            "Multiramo": 850
-        }
-        
-        base = base_premiums.get(product_type, 500)
+    def tool_premium_calculator(self, risk_score: float, product_type: str, coverage_amount: float = DEFAULT_COVERAGE_AMOUNT) -> Dict:
+        """Tool: Calculate premium using constants."""
+        base = BASE_PREMIUMS.get(product_type, DEFAULT_BASE_PREMIUM)
         risk_multiplier = 1 + (risk_score / 100)
-        coverage_factor = coverage_amount / 100000
+        coverage_factor = coverage_amount / DEFAULT_COVERAGE_AMOUNT
         
         premium_annual = int(base * risk_multiplier * coverage_factor)
         premium_monthly = int(premium_annual / 12)
