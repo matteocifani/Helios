@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/Users/matteocifani/Documents/AI Challenge Generali/Streamlit App/geocode_addresses.py", line 16, in <module>
+    from geopy.geocoders import Nominatim
+ModuleNotFoundError: No module named 'geopy'

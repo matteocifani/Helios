@@ -72,7 +72,24 @@ def geocode_address(row: pd.Series) -> tuple:
         if location:
             return (location.latitude, location.longitude)
         
-        # Fallback: try just city + Italia
+        # 2. Try city cleanup - Remove "Calabra" and other common suffixes if present
+        if row.get('citta'):
+            city_original = row['citta']
+            
+            # Strategy: Clean "Calabra"
+            if "Calabra" in city_original:
+                city_clean = city_original.replace("Calabra", "").strip()
+                clean_address = f"{city_clean}, Italia"
+                # print(f"DEBUG: Trying cleaned city: {clean_address}")
+                location = geocode(clean_address)
+                if location:
+                    return (location.latitude, location.longitude)
+
+            # Strategy: Clean other suffixes (generic approach, split by space and take first word if > 2 chars)
+            # Useful for "Santi Lorenzo E Flaviano" -> "Santi Lorenzo"? No, maybe better to check known mappings in future.
+            # But for things like "Collecalcioni", it might be a hamlet of a larger city (missing province is killer).
+            
+        # 3. Fallback: try just city + Italia (already tried originally, but let's keep it as last resort)
         if row.get('citta'):
             city_address = f"{row['citta']}, Italia"
             location = geocode(city_address)
@@ -99,44 +116,70 @@ def update_coordinates(abitazione_id: int, lat: float, lon: float) -> bool:
         return False
 
 
-def main(batch_size: int = 100):
+def main(batch_size: int = 1000):
     """
-    Main geocoding function.
+    Main geocoding function with auto-looping.
     
     Args:
-        batch_size: Number of records to process (use None for all)
+        batch_size: Number of records to process per batch (max 1000 usually)
     """
-    print("🌍 HELIOS Geocoding Script")
+    print("🌍 HELIOS Geocoding Script - Auto Loop Mode")
     print("=" * 50)
     
-    # Get records needing geocoding
-    df = get_abitazioni_without_coords(limit=batch_size)
-    print(f"📊 Found {len(df)} records to geocode")
+    total_processed = 0
+    total_success = 0
+    total_fail = 0
     
-    if df.empty:
-        print("✅ All records already have coordinates!")
-        return
-    
-    # Process records
-    success_count = 0
-    fail_count = 0
-    
-    for idx, row in tqdm(df.iterrows(), total=len(df), desc="Geocoding"):
-        lat, lon = geocode_address(row)
+    while True:
+        # Get records needing geocoding
+        # If batch_size is provided (not None/0), use it. If 0/None passed, use default valid int.
+        # But here we want to loop.
+        current_limit = batch_size if batch_size and batch_size > 0 else 1000
         
-        if lat and lon:
-            if update_coordinates(row['id'], lat, lon):
-                success_count += 1
+        print(f"\n🔄 Fetching next batch (limit: {current_limit})...")
+        df = get_abitazioni_without_coords(limit=current_limit)
+        
+        count = len(df)
+        print(f"📊 Found {count} records to geocode in this batch")
+        
+        if df.empty:
+            print("✅ All records have been processed!")
+            break
+        
+        # Process records
+        batch_success = 0
+        batch_fail = 0
+        
+        for idx, row in tqdm(df.iterrows(), total=len(df), desc=f"Geocoding Batch"):
+            lat, lon = geocode_address(row)
+            
+            if lat and lon:
+                if update_coordinates(row['id'], lat, lon):
+                    batch_success += 1
+                else:
+                    batch_fail += 1
             else:
-                fail_count += 1
-        else:
-            fail_count += 1
-    
-    # Summary
+                batch_fail += 1
+                
+        total_processed += count
+        total_success += batch_success
+        total_fail += batch_fail
+        
+        print(f"   Batch result: {batch_success} OK, {batch_fail} Failed")
+        
+        # Check if we should stop (if we processed fewer than requested, we are done)
+        if count < current_limit:
+            print("✅ No more records to fetch.")
+            break
+
+    # Final Summary
     print("\n" + "=" * 50)
-    print(f"✅ Successfully geocoded: {success_count}")
-    print(f"❌ Failed: {fail_count}")
-    print(f"📊 Success rate: {success_count/(success_count+fail_count)*100:.1f}%")
+    print("🏁 GEOCODING COMPLETE")
+    print(f"📊 Total processed: {total_processed}")
+    print(f"✅ Total success: {total_success}")
+    print(f"❌ Total failed: {total_fail}")
+    if total_processed > 0:
+        print(f"📈 Overall success rate: {total_success/total_processed*100:.1f}%")
 
 
 if __name__ == "__main__":

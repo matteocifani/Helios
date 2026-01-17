@@ -16,6 +16,11 @@ from ada_chat_enhanced import render_ada_chat
 import json
 import folium
 from streamlit_folium import folium_static
+from dotenv import load_dotenv
+import os
+
+# Load environment variables (Mapbox API Key)
+load_dotenv()
 
 # Import constants
 from constants import (
@@ -44,7 +49,41 @@ st.markdown("""
     /* ═══════════════════════════════════════════════════════════════════════
        GOOGLE FONTS IMPORT
     ═══════════════════════════════════════════════════════════════════════ */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap');
+
+    /* Fix for Streamlit sidebar toggle button showing text instead of icon */
+    [data-testid="collapsedControl"],
+    [data-testid="stSidebarCollapsedControl"],
+    [data-testid="stSidebarNavCollapseIcon"],
+    button[kind="headerNoPadding"] {
+        font-size: 0 !important;
+        color: transparent !important;
+        text-indent: -9999px !important;
+        overflow: hidden !important;
+    }
+    [data-testid="collapsedControl"] *,
+    [data-testid="stSidebarCollapsedControl"] *,
+    button[kind="headerNoPadding"] * {
+        font-size: 0 !important;
+        color: transparent !important;
+    }
+    [data-testid="collapsedControl"] svg,
+    [data-testid="stSidebarCollapsedControl"] svg,
+    button[kind="headerNoPadding"] svg {
+        width: 24px !important;
+        height: 24px !important;
+        visibility: visible !important;
+        display: block !important;
+        fill: #64748B !important;
+        color: #64748B !important;
+        font-size: 24px !important;
+    }
+    [data-testid="collapsedControl"]:hover svg,
+    [data-testid="stSidebarCollapsedControl"]:hover svg,
+    button[kind="headerNoPadding"]:hover svg {
+        fill: #00A0B0 !important;
+        color: #00A0B0 !important;
+    }
 
     /* ═══════════════════════════════════════════════════════════════════════
        CSS VARIABLES - Vita Sicura Light Theme
@@ -131,7 +170,7 @@ st.markdown("""
         letter-spacing: -0.025em;
     }
 
-    p, span, div, .stMarkdown p {
+    p, .stMarkdown p {
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
         color: var(--vs-text-secondary);
     }
@@ -683,7 +722,7 @@ with st.sidebar:
     st.markdown("""
     <div style="text-align: center; padding: 1rem 0 0.5rem;">
         <div style="display: inline-flex; align-items: center; gap: 0.5rem;">
-            <svg width="32" height="32" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <svg width="44" height="44" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
                 <defs>
                     <linearGradient id="tealGrad" x1="0%" y1="0%" x2="100%" y2="100%">
                         <stop offset="0%" stop-color="#00A0B0"/>
@@ -709,9 +748,9 @@ with st.sidebar:
                     <line x1="32" y1="68" x2="22" y2="78"/>
                 </g>
             </svg>
-            <span style="font-family: 'Inter', sans-serif; font-size: 1.5rem; font-weight: 800; background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">HELIOS</span>
+            <span style="font-family: 'Inter', sans-serif; font-size: 2rem; font-weight: 800; background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">HELIOS</span>
         </div>
-        <p style="font-family: 'Inter', sans-serif; font-size: 0.65rem; color: #94A3B8; letter-spacing: 0.05em; margin-top: 0.25rem;">VITA SICURA INTELLIGENCE</p>
+        <p style="font-family: 'Inter', sans-serif; font-size: 0.85rem; color: #94A3B8; letter-spacing: 0.08em; margin-top: 0.25rem;">VITA SICURA INTELLIGENCE</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -1026,31 +1065,25 @@ st.markdown("""
 page_title = "Dashboard Geo-Rischio" if st.session_state.dashboard_mode == 'Helios View' else "NBO Dashboard - Raccomandazioni Prodotti"
 page_description = "Monitoraggio in tempo reale del portafoglio assicurativo territoriale" if st.session_state.dashboard_mode == 'Helios View' else "Sistema intelligente di Next Best Offer per cross-selling e up-selling"
 
-# Header with logo
-header_col1, header_col2, header_col3 = st.columns([2, 6, 2])
+# Header with logo - centered layout
+header_col1, header_col2 = st.columns([8, 2])
 
 with header_col1:
-    try:
-        st.image("Logo/Gemini_Generated_Image_t6htt1t6htt1t6ht.png", width=80)
-    except Exception:
-        st.markdown("🌞", unsafe_allow_html=True)
-
-with header_col2:
     st.markdown(f"""
-    <div style="text-align: center;">
-        <div style="display: flex; align-items: center; justify-content: center; gap: 1rem;">
-            <span style="font-family: 'Inter', sans-serif; font-size: 1.5rem; font-weight: 800; background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">HELIOS</span>
-            <span style="font-family: 'Inter', sans-serif; font-size: 0.65rem; font-weight: 500; color: #64748B; letter-spacing: 0.1em; text-transform: uppercase;">Geo-Cognitive Intelligence</span>
+    <div style="text-align: center; padding-left: 10%;">
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 0.25rem;">
+            <span style="font-family: 'Inter', sans-serif; font-size: 5rem; font-weight: 800; background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: -0.02em; line-height: 1;">HELIOS</span>
+            <span style="font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 500; color: #64748B; letter-spacing: 0.15em; text-transform: uppercase;">Geo-Cognitive Intelligence</span>
         </div>
-        <h1 style="font-family: 'Playfair Display', serif; font-size: 2rem; font-weight: 700; color: #1B3A5F; margin: 0.5rem 0 0; letter-spacing: -0.02em;">{page_title}</h1>
+        <h1 style="font-family: 'Playfair Display', serif; font-size: 1.5rem; font-weight: 700; color: #1B3A5F; margin: 0.75rem 0 0; letter-spacing: -0.02em;">{page_title}</h1>
         <p style="font-family: 'Inter', sans-serif; font-size: 0.85rem; color: #64748B; margin-top: 0.25rem; font-weight: 400;">{page_description}</p>
     </div>
     """, unsafe_allow_html=True)
 
-with header_col3:
+with header_col2:
     st.markdown("""
-    <div style="display: flex; justify-content: flex-end; align-items: center; height: 100%;">
-        <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 100px; font-family: 'Inter', sans-serif; font-size: 0.75rem; font-weight: 500; color: #10B981;">
+    <div style="display: flex; justify-content: flex-end; align-items: flex-start; padding-top: 0.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 100px; font-family: 'Inter', sans-serif; font-size: 0.75rem; font-weight: 500; color: #10B981; white-space: nowrap;">
             <span style="width: 8px; height: 8px; background: #10B981; border-radius: 50%;"></span>
             Sistema Attivo
         </div>
@@ -1155,62 +1188,152 @@ if st.session_state.dashboard_mode == 'Helios View':
         st.markdown("### 🌍 Mappa del Rischio Territoriale")
         st.markdown(
             "<p style='color: #64748B; font-size: 0.9rem;'>"
-            "Visualizzazione geospaziale del portafoglio con indicatori di rischio sismico e idrogeologico. "
-            "Ogni punto rappresenta un'abitazione assicurata."
+            "Visualizzazione avanzata Heatmap & Scatterplot. "
+            "La densità del colore indica il rischio cumulativo dell'area."
             "</p>",
             unsafe_allow_html=True
         )
         
-        # Prepare map data - FILTER OUT records without valid coordinates
+        # Prepare map data
         map_df = filtered_df[
             filtered_df['latitudine'].notna() & 
             filtered_df['longitudine'].notna()
         ].copy()
+
+        # Check for Mapbox Token
+        mapbox_key = os.getenv("MAPBOX_TOKEN")
+        if not mapbox_key:
+            st.warning("⚠️ MAPBOX_TOKEN mancante nel file .env. La mappa potrebbe non mostrare lo sfondo.")
         
-        # Show count
         if len(map_df) == 0:
-            st.warning("⚠️ Nessuna abitazione con coordinate geografiche disponibile. Il geocoding potrebbe essere ancora in corso.")
+            st.warning("⚠️ Nessuna abitazione con coordinate geografiche disponibile.")
         else:
-            st.caption(f"📍 Visualizzando {len(map_df)} abitazioni con coordinate su {len(filtered_df)} totali")
+            # 1. Prepare Colors for PyDeck
+            # Format: [R, G, B, A]
+            def get_color(risk_cat):
+                if risk_cat == 'Critico': return [220, 38, 38, 200]   # Red
+                if risk_cat == 'Alto':    return [234, 88, 12, 200]   # Orange
+                if risk_cat == 'Medio':   return [202, 138, 4, 180]   # Yellow
+                return [22, 163, 74, 180]                             # Green
+
+            map_df['color'] = map_df['risk_category'].apply(get_color)
             
-            # Prepare data for st.map (needs 'lat' and 'lon' columns)
-            map_display = map_df.rename(columns={
-                'latitudine': 'lat',
-                'longitudine': 'lon'
-            })[['lat', 'lon']]
+            # 2. PyDeck Layers
             
-            # Display the map
-            st.map(map_display, use_container_width=True)
-            
-            # Show data table for selection
-            st.markdown("### 📋 Dettaglio Abitazioni")
-            
-            # Display table with key columns
-            display_cols = ['id', 'citta', 'risk_score', 'risk_category', 'zona_sismica', 'codice_cliente']
-            display_df = map_df[[c for c in display_cols if c in map_df.columns]].copy()
-            display_df['risk_score'] = display_df['risk_score'].fillna(0).round(1)
-            
-            st.dataframe(
-                display_df,
-                use_container_width=True,
-                height=300,
-                column_config={
-                    'id': st.column_config.TextColumn('ID'),
-                    'citta': st.column_config.TextColumn('Città'),
-                    'risk_score': st.column_config.ProgressColumn('Risk Score', min_value=0, max_value=100, format="%.1f"),
-                    'risk_category': st.column_config.TextColumn('Categoria'),
-                    'zona_sismica': st.column_config.NumberColumn('Zona Sism.'),
-                    'codice_cliente': st.column_config.TextColumn('Cliente'),
-                }
+            # View State (Initialize centered on data or Italy)
+            view_state = pdk.ViewState(
+                latitude=map_df['latitudine'].mean() if len(map_df) > 0 else 41.8719,
+                longitude=map_df['longitudine'].mean() if len(map_df) > 0 else 12.5674,
+                zoom=5.5,
+                pitch=0,
             )
+
+            # Layer 1: Heatmap (Density/Intensity)
+            heatmap_layer = pdk.Layer(
+                "HeatmapLayer",
+                data=map_df,
+                get_position=['longitudine', 'latitudine'],
+                get_weight="risk_score",
+                opacity=0.4,
+                radius_pixels=40,
+                intensity=1,
+                threshold=0.2
+            )
+
+            # Layer 2: Scatterplot (Individual Points)
+            scatter_layer = pdk.Layer(
+                "ScatterplotLayer",
+                data=map_df,
+                get_position=['longitudine', 'latitudine'],
+                get_fill_color='color',
+                get_radius=5000,  # Meters
+                pickable=True,
+                radius_min_pixels=4,
+                radius_max_pixels=15,
+                line_width_min_pixels=1,
+                stroked=True,
+                get_line_color=[255, 255, 255, 100]
+            )
+
+            # Render Chart
+            st.pydeck_chart(pdk.Deck(
+                map_style='mapbox://styles/mapbox/light-v10',
+                api_keys={'mapbox': mapbox_key},
+                initial_view_state=view_state,
+                layers=[heatmap_layer, scatter_layer],
+                tooltip={
+                    "html": "<b>Città:</b> {citta}<br/>"
+                            "<b>Rischio:</b> {risk_score}<br/>"
+                            "<b>Categoria:</b> {risk_category}<br/>"
+                            "<b>Cliente:</b> {codice_cliente}",
+                    "style": {"backgroundColor": "steelblue", "color": "white"}
+                }
+            ))
+
+            # 3. Critical Highlights Section (Replacing the big table)
+            st.markdown("### 🚨 Focus Criticità")
+            
+            # Get top critical items
+            critical_df = map_df[map_df['risk_category'].isin(['Critico', 'Alto'])].sort_values('risk_score', ascending=False).head(4)
+            
+            if not critical_df.empty:
+                cols = st.columns(len(critical_df))
+                for idx, (index, row) in enumerate(critical_df.iterrows()):
+                    with cols[idx]:
+                        # Card Styling
+                        risk_color = "#DC2626" if row['risk_category'] == 'Critico' else "#EA580C"
+                        st.markdown(f"""
+                        <div style="
+                            background: white; 
+                            border: 1px solid {risk_color}; 
+                            border-left: 5px solid {risk_color};
+                            border-radius: 8px; 
+                            padding: 1rem;
+                            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+                        ">
+                            <h4 style="margin:0; font-size: 0.9rem; color: #64748B;">{row['citta']}</h4>
+                            <p style="font-size: 1.8rem; font-weight: 800; color: #1B3A5F; margin: 0;">{row['risk_score']}</p>
+                            <p style="font-size: 0.75rem; color: {risk_color}; font-weight: bold; margin:0;">
+                                {row['risk_category'].upper()}
+                            </p>
+                            <p style="font-size: 0.7rem; color: #94A3B8; margin-top:0.5rem;">
+                                ID: {row['id']}<br>Filtra mappa per zoom
+                            </p>
+                        </div>
+                        """, unsafe_allow_html=True)
+            else:
+                st.info("✅ Nessuna criticità elevata rilevata nei filtri correnti.")
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            # 4. Collapsible full data table
+            with st.expander("📋 Visualizza Elenco Completo Abitazioni", expanded=False):
+                # Display table with key columns
+                display_cols = ['id', 'citta', 'risk_score', 'risk_category', 'zona_sismica', 'codice_cliente']
+                display_df = map_df[[c for c in display_cols if c in map_df.columns]].copy()
+                display_df['risk_score'] = display_df['risk_score'].fillna(0).round(1)
+                
+                st.dataframe(
+                    display_df,
+                    use_container_width=True,
+                    height=400,
+                    column_config={
+                        'id': st.column_config.TextColumn('ID'),
+                        'citta': st.column_config.TextColumn('Città'),
+                        'risk_score': st.column_config.ProgressColumn('Risk Score', min_value=0, max_value=100, format="%.1f"),
+                        'risk_category': st.column_config.TextColumn('Categoria'),
+                        'zona_sismica': st.column_config.NumberColumn('Zona Sism.'),
+                        'codice_cliente': st.column_config.TextColumn('Cliente'),
+                    }
+                )
         
-        # Legend
+        # Legend (Horizontal)
         st.markdown("""
-        <div style="display: flex; gap: 2rem; justify-content: center; margin-top: 1rem; flex-wrap: wrap;">
-            <span class="risk-badge risk-critical">🔴 Critico (≥80)</span>
-            <span class="risk-badge risk-high">🟠 Alto (60-79)</span>
-            <span class="risk-badge risk-medium">🟡 Medio (40-59)</span>
-            <span class="risk-badge risk-low">🟢 Basso (<40)</span>
+        <div style="display: flex; gap: 2rem; justify-content: center; margin-top: 2rem; flex-wrap: wrap; opacity: 0.8;">
+            <div style="display:flex; align-items:center; gap:0.5rem;"><span style="width:12px; height:12px; background:#DC2626; border-radius:50%;"></span> <span style="font-size:0.8rem;">Critico</span></div>
+            <div style="display:flex; align-items:center; gap:0.5rem;"><span style="width:12px; height:12px; background:#EA580C; border-radius:50%;"></span> <span style="font-size:0.8rem;">Alto</span></div>
+            <div style="display:flex; align-items:center; gap:0.5rem;"><span style="width:12px; height:12px; background:#CA8A04; border-radius:50%;"></span> <span style="font-size:0.8rem;">Medio</span></div>
+            <div style="display:flex; align-items:center; gap:0.5rem;"><span style="width:12px; height:12px; background:#16A34A; border-radius:50%;"></span> <span style="font-size:0.8rem;">Basso</span></div>
         </div>
         """, unsafe_allow_html=True)
     

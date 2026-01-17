@@ -13,3 +13,5 @@ anthropic>=0.18.0
 # Per NBO Dashboard
 folium>=0.15.0
 streamlit-folium>=0.15.0
+geopy>=2.4.0
+tqdm>=4.66.0
