@@ -17,12 +17,16 @@ from ada_engine import ADAEngine
 load_dotenv()
 
 
+
+ADA_VERSION = "1.1"  # Increment to force reload
+
 def init_ada_engine() -> None:
     """Initialize A.D.A. engine with Supabase connection."""
-    if "ada_engine" not in st.session_state:
+    # Check if engine exists or version changed
+    if "ada_engine" not in st.session_state or st.session_state.get("ada_version") != ADA_VERSION:
         try:
             print("=" * 80)
-            print("🔧 INITIALIZING A.D.A. ENGINE")
+            print(f"🔧 INITIALIZING A.D.A. ENGINE (v{ADA_VERSION})")
             print("=" * 80)
 
             # Import here to avoid circular dependency
@@ -31,8 +35,9 @@ def init_ada_engine() -> None:
             supabase = get_supabase_client()
             if supabase:
                 st.session_state.ada_engine = ADAEngine(supabase)
-                st.session_state.ada_mode = "python"  # Using Python engine
-                print("✅ A.D.A. Engine initialized successfully")
+                st.session_state.ada_mode = "python"
+                st.session_state.ada_version = ADA_VERSION
+                print(f"✅ A.D.A. Engine v{ADA_VERSION} initialized successfully")
             else:
                 st.session_state.ada_engine = None
                 st.session_state.ada_mode = "fallback"
@@ -47,9 +52,140 @@ def render_ada_chat() -> None:
     """
     Render the A.D.A. chat interface with Python engine.
     """
+    # Apply Vita Sicura Light Theme CSS for chat
+    st.markdown("""
+    <style>
+        /* Chat container styling */
+        [data-testid="stChatMessage"] {
+            background: rgba(255, 255, 255, 0.85) !important;
+            border: 1px solid #E2E8F0 !important;
+            border-radius: 16px !important;
+            padding: 1rem !important;
+            margin-bottom: 0.75rem !important;
+            box-shadow: 0 2px 4px rgba(27, 58, 95, 0.05) !important;
+        }
+
+        /* User message */
+        [data-testid="stChatMessage"][data-testid*="user"] {
+            background: linear-gradient(135deg, rgba(0, 160, 176, 0.08) 0%, rgba(0, 201, 212, 0.05) 100%) !important;
+            border: 1px solid rgba(0, 160, 176, 0.15) !important;
+        }
+
+        /* Chat input */
+        [data-testid="stChatInput"] {
+            border-radius: 16px !important;
+        }
+
+        [data-testid="stChatInput"] > div {
+            background: #FFFFFF !important;
+            border: 1px solid #E2E8F0 !important;
+            border-radius: 16px !important;
+            box-shadow: 0 2px 8px rgba(27, 58, 95, 0.08) !important;
+        }
+
+        [data-testid="stChatInput"] input {
+            font-family: 'Inter', sans-serif !important;
+            color: #1B3A5F !important;
+        }
+
+        [data-testid="stChatInput"] input::placeholder {
+            color: #94A3B8 !important;
+        }
+
+        /* Chat message text */
+        [data-testid="stChatMessage"] p,
+        [data-testid="stChatMessage"] span,
+        [data-testid="stChatMessage"] li {
+            color: #1B3A5F !important;
+            font-family: 'Inter', sans-serif !important;
+        }
+
+        [data-testid="stChatMessage"] strong {
+            color: #00A0B0 !important;
+        }
+
+        /* Expander in chat */
+        [data-testid="stChatMessage"] .streamlit-expanderHeader {
+            background: rgba(243, 244, 246, 0.8) !important;
+            border: 1px solid #E2E8F0 !important;
+            border-radius: 8px !important;
+            font-size: 0.8rem !important;
+        }
+
+        /* Code blocks in chat */
+        [data-testid="stChatMessage"] code {
+            background: #F3F4F6 !important;
+            color: #1B3A5F !important;
+            border: 1px solid #E2E8F0 !important;
+            border-radius: 6px !important;
+            font-family: 'JetBrains Mono', monospace !important;
+        }
+
+        /* ADA header styling */
+        .ada-header {
+            background: linear-gradient(135deg, rgba(0, 160, 176, 0.1) 0%, rgba(0, 201, 212, 0.05) 100%);
+            border: 1px solid rgba(0, 160, 176, 0.2);
+            border-radius: 16px;
+            padding: 1rem 1.5rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .ada-avatar {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .ada-info h3 {
+            margin: 0;
+            font-family: 'Inter', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #1B3A5F;
+        }
+
+        .ada-info p {
+            margin: 0.25rem 0 0;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.8rem;
+            color: #64748B;
+        }
+
+        .ada-status {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem 0.8rem;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            border-radius: 100px;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.7rem;
+            font-weight: 500;
+            color: #10B981;
+        }
+
+        .ada-status-dot {
+            width: 6px;
+            height: 6px;
+            background: #10B981;
+            border-radius: 50%;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
     # Initialize engine
     init_ada_engine()
-    
+
     # Initialize chat history
     if "ada_messages" not in st.session_state:
         st.session_state.ada_messages = [
@@ -58,13 +194,59 @@ def render_ada_chat() -> None:
                 "content": get_welcome_message()
             }
         ]
-    
-    # Display mode indicator
+
+    # Display mode indicator with styled header
     mode_emoji = "🐍" if st.session_state.get("ada_mode") == "python" else "⚙️" if st.session_state.get("ada_mode") == "n8n" else "💤"
     mode_text = "Python Engine" if st.session_state.get("ada_mode") == "python" else "n8n Webhook" if st.session_state.get("ada_mode") == "n8n" else "Fallback Mode"
-    
-    st.caption(f"{mode_emoji} **A.D.A. Status:** {mode_text}")
-    
+
+    st.markdown(f"""
+    <div class="ada-header">
+        <div class="ada-avatar">☀️</div>
+        <div class="ada-info">
+            <h3>A.D.A. - Augmented Digital Advisor</h3>
+            <p>Assistente intelligente per analisi geo-rischio e consulenza assicurativa</p>
+        </div>
+        <div class="ada-status">
+            <span class="ada-status-dot"></span>
+            {mode_emoji} {mode_text}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Check for auto-prompt from map selection (styled)
+    if st.session_state.get('ada_auto_prompt'):
+        auto_prompt = st.session_state.ada_auto_prompt
+
+        st.info(f"💡 **Prompt dalla mappa:** {auto_prompt}")
+
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            if st.button("🚀 Usa questo prompt", key="use_auto_prompt", type="primary", use_container_width=True):
+                # Add user message with auto-prompt
+                st.session_state.ada_messages.append({"role": "user", "content": auto_prompt})
+
+                # Get response
+                result = get_ada_response(auto_prompt)
+                response = result.get("response", "Errore di elaborazione.")
+                tools_used = result.get("tools_used", [])
+
+                # Add to history
+                st.session_state.ada_messages.append({
+                    "role": "assistant",
+                    "content": response,
+                    "tools_used": tools_used
+                })
+
+                # Clear auto-prompt
+                st.session_state.ada_auto_prompt = None
+                st.rerun()
+
+        if st.button("❌ Ignora", key="ignore_auto_prompt"):
+            st.session_state.ada_auto_prompt = None
+            st.rerun()
+
+        st.markdown("---")
+
     # Chat container
     chat_container = st.container()
     

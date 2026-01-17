@@ -26,12 +26,20 @@ RISK_CATEGORY_HIGH: str = "Alto"
 RISK_CATEGORY_CRITICAL: str = "Critico"
 RISK_CATEGORY_UNASSESSED: str = "Non valutato"
 
-# Risk colors (for UI display)
+# Risk colors (for UI display) - Light theme optimized
 RISK_COLORS: Dict[str, str] = {
-    RISK_CATEGORY_CRITICAL: "#FF453A",  # Red
-    RISK_CATEGORY_HIGH: "#FF9F0A",      # Orange
-    RISK_CATEGORY_MEDIUM: "#FFD60A",    # Yellow
-    RISK_CATEGORY_LOW: "#30D158",       # Green
+    RISK_CATEGORY_CRITICAL: "#DC2626",  # Red (darker for light bg)
+    RISK_CATEGORY_HIGH: "#EA580C",      # Orange
+    RISK_CATEGORY_MEDIUM: "#CA8A04",    # Amber
+    RISK_CATEGORY_LOW: "#16A34A",       # Green
+}
+
+# Risk background colors (for badges on light theme)
+RISK_BG_COLORS: Dict[str, str] = {
+    RISK_CATEGORY_CRITICAL: "#FEE2E2",  # Light red
+    RISK_CATEGORY_HIGH: "#FFEDD5",      # Light orange
+    RISK_CATEGORY_MEDIUM: "#FEF9C3",    # Light yellow
+    RISK_CATEGORY_LOW: "#DCFCE7",       # Light green
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -138,20 +146,41 @@ API_MAX_RETRIES: int = 3
 API_RETRY_DELAY_SECONDS: float = 1.0
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# UI CONFIGURATION
+# UI CONFIGURATION - Vita Sicura Light Theme
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# Color palette (Aurora Borealis theme)
-COLOR_HELIOS_SUN: str = "#FF6B35"
-COLOR_HELIOS_AMBER: str = "#F7C948"
-COLOR_HELIOS_CORAL: str = "#FF8C61"
-COLOR_AURORA_CYAN: str = "#00E5CC"
-COLOR_AURORA_BLUE: str = "#0A84FF"
-COLOR_AURORA_PURPLE: str = "#5E5CE6"
-COLOR_DEEP_SPACE: str = "#0D1117"
-COLOR_SPACE_GRAY: str = "#161B22"
-COLOR_STAR_WHITE: str = "#F0F6FC"
-COLOR_COMET_GRAY: str = "#8B949E"
+# Primary Colors (from Vita Sicura logo)
+COLOR_VS_NAVY: str = "#1B3A5F"           # Main brand color - text, headers
+COLOR_VS_NAVY_LIGHT: str = "#2C5282"     # Secondary navy
+COLOR_VS_TEAL: str = "#00A0B0"           # Primary accent - CTAs, highlights
+COLOR_VS_CYAN: str = "#00C9D4"           # Hover states, gradients
+COLOR_VS_AQUA: str = "#B8E6E8"           # Soft backgrounds, accents
+
+# Backgrounds (Light Mode)
+COLOR_BG_WHITE: str = "#FFFFFF"          # Main background
+COLOR_BG_OFF_WHITE: str = "#FAFBFC"      # Card backgrounds
+COLOR_BG_GRAY_LIGHT: str = "#F3F4F6"     # Sidebar, sections
+
+# Text Colors
+COLOR_TEXT_PRIMARY: str = "#1B3A5F"      # Primary text (navy)
+COLOR_TEXT_SECONDARY: str = "#64748B"    # Secondary text (slate)
+COLOR_TEXT_MUTED: str = "#94A3B8"        # Muted/disabled text
+
+# Borders
+COLOR_BORDER_LIGHT: str = "#E2E8F0"      # Card borders
+COLOR_BORDER_MEDIUM: str = "#CBD5E1"     # Input borders
+
+# Legacy compatibility aliases
+COLOR_HELIOS_SUN: str = "#00A0B0"        # Now teal (was orange)
+COLOR_HELIOS_AMBER: str = "#00C9D4"      # Now cyan (was yellow)
+COLOR_HELIOS_CORAL: str = "#38B2AC"      # Now teal variant
+COLOR_AURORA_CYAN: str = "#00A0B0"       # Teal
+COLOR_AURORA_BLUE: str = "#1B3A5F"       # Navy
+COLOR_AURORA_PURPLE: str = "#2C5282"     # Navy light
+COLOR_DEEP_SPACE: str = "#FFFFFF"        # Now white
+COLOR_SPACE_GRAY: str = "#F3F4F6"        # Now light gray
+COLOR_STAR_WHITE: str = "#1B3A5F"        # Now navy (for text)
+COLOR_COMET_GRAY: str = "#64748B"        # Now slate
 
 # Map visualization defaults
 MAP_DEFAULT_ZOOM: float = 5.5
