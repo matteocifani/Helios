@@ -7,9 +7,6 @@ requests>=2.31.0
 supabase>=2.0.0
 python-dotenv>=1.0.0
 
-# Per A.D.A. Python Engine
-anthropic>=0.18.0
-
 # Per NBO Dashboard
 folium>=0.15.0
 streamlit-folium>=0.15.0

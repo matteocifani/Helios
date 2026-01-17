@@ -12,7 +12,6 @@ import pydeck as pdk
 from datetime import datetime
 import plotly.express as px
 import plotly.graph_objects as go
-from ada_chat_enhanced import render_ada_chat
 import json
 import folium
 from streamlit_folium import folium_static
@@ -22,15 +21,14 @@ import os
 # Load environment variables (Mapbox API Key)
 load_dotenv()
 
-# Import constants
-from constants import (
+# Import from new src structure
+from src.ada.chat import render_ada_chat
+from src.config.constants import (
     DEFAULT_SEISMIC_ZONE,
     SEISMIC_ZONE_COLORS,
     ABITAZIONI_COLUMNS,
 )
-
-# Import db utilities
-from db_utils import (
+from src.data.db_utils import (
     fetch_abitazioni,
     fetch_clienti,
     check_client_interactions,
@@ -610,14 +608,16 @@ def load_data():
     return df
 
 
-def get_risk_stats(df):
-    """Calculate risk distribution statistics."""
-    stats = df['risk_category'].value_counts()
-    # Protect against division by zero and NaN
-    total = len(df)
+@st.cache_data(ttl=300)
+def _get_risk_stats_cached(risk_categories: tuple, risk_scores: tuple) -> dict:
+    """Calculate risk distribution statistics (cached with hashable args)."""
+    from collections import Counter
+    stats = Counter(risk_categories)
+    total = len(risk_categories)
+
     if total > 0:
-        avg_score = df['risk_score'].mean()
-        avg_score = round(avg_score, 1) if not pd.isna(avg_score) else 0
+        avg_score = sum(risk_scores) / total
+        avg_score = round(avg_score, 1) if avg_score == avg_score else 0  # NaN check
         high_risk_pct = round((stats.get('Critico', 0) + stats.get('Alto', 0)) / total * 100, 1)
     else:
         avg_score = 0
@@ -632,6 +632,14 @@ def get_risk_stats(df):
         'avg_score': avg_score,
         'high_risk_pct': high_risk_pct
     }
+
+
+def get_risk_stats(df):
+    """Calculate risk distribution statistics."""
+    return _get_risk_stats_cached(
+        tuple(df['risk_category'].tolist()),
+        tuple(df['risk_score'].tolist())
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -653,15 +661,26 @@ def load_nbo_data():
         return []
 
 
+@st.cache_data(ttl=300)
+def _calculate_score_cached(
+    retention_gain: float, redditivita: float, propensione: float,
+    w_retention: float, w_redditivita: float, w_propensione: float
+) -> float:
+    """Calculate weighted score (cached version with primitive args)."""
+    return (
+        retention_gain * w_retention / 100 +
+        redditivita * w_redditivita / 100 +
+        propensione * w_propensione / 100
+    )
+
+
 def calculate_recommendation_score(rec, weights):
     """Calculate weighted score for a recommendation."""
-    components = rec['componenti']
-    score = (
-        components['retention_gain'] * weights['retention'] / 100 +
-        components['redditivita'] * weights['redditivita'] / 100 +
-        components['propensione'] * weights['propensione'] / 100
+    c = rec['componenti']
+    return _calculate_score_cached(
+        c['retention_gain'], c['redditivita'], c['propensione'],
+        weights['retention'], weights['redditivita'], weights['propensione']
     )
-    return score
 
 
 def get_all_recommendations(data, weights, filter_top20=True):
@@ -1262,14 +1281,16 @@ if st.session_state.dashboard_mode == 'Helios View':
             st.warning("⚠️ Nessuna abitazione con coordinate geografiche disponibile.")
         else:
             # 1. Prepare Colors for PyDeck
-            # Format: [R, G, B, A]
-            def get_color(risk_cat):
-                if risk_cat == 'Critico': return [220, 38, 38, 200]   # Red
-                if risk_cat == 'Alto':    return [234, 88, 12, 200]   # Orange
-                if risk_cat == 'Medio':   return [202, 138, 4, 180]   # Yellow
-                return [22, 163, 74, 180]                             # Green
+            # Format: [R, G, B, A] - Using dict lookup for performance
+            RISK_COLOR_MAP = {
+                'Critico': [220, 38, 38, 200],   # Red
+                'Alto':    [234, 88, 12, 200],   # Orange
+                'Medio':   [202, 138, 4, 180],   # Yellow
+                'Basso':   [22, 163, 74, 180]    # Green
+            }
+            DEFAULT_COLOR = [22, 163, 74, 180]
 
-            map_df['color'] = map_df['risk_category'].apply(get_color)
+            map_df['color'] = map_df['risk_category'].apply(lambda x: RISK_COLOR_MAP.get(x, DEFAULT_COLOR))
             
             # 2. PyDeck Layers
             
@@ -1331,26 +1352,26 @@ if st.session_state.dashboard_mode == 'Helios View':
             
             if not critical_df.empty:
                 cols = st.columns(len(critical_df))
-                for idx, (index, row) in enumerate(critical_df.iterrows()):
+                for idx, row in enumerate(critical_df.itertuples()):
                     with cols[idx]:
                         # Card Styling
-                        risk_color = "#DC2626" if row['risk_category'] == 'Critico' else "#EA580C"
+                        risk_color = "#DC2626" if row.risk_category == 'Critico' else "#EA580C"
                         st.markdown(f"""
                         <div style="
-                            background: white; 
-                            border: 1px solid {risk_color}; 
+                            background: white;
+                            border: 1px solid {risk_color};
                             border-left: 5px solid {risk_color};
-                            border-radius: 8px; 
+                            border-radius: 8px;
                             padding: 1rem;
                             box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
                         ">
-                            <h4 style="margin:0; font-size: 0.9rem; color: #64748B;">{row['citta']}</h4>
-                            <p style="font-size: 1.8rem; font-weight: 800; color: #1B3A5F; margin: 0;">{row['risk_score']}</p>
+                            <h4 style="margin:0; font-size: 0.9rem; color: #64748B;">{row.citta}</h4>
+                            <p style="font-size: 1.8rem; font-weight: 800; color: #1B3A5F; margin: 0;">{row.risk_score}</p>
                             <p style="font-size: 0.75rem; color: {risk_color}; font-weight: bold; margin:0;">
-                                {row['risk_category'].upper()}
+                                {row.risk_category.upper()}
                             </p>
                             <p style="font-size: 0.7rem; color: #94A3B8; margin-top:0.5rem;">
-                                ID: {row['id']}<br>Filtra mappa per zoom
+                                ID: {row.id}<br>Filtra mappa per zoom
                             </p>
                         </div>
                         """, unsafe_allow_html=True)
@@ -1693,34 +1714,34 @@ if st.session_state.dashboard_mode == 'Helios View':
         display_df = display_df.sort_values(sort_col, ascending=ascending)
         
         st.markdown(f"**{len(display_df):,}** risultati trovati")
-        
-        # Display as cards - Light Theme
-        for idx, row in display_df.head(20).iterrows():
-            risk_class = row['risk_category'].lower()
-            solar_info = f"☀️ {row['solar_potential_kwh']:,} kWh/anno" if pd.notna(row['solar_potential_kwh']) else "☀️ Non calcolato"
-    
+
+        # Display as cards - Light Theme (using itertuples for performance)
+        for row in display_df.head(20).itertuples():
+            risk_class = row.risk_category.lower()
+            solar_info = f"☀️ {row.solar_potential_kwh:,} kWh/anno" if pd.notna(row.solar_potential_kwh) else "☀️ Non calcolato"
+
             st.markdown(f"""
             <div class="glass-card" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
                 <div style="flex: 1; min-width: 200px;">
-                    <h4 style="margin: 0; color: #1B3A5F; font-size: 1.1rem; font-weight: 600;">{row['id']}</h4>
+                    <h4 style="margin: 0; color: #1B3A5F; font-size: 1.1rem; font-weight: 600;">{row.id}</h4>
                     <p style="margin: 0.25rem 0; color: #64748B; font-size: 0.85rem;">
-                        📍 {row['citta']} · {row['codice_cliente']}
+                        📍 {row.citta} · {row.codice_cliente}
                     </p>
                 </div>
                 <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: center;">
                     <div style="text-align: center;">
                         <p style="margin: 0; color: #94A3B8; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">Risk Score</p>
-                        <p style="margin: 0; color: #1B3A5F; font-size: 1.5rem; font-weight: 700; font-family: 'JetBrains Mono', monospace;">{row['risk_score']}</p>
+                        <p style="margin: 0; color: #1B3A5F; font-size: 1.5rem; font-weight: 700; font-family: 'JetBrains Mono', monospace;">{row.risk_score}</p>
                     </div>
                     <div style="text-align: center;">
                         <p style="margin: 0; color: #94A3B8; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">Zona</p>
-                        <p style="margin: 0; color: #1B3A5F; font-size: 1.5rem; font-weight: 700; font-family: 'JetBrains Mono', monospace;">{row['zona_sismica']}</p>
+                        <p style="margin: 0; color: #1B3A5F; font-size: 1.5rem; font-weight: 700; font-family: 'JetBrains Mono', monospace;">{row.zona_sismica}</p>
                     </div>
                     <div style="text-align: center;">
                         <p style="margin: 0; color: #94A3B8; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">CLV</p>
-                        <p style="margin: 0; color: #00A0B0; font-size: 1.5rem; font-weight: 700; font-family: 'JetBrains Mono', monospace;">€{row['clv']:,}</p>
+                        <p style="margin: 0; color: #00A0B0; font-size: 1.5rem; font-weight: 700; font-family: 'JetBrains Mono', monospace;">€{row.clv:,}</p>
                     </div>
-                    <span class="risk-badge risk-{risk_class}">{row['risk_category']}</span>
+                    <span class="risk-badge risk-{risk_class}">{row.risk_category}</span>
                 </div>
             </div>
             """, unsafe_allow_html=True)
