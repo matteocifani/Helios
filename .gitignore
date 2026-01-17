@@ -4,24 +4,50 @@ __pycache__/
 *$py.class
 *.so
 .Python
-.venv/
-venv/
-ENV/
-
-# Model weights (large files)
-*.pt
-
-# Environment
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.venv
 .env
 
 # IDE
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
+.DS_Store
 
-# OS
+# Project specific
+results/
+Python/results/
+Python/__pycache__/
+Python/*.pyc
+yolo_results/
+Python/yolo_results/
+*.pt
+!solar_panel_yolov8s.pt
+
+# Models (too large for git)
+*.pt
+
+# Test files
+test_output/
+*.png
+!README_SCREENSHOT.png
+
+# System
 .DS_Store
 Thumbs.db
-
-# Results (optional - uncomment to exclude)
-# Python/results/
-# Python/yolo_results/

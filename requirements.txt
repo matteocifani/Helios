@@ -1,0 +1,11 @@
+# Core Dependencies for House Analysis Pipeline
+playwright>=1.40.0
+ultralytics>=8.0.0
+opencv-python>=4.8.0
+numpy>=1.24.0
+httpx>=0.25.0
+python-dotenv>=1.0.0
+
+# Optional but recommended for better performance
+torch>=2.0.0
+torchvision>=0.15.0
