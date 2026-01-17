@@ -1020,29 +1020,42 @@ st.markdown("""
         font-weight: 400;
     }
 </style>
+""", unsafe_allow_html=True)
 
-<div class="header-container">
-    <div class="logo-section">
-        <img src="app/static/vita_sicura_logo.png" alt="Vita Sicura" class="vita-sicura-logo" onerror="this.style.display='none'">
-        <div class="logo-divider"></div>
-        <div class="helios-brand">
-            <span class="helios-title">HELIOS</span>
-            <span class="helios-subtitle">Geo-Cognitive Intelligence</span>
+# Dynamic header content based on mode
+page_title = "Dashboard Geo-Rischio" if st.session_state.dashboard_mode == 'Helios View' else "NBO Dashboard - Raccomandazioni Prodotti"
+page_description = "Monitoraggio in tempo reale del portafoglio assicurativo territoriale" if st.session_state.dashboard_mode == 'Helios View' else "Sistema intelligente di Next Best Offer per cross-selling e up-selling"
+
+# Header with logo
+header_col1, header_col2, header_col3 = st.columns([2, 6, 2])
+
+with header_col1:
+    try:
+        st.image("Logo/Gemini_Generated_Image_t6htt1t6htt1t6ht.png", width=80)
+    except Exception:
+        st.markdown("🌞", unsafe_allow_html=True)
+
+with header_col2:
+    st.markdown(f"""
+    <div style="text-align: center;">
+        <div style="display: flex; align-items: center; justify-content: center; gap: 1rem;">
+            <span style="font-family: 'Inter', sans-serif; font-size: 1.5rem; font-weight: 800; background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">HELIOS</span>
+            <span style="font-family: 'Inter', sans-serif; font-size: 0.65rem; font-weight: 500; color: #64748B; letter-spacing: 0.1em; text-transform: uppercase;">Geo-Cognitive Intelligence</span>
         </div>
+        <h1 style="font-family: 'Playfair Display', serif; font-size: 2rem; font-weight: 700; color: #1B3A5F; margin: 0.5rem 0 0; letter-spacing: -0.02em;">{page_title}</h1>
+        <p style="font-family: 'Inter', sans-serif; font-size: 0.85rem; color: #64748B; margin-top: 0.25rem; font-weight: 400;">{page_description}</p>
     </div>
-    <div class="header-status">
-        <div class="status-badge">
-            <span class="status-dot"></span>
+    """, unsafe_allow_html=True)
+
+with header_col3:
+    st.markdown("""
+    <div style="display: flex; justify-content: flex-end; align-items: center; height: 100%;">
+        <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 100px; font-family: 'Inter', sans-serif; font-size: 0.75rem; font-weight: 500; color: #10B981;">
+            <span style="width: 8px; height: 8px; background: #10B981; border-radius: 50%;"></span>
             Sistema Attivo
         </div>
     </div>
-</div>
-
-<div class="page-title-section">
-    <h1 class="page-title">{f"Dashboard Geo-Rischio" if st.session_state.dashboard_mode == 'Helios View' else "NBO Dashboard - Raccomandazioni Prodotti"}</h1>
-    <p class="page-description">{f"Monitoraggio in tempo reale del portafoglio assicurativo territoriale" if st.session_state.dashboard_mode == 'Helios View' else "Sistema intelligente di Next Best Offer per cross-selling e up-selling"}</p>
-</div>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
 # Divider
 st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
@@ -1148,247 +1161,49 @@ if st.session_state.dashboard_mode == 'Helios View':
             unsafe_allow_html=True
         )
         
-        # Map controls
-        map_col1, map_col2, map_col3, map_col4 = st.columns([2, 2, 1, 2])
-    
-        with map_col1:
-            map_style = st.selectbox(
-                "Stile Mappa",
-                ["Dark", "Satellite", "Light"],
-                index=0
-            )
-    
-        with map_col2:
-            color_by = st.selectbox(
-                "Colorazione per",
-                ["Risk Score", "Zona Sismica", "CLV", "Churn Probability"],
-                index=0
-            )
-    
-        with map_col3:
-            point_size = st.slider("Dimensione", 50, 300, 150)
-    
-        with map_col4:
-            st.markdown("**Layer Visibili**")
-            show_scatter = st.checkbox("📍 Punti", value=True, key="layer_scatter")
-            show_heatmap = st.checkbox("🔥 Heatmap", value=True, key="layer_heatmap")
-            show_columns = st.checkbox("📊 Colonne 3D", value=False, key="layer_columns")
+        # Prepare map data - FILTER OUT records without valid coordinates
+        map_df = filtered_df[
+            filtered_df['latitudine'].notna() & 
+            filtered_df['longitudine'].notna()
+        ].copy()
         
-        # Prepare map data
-        map_df = filtered_df.copy()
-        
-        # Color mapping based on selection
-        if color_by == "Risk Score":
-            map_df['color_r'] = (map_df['risk_score'] * 2.55).astype(int)
-            map_df['color_g'] = ((100 - map_df['risk_score']) * 2.55).astype(int)
-            map_df['color_b'] = 50
-        elif color_by == "Zona Sismica":
-            # Fill missing zona_sismica with default before mapping to prevent KeyError
-            map_df['zona_sismica'] = map_df['zona_sismica'].fillna(DEFAULT_SEISMIC_ZONE).astype(int)
-            map_df['color_r'] = map_df['zona_sismica'].map(lambda x: SEISMIC_ZONE_COLORS.get(x, SEISMIC_ZONE_COLORS[DEFAULT_SEISMIC_ZONE])[0])
-            map_df['color_g'] = map_df['zona_sismica'].map(lambda x: SEISMIC_ZONE_COLORS.get(x, SEISMIC_ZONE_COLORS[DEFAULT_SEISMIC_ZONE])[1])
-            map_df['color_b'] = map_df['zona_sismica'].map(lambda x: SEISMIC_ZONE_COLORS.get(x, SEISMIC_ZONE_COLORS[DEFAULT_SEISMIC_ZONE])[2])
-        elif color_by == "CLV":
-            # Avoid division by zero when all CLV values are equal
-            clv_min = map_df['clv'].min()
-            clv_max = map_df['clv'].max()
-            if clv_max > clv_min:
-                clv_norm = (map_df['clv'] - clv_min) / (clv_max - clv_min)
-            else:
-                clv_norm = pd.Series([0.5] * len(map_df), index=map_df.index)  # Neutral color if all equal
-            map_df['color_r'] = (255 * (1 - clv_norm)).astype(int)
-            map_df['color_g'] = (215 * clv_norm).astype(int)
-            map_df['color_b'] = 100
-        else:  # Churn
-            map_df['color_r'] = (map_df['churn_probability'] * 255).astype(int)
-            map_df['color_g'] = ((1 - map_df['churn_probability']) * 200).astype(int)
-            map_df['color_b'] = 100
-        
-        # Map style
-        map_styles = {
-            "Dark": "mapbox://styles/mapbox/dark-v10",
-            "Satellite": "mapbox://styles/mapbox/satellite-v9",
-            "Light": "mapbox://styles/mapbox/light-v10"
-        }
-        
-        # Create PyDeck map
-        # Protect against NaN when filtered_df is empty - use center of Italy as fallback
-        if len(filtered_df) > 0:
-            center_lat = filtered_df['latitudine'].mean()
-            center_lon = filtered_df['longitudine'].mean()
-            # Handle NaN if all coordinates are missing
-            if pd.isna(center_lat) or pd.isna(center_lon):
-                center_lat, center_lon = 41.9028, 12.4964  # Rome
+        # Show count
+        if len(map_df) == 0:
+            st.warning("⚠️ Nessuna abitazione con coordinate geografiche disponibile. Il geocoding potrebbe essere ancora in corso.")
         else:
-            center_lat, center_lon = 41.9028, 12.4964  # Rome as default
-    
-        view_state = pdk.ViewState(
-            latitude=center_lat,
-            longitude=center_lon,
-            zoom=5.5,
-            pitch=45,
-            bearing=0
-        )
+            st.caption(f"📍 Visualizzando {len(map_df)} abitazioni con coordinate su {len(filtered_df)} totali")
+            
+            # Prepare data for st.map (needs 'lat' and 'lon' columns)
+            map_display = map_df.rename(columns={
+                'latitudine': 'lat',
+                'longitudine': 'lon'
+            })[['lat', 'lon']]
+            
+            # Display the map
+            st.map(map_display, use_container_width=True)
+            
+            # Show data table for selection
+            st.markdown("### 📋 Dettaglio Abitazioni")
+            
+            # Display table with key columns
+            display_cols = ['id', 'citta', 'risk_score', 'risk_category', 'zona_sismica', 'codice_cliente']
+            display_df = map_df[[c for c in display_cols if c in map_df.columns]].copy()
+            display_df['risk_score'] = display_df['risk_score'].fillna(0).round(1)
+            
+            st.dataframe(
+                display_df,
+                use_container_width=True,
+                height=300,
+                column_config={
+                    'id': st.column_config.TextColumn('ID'),
+                    'citta': st.column_config.TextColumn('Città'),
+                    'risk_score': st.column_config.ProgressColumn('Risk Score', min_value=0, max_value=100, format="%.1f"),
+                    'risk_category': st.column_config.TextColumn('Categoria'),
+                    'zona_sismica': st.column_config.NumberColumn('Zona Sism.'),
+                    'codice_cliente': st.column_config.TextColumn('Cliente'),
+                }
+            )
         
-        scatter_layer = pdk.Layer(
-            "ScatterplotLayer",
-            id="scatter_abitazioni",
-            data=map_df,
-            get_position=['longitudine', 'latitudine'],
-            get_color=['color_r', 'color_g', 'color_b', 180],
-            get_radius=point_size,
-            pickable=True,
-            auto_highlight=True,
-            highlight_color=[255, 107, 53, 255]
-        )
-    
-        # Heatmap layer
-        heatmap_layer = pdk.Layer(
-            "HeatmapLayer",
-            id="heatmap_rischio",
-            data=map_df[map_df['risk_category'].isin(['Critico', 'Alto'])],
-            get_position=['longitudine', 'latitudine'],
-            get_weight='risk_score',
-            aggregation='MEAN',
-            opacity=0.3,
-            radiusPixels=60
-        )
-    
-        # Column Layer 3D (altezza = risk_score)
-        column_layer = pdk.Layer(
-            "ColumnLayer",
-            id="columns_risk",
-            data=map_df,
-            get_position=['longitudine', 'latitudine'],
-            get_elevation='risk_score',
-            elevation_scale=50,
-            radius=800,
-            get_fill_color=['color_r', 'color_g', 'color_b', 200],
-            pickable=True,
-            auto_highlight=True,
-            extruded=True,
-            coverage=0.8
-        )
-        
-        # Build layers list dynamically based on toggles
-        layers = []
-        if show_heatmap:
-            layers.append(heatmap_layer)
-        if show_columns:
-            layers.append(column_layer)
-        if show_scatter:
-            layers.append(scatter_layer)  # Scatter on top for better picking
-    
-        deck = pdk.Deck(
-            layers=layers,
-            initial_view_state=view_state,
-            map_style=map_styles[map_style],
-            tooltip={
-                "html": """
-                    <div style="font-family: 'Inter', sans-serif; padding: 12px 16px; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); border-radius: 12px; border: 1px solid #E2E8F0; box-shadow: 0 4px 12px rgba(27,58,95,0.15);">
-                        <b style="color: #1B3A5F; font-size: 14px; font-weight: 600;">{citta}</b><br>
-                        <span style="color: #94A3B8; font-size: 11px;">ID: {id}</span><br>
-                        <hr style="border: none; border-top: 1px solid #E2E8F0; margin: 8px 0;">
-                        <div style="display: flex; flex-direction: column; gap: 4px;">
-                            <span style="color: #64748B; font-size: 12px;">🎯 Risk Score: <b style="color: #1B3A5F;">{risk_score}</b></span>
-                            <span style="color: #64748B; font-size: 12px;">🌍 Zona Sismica: <b style="color: #1B3A5F;">{zona_sismica}</b></span>
-                            <span style="color: #64748B; font-size: 12px;">💎 CLV: <b style="color: #00A0B0;">€{clv}</b></span>
-                        </div>
-                    </div>
-                """,
-                "style": {"backgroundColor": "transparent", "color": "#1B3A5F"}
-            }
-        )
-    
-        # Render map with selection support
-        event = st.pydeck_chart(
-            deck,
-            use_container_width=True,
-            on_select="rerun",
-            selection_mode="single-object",
-            key="map_selection"
-        )
-    
-        # Handle click/selection
-        if event and event.selection and event.selection.objects:
-            # Check which layer was clicked
-            selected_items = None
-            if "scatter_abitazioni" in event.selection.objects:
-                selected_items = event.selection.objects["scatter_abitazioni"]
-            elif "columns_risk" in event.selection.objects:
-                selected_items = event.selection.objects["columns_risk"]
-    
-            if selected_items and len(selected_items) > 0:
-                selected = selected_items[0]
-    
-                # Store in session_state
-                st.session_state.selected_client_id = selected.get('codice_cliente')
-                st.session_state.selected_abitazione = selected
-    
-                # Show expander with details
-                with st.expander(
-                    f"📍 **{selected.get('citta', 'N/A')}** - {selected.get('id', 'N/A')}",
-                    expanded=True
-                ):
-                    detail_col1, detail_col2, detail_col3, detail_col4 = st.columns(4)
-    
-                    with detail_col1:
-                        st.markdown(f"""
-                        <div style="text-align: center;">
-                            <p style="color: #94A3B8; font-size: 0.65rem; margin: 0; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">CLIENTE</p>
-                            <p style="color: #1B3A5F; font-size: 1.1rem; font-weight: 600; margin: 0.25rem 0;">
-                                {selected.get('codice_cliente', 'N/A')}
-                            </p>
-                        </div>
-                        """, unsafe_allow_html=True)
-    
-                    with detail_col2:
-                        risk_score = selected.get('risk_score', 0)
-                        st.markdown(f"""
-                        <div style="text-align: center;">
-                            <p style="color: #94A3B8; font-size: 0.65rem; margin: 0; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">RISK SCORE</p>
-                            <p style="color: #DC2626; font-size: 1.5rem; font-weight: 700; margin: 0.25rem 0; font-family: 'JetBrains Mono', monospace;">
-                                {risk_score}
-                            </p>
-                        </div>
-                        """, unsafe_allow_html=True)
-    
-                    with detail_col3:
-                        zona = selected.get('zona_sismica', 'N/A')
-                        st.markdown(f"""
-                        <div style="text-align: center;">
-                            <p style="color: #94A3B8; font-size: 0.65rem; margin: 0; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">ZONA SISMICA</p>
-                            <p style="color: #1B3A5F; font-size: 1.5rem; font-weight: 700; margin: 0.25rem 0; font-family: 'JetBrains Mono', monospace;">
-                                {zona}
-                            </p>
-                        </div>
-                        """, unsafe_allow_html=True)
-    
-                    with detail_col4:
-                        clv = selected.get('clv', 0)
-                        st.markdown(f"""
-                        <div style="text-align: center;">
-                            <p style="color: #94A3B8; font-size: 0.65rem; margin: 0; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">CLV</p>
-                            <p style="color: #00A0B0; font-size: 1.5rem; font-weight: 600; margin: 0.25rem 0; font-family: 'JetBrains Mono', monospace;">
-                                €{clv:,}
-                            </p>
-                        </div>
-                        """, unsafe_allow_html=True)
-    
-                    # Button to analyze with A.D.A.
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    btn_col1, btn_col2, btn_col3 = st.columns([1, 2, 1])
-                    with btn_col2:
-                        if st.button("🤖 Analizza con A.D.A.", key="analyze_ada_btn", type="primary", use_container_width=True):
-                            # Prepare prompt for A.D.A.
-                            st.session_state.ada_auto_prompt = (
-                                f"Analizza il cliente {selected.get('codice_cliente')} "
-                                f"con abitazione {selected.get('id')} a {selected.get('citta')}. "
-                                f"Risk score: {risk_score}, Zona sismica: {zona}, CLV: €{clv:,}"
-                            )
-                            st.success("✅ Cliente selezionato! Vai alla tab '🤖 A.D.A. Chat' per l'analisi.")
-                            st.info(f"💡 Prompt suggerito: _{st.session_state.ada_auto_prompt}_")
-    
         # Legend
         st.markdown("""
         <div style="display: flex; gap: 2rem; justify-content: center; margin-top: 1rem; flex-wrap: wrap;">
