@@ -999,487 +999,487 @@ else:
         "🤖 A.D.A. Chat"
     ])
 
-    # ═══════════════════════════════════════════════════════════════════════════════
-    # TAB 1: GEO-RISK MAP
-    # ═══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
+# TAB 1: GEO-RISK MAP
+# ═══════════════════════════════════════════════════════════════════════════════
+
+with tab1:
+    st.markdown("### 🌍 Mappa del Rischio Territoriale")
+    st.markdown(
+        "<p style='color: var(--comet-gray);'>"
+        "Visualizzazione geospaziale del portafoglio con indicatori di rischio sismico e idrogeologico. "
+        "Ogni punto rappresenta un'abitazione assicurata."
+        "</p>",
+        unsafe_allow_html=True
+    )
     
-    with tab1:
-        st.markdown("### 🌍 Mappa del Rischio Territoriale")
-        st.markdown(
-            "<p style='color: var(--comet-gray);'>"
-            "Visualizzazione geospaziale del portafoglio con indicatori di rischio sismico e idrogeologico. "
-            "Ogni punto rappresenta un'abitazione assicurata."
-            "</p>",
-            unsafe_allow_html=True
+    # Map controls
+    map_col1, map_col2, map_col3 = st.columns([2, 2, 1])
+    
+    with map_col1:
+        map_style = st.selectbox(
+            "Stile Mappa",
+            ["Dark", "Satellite", "Light"],
+            index=0
         )
-        
-        # Map controls
-        map_col1, map_col2, map_col3 = st.columns([2, 2, 1])
-        
-        with map_col1:
-            map_style = st.selectbox(
-                "Stile Mappa",
-                ["Dark", "Satellite", "Light"],
-                index=0
-            )
-        
-        with map_col2:
-            color_by = st.selectbox(
-                "Colorazione per",
-                ["Risk Score", "Zona Sismica", "CLV", "Churn Probability"],
-                index=0
-            )
-        
-        with map_col3:
-            point_size = st.slider("Dimensione", 50, 300, 150)
-        
-        # Prepare map data
-        map_df = filtered_df.copy()
-        
-        # Color mapping based on selection
-        if color_by == "Risk Score":
-            map_df['color_r'] = (map_df['risk_score'] * 2.55).astype(int)
-            map_df['color_g'] = ((100 - map_df['risk_score']) * 2.55).astype(int)
-            map_df['color_b'] = 50
-        elif color_by == "Zona Sismica":
-            # Fill missing zona_sismica with default before mapping to prevent KeyError
-            map_df['zona_sismica'] = map_df['zona_sismica'].fillna(DEFAULT_SEISMIC_ZONE).astype(int)
-            map_df['color_r'] = map_df['zona_sismica'].map(lambda x: SEISMIC_ZONE_COLORS.get(x, SEISMIC_ZONE_COLORS[DEFAULT_SEISMIC_ZONE])[0])
-            map_df['color_g'] = map_df['zona_sismica'].map(lambda x: SEISMIC_ZONE_COLORS.get(x, SEISMIC_ZONE_COLORS[DEFAULT_SEISMIC_ZONE])[1])
-            map_df['color_b'] = map_df['zona_sismica'].map(lambda x: SEISMIC_ZONE_COLORS.get(x, SEISMIC_ZONE_COLORS[DEFAULT_SEISMIC_ZONE])[2])
-        elif color_by == "CLV":
-            # Avoid division by zero when all CLV values are equal
-            clv_min = map_df['clv'].min()
-            clv_max = map_df['clv'].max()
-            if clv_max > clv_min:
-                clv_norm = (map_df['clv'] - clv_min) / (clv_max - clv_min)
-            else:
-                clv_norm = pd.Series([0.5] * len(map_df), index=map_df.index)  # Neutral color if all equal
-            map_df['color_r'] = (255 * (1 - clv_norm)).astype(int)
-            map_df['color_g'] = (215 * clv_norm).astype(int)
-            map_df['color_b'] = 100
-        else:  # Churn
-            map_df['color_r'] = (map_df['churn_probability'] * 255).astype(int)
-            map_df['color_g'] = ((1 - map_df['churn_probability']) * 200).astype(int)
-            map_df['color_b'] = 100
-        
-        # Map style
-        map_styles = {
-            "Dark": "mapbox://styles/mapbox/dark-v10",
-            "Satellite": "mapbox://styles/mapbox/satellite-v9",
-            "Light": "mapbox://styles/mapbox/light-v10"
-        }
-        
-        # Create PyDeck map
-        # Protect against NaN when filtered_df is empty - use center of Italy as fallback
-        if len(filtered_df) > 0:
-            center_lat = filtered_df['latitudine'].mean()
-            center_lon = filtered_df['longitudine'].mean()
-            # Handle NaN if all coordinates are missing
-            if pd.isna(center_lat) or pd.isna(center_lon):
-                center_lat, center_lon = 41.9028, 12.4964  # Rome
+    
+    with map_col2:
+        color_by = st.selectbox(
+            "Colorazione per",
+            ["Risk Score", "Zona Sismica", "CLV", "Churn Probability"],
+            index=0
+        )
+    
+    with map_col3:
+        point_size = st.slider("Dimensione", 50, 300, 150)
+    
+    # Prepare map data
+    map_df = filtered_df.copy()
+    
+    # Color mapping based on selection
+    if color_by == "Risk Score":
+        map_df['color_r'] = (map_df['risk_score'] * 2.55).astype(int)
+        map_df['color_g'] = ((100 - map_df['risk_score']) * 2.55).astype(int)
+        map_df['color_b'] = 50
+    elif color_by == "Zona Sismica":
+        # Fill missing zona_sismica with default before mapping to prevent KeyError
+        map_df['zona_sismica'] = map_df['zona_sismica'].fillna(DEFAULT_SEISMIC_ZONE).astype(int)
+        map_df['color_r'] = map_df['zona_sismica'].map(lambda x: SEISMIC_ZONE_COLORS.get(x, SEISMIC_ZONE_COLORS[DEFAULT_SEISMIC_ZONE])[0])
+        map_df['color_g'] = map_df['zona_sismica'].map(lambda x: SEISMIC_ZONE_COLORS.get(x, SEISMIC_ZONE_COLORS[DEFAULT_SEISMIC_ZONE])[1])
+        map_df['color_b'] = map_df['zona_sismica'].map(lambda x: SEISMIC_ZONE_COLORS.get(x, SEISMIC_ZONE_COLORS[DEFAULT_SEISMIC_ZONE])[2])
+    elif color_by == "CLV":
+        # Avoid division by zero when all CLV values are equal
+        clv_min = map_df['clv'].min()
+        clv_max = map_df['clv'].max()
+        if clv_max > clv_min:
+            clv_norm = (map_df['clv'] - clv_min) / (clv_max - clv_min)
         else:
-            center_lat, center_lon = 41.9028, 12.4964  # Rome as default
+            clv_norm = pd.Series([0.5] * len(map_df), index=map_df.index)  # Neutral color if all equal
+        map_df['color_r'] = (255 * (1 - clv_norm)).astype(int)
+        map_df['color_g'] = (215 * clv_norm).astype(int)
+        map_df['color_b'] = 100
+    else:  # Churn
+        map_df['color_r'] = (map_df['churn_probability'] * 255).astype(int)
+        map_df['color_g'] = ((1 - map_df['churn_probability']) * 200).astype(int)
+        map_df['color_b'] = 100
     
-        view_state = pdk.ViewState(
-            latitude=center_lat,
-            longitude=center_lon,
-            zoom=5.5,
-            pitch=45,
-            bearing=0
-        )
-        
-        scatter_layer = pdk.Layer(
-            "ScatterplotLayer",
-            data=map_df,
-            get_position=['longitudine', 'latitudine'],
-            get_color=['color_r', 'color_g', 'color_b', 180],
-            get_radius=point_size,
-            pickable=True,
-            auto_highlight=True,
-            highlight_color=[255, 107, 53, 255]
-        )
-        
-        # Heatmap layer (optional)
-        heatmap_layer = pdk.Layer(
-            "HeatmapLayer",
-            data=map_df[map_df['risk_category'].isin(['Critico', 'Alto'])],
-            get_position=['longitudine', 'latitudine'],
-            get_weight='risk_score',
-            aggregation='MEAN',
-            opacity=0.3,
-            radiusPixels=60
-        )
-        
-        deck = pdk.Deck(
-            layers=[heatmap_layer, scatter_layer],
-            initial_view_state=view_state,
-            map_style=map_styles[map_style],
-            tooltip={
-                "html": """
-                    <div style="font-family: Outfit; padding: 10px; background: rgba(13,17,23,0.95); border-radius: 8px; border: 1px solid rgba(255,107,53,0.3);">
-                        <b style="color: #FF6B35; font-size: 14px;">{citta}</b><br>
-                        <span style="color: #8B949E;">ID: {id}</span><br>
-                        <hr style="border-color: rgba(255,255,255,0.1); margin: 8px 0;">
-                        <span style="color: #F0F6FC;">🎯 Risk Score: <b>{risk_score}</b></span><br>
-                        <span style="color: #F0F6FC;">🌍 Zona Sismica: <b>{zona_sismica}</b></span><br>
-                        <span style="color: #F0F6FC;">💎 CLV: €{clv}</span>
-                    </div>
-                """,
-                "style": {"backgroundColor": "transparent", "color": "white"}
-            }
-        )
-        
-        st.pydeck_chart(deck, use_container_width=True)
-        
-        # Legend
-        st.markdown("""
-        <div style="display: flex; gap: 2rem; justify-content: center; margin-top: 1rem; flex-wrap: wrap;">
-            <span class="risk-badge risk-critical">🔴 Critico (≥80)</span>
-            <span class="risk-badge risk-high">🟠 Alto (60-79)</span>
-            <span class="risk-badge risk-medium">🟡 Medio (40-59)</span>
-            <span class="risk-badge risk-low">🟢 Basso (<40)</span>
-        </div>
-        """, unsafe_allow_html=True)
+    # Map style
+    map_styles = {
+        "Dark": "mapbox://styles/mapbox/dark-v10",
+        "Satellite": "mapbox://styles/mapbox/satellite-v9",
+        "Light": "mapbox://styles/mapbox/light-v10"
+    }
     
+    # Create PyDeck map
+    # Protect against NaN when filtered_df is empty - use center of Italy as fallback
+    if len(filtered_df) > 0:
+        center_lat = filtered_df['latitudine'].mean()
+        center_lon = filtered_df['longitudine'].mean()
+        # Handle NaN if all coordinates are missing
+        if pd.isna(center_lat) or pd.isna(center_lon):
+            center_lat, center_lon = 41.9028, 12.4964  # Rome
+    else:
+        center_lat, center_lon = 41.9028, 12.4964  # Rome as default
+
+    view_state = pdk.ViewState(
+        latitude=center_lat,
+        longitude=center_lon,
+        zoom=5.5,
+        pitch=45,
+        bearing=0
+    )
     
-    # ═══════════════════════════════════════════════════════════════════════════════
-    # TAB 2: ANALYTICS
-    # ═══════════════════════════════════════════════════════════════════════════════
+    scatter_layer = pdk.Layer(
+        "ScatterplotLayer",
+        data=map_df,
+        get_position=['longitudine', 'latitudine'],
+        get_color=['color_r', 'color_g', 'color_b', 180],
+        get_radius=point_size,
+        pickable=True,
+        auto_highlight=True,
+        highlight_color=[255, 107, 53, 255]
+    )
     
-    with tab2:
-        st.markdown("### 📈 Analytics Dashboard")
-        
-        analytics_col1, analytics_col2 = st.columns(2)
-        
-        with analytics_col1:
-            # Risk Distribution Donut
-            risk_counts = filtered_df['risk_category'].value_counts()
-            
-            fig_donut = go.Figure(data=[go.Pie(
-                labels=risk_counts.index,
-                values=risk_counts.values,
-                hole=0.65,
-                marker_colors=['#FF453A', '#FF9F0A', '#FFD60A', '#30D158'],
-                textinfo='percent+label',
-                textfont=dict(family='Outfit', size=12, color='white'),
-                hovertemplate="<b>%{label}</b><br>%{value:,} abitazioni<br>%{percent}<extra></extra>"
-            )])
-            
-            fig_donut.update_layout(
-                title=dict(
-                    text="Distribuzione Rischio",
-                    font=dict(family='Outfit', size=18, color='#F0F6FC'),
-                    x=0.5
-                ),
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                font=dict(color='#8B949E'),
-                showlegend=True,
-                legend=dict(
-                    orientation="h",
-                    yanchor="bottom",
-                    y=-0.2,
-                    xanchor="center",
-                    x=0.5,
-                    font=dict(family='Outfit', size=11)
-                ),
-                annotations=[dict(
-                    text=f"<b>{len(filtered_df):,}</b><br>Totale",
-                    x=0.5, y=0.5,
-                    font=dict(family='Outfit', size=20, color='#F0F6FC'),
-                    showarrow=False
-                )],
-                height=400,
-                margin=dict(t=60, b=60, l=20, r=20)
-            )
-            
-            st.plotly_chart(fig_donut, use_container_width=True)
-        
-        with analytics_col2:
-            # Seismic Zone Bar Chart
-            zone_counts = filtered_df['zona_sismica'].value_counts().sort_index()
-            
-            fig_bar = go.Figure(data=[go.Bar(
-                x=[f"Zona {z}" for z in zone_counts.index],
-                y=zone_counts.values,
-                marker=dict(
-                    color=['#FF453A', '#FF9F0A', '#FFD60A', '#30D158'][:len(zone_counts)],
-                    line=dict(color='rgba(255,255,255,0.2)', width=1)
-                ),
-                text=zone_counts.values,
-                textposition='outside',
-                textfont=dict(family='JetBrains Mono', size=12, color='#F0F6FC'),
-                hovertemplate="<b>%{x}</b><br>%{y:,} abitazioni<extra></extra>"
-            )])
-            
-            fig_bar.update_layout(
-                title=dict(
-                    text="Distribuzione Zone Sismiche",
-                    font=dict(family='Outfit', size=18, color='#F0F6FC'),
-                    x=0.5
-                ),
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                font=dict(color='#8B949E'),
-                xaxis=dict(
-                    showgrid=False,
-                    tickfont=dict(family='Outfit', size=12)
-                ),
-                yaxis=dict(
-                    showgrid=True,
-                    gridcolor='rgba(255,255,255,0.05)',
-                    tickfont=dict(family='JetBrains Mono', size=11)
-                ),
-                height=400,
-                margin=dict(t=60, b=40, l=40, r=40)
-            )
-            
-            st.plotly_chart(fig_bar, use_container_width=True)
-        
-        st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
-        
-        # Second row of charts
-        analytics_col3, analytics_col4 = st.columns(2)
-        
-        with analytics_col3:
-            # CLV vs Risk Score Scatter
-            fig_scatter = px.scatter(
-                filtered_df,
-                x='risk_score',
-                y='clv',
-                color='risk_category',
-                color_discrete_map={
-                    'Critico': '#FF453A',
-                    'Alto': '#FF9F0A',
-                    'Medio': '#FFD60A',
-                    'Basso': '#30D158'
-                },
-                size='churn_probability',
-                hover_data=['citta', 'zona_sismica'],
-                labels={
-                    'risk_score': 'Risk Score',
-                    'clv': 'Customer Lifetime Value (€)',
-                    'risk_category': 'Categoria'
-                }
-            )
-            
-            fig_scatter.update_layout(
-                title=dict(
-                    text="CLV vs Risk Score",
-                    font=dict(family='Outfit', size=18, color='#F0F6FC'),
-                    x=0.5
-                ),
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                font=dict(color='#8B949E', family='Outfit'),
-                xaxis=dict(
-                    showgrid=True,
-                    gridcolor='rgba(255,255,255,0.05)',
-                    title_font=dict(size=12)
-                ),
-                yaxis=dict(
-                    showgrid=True,
-                    gridcolor='rgba(255,255,255,0.05)',
-                    title_font=dict(size=12)
-                ),
-                legend=dict(
-                    orientation="h",
-                    yanchor="bottom",
-                    y=-0.3,
-                    xanchor="center",
-                    x=0.5
-                ),
-                height=400,
-                margin=dict(t=60, b=80, l=60, r=40)
-            )
-            
-            st.plotly_chart(fig_scatter, use_container_width=True)
-        
-        with analytics_col4:
-            # Churn Probability Distribution
-            churn_bins = pd.cut(filtered_df['churn_probability'], bins=[0, 0.2, 0.4, 0.6, 0.8, 1.0],
-                               labels=['Molto Basso', 'Basso', 'Medio', 'Alto', 'Molto Alto'])
-            churn_counts = churn_bins.value_counts().sort_index()
+    # Heatmap layer (optional)
+    heatmap_layer = pdk.Layer(
+        "HeatmapLayer",
+        data=map_df[map_df['risk_category'].isin(['Critico', 'Alto'])],
+        get_position=['longitudine', 'latitudine'],
+        get_weight='risk_score',
+        aggregation='MEAN',
+        opacity=0.3,
+        radiusPixels=60
+    )
     
-            fig_churn = go.Figure(data=[go.Bar(
-                y=churn_counts.index.astype(str),
-                x=churn_counts.values,
-                orientation='h',
-                marker=dict(
-                    color=['#30D158', '#0A84FF', '#FFD60A', '#FF9F0A', '#FF453A'][:len(churn_counts)],
-                    line=dict(color='rgba(255,255,255,0.2)', width=1)
-                ),
-                text=churn_counts.values,
-                textposition='outside',
-                textfont=dict(family='JetBrains Mono', size=11, color='#F0F6FC'),
-                hovertemplate="<b>%{y}</b><br>%{x:,} clienti<extra></extra>"
-            )])
+    deck = pdk.Deck(
+        layers=[heatmap_layer, scatter_layer],
+        initial_view_state=view_state,
+        map_style=map_styles[map_style],
+        tooltip={
+            "html": """
+                <div style="font-family: Outfit; padding: 10px; background: rgba(13,17,23,0.95); border-radius: 8px; border: 1px solid rgba(255,107,53,0.3);">
+                    <b style="color: #FF6B35; font-size: 14px;">{citta}</b><br>
+                    <span style="color: #8B949E;">ID: {id}</span><br>
+                    <hr style="border-color: rgba(255,255,255,0.1); margin: 8px 0;">
+                    <span style="color: #F0F6FC;">🎯 Risk Score: <b>{risk_score}</b></span><br>
+                    <span style="color: #F0F6FC;">🌍 Zona Sismica: <b>{zona_sismica}</b></span><br>
+                    <span style="color: #F0F6FC;">💎 CLV: €{clv}</span>
+                </div>
+            """,
+            "style": {"backgroundColor": "transparent", "color": "white"}
+        }
+    )
     
-            fig_churn.update_layout(
-                title=dict(
-                    text="Distribuzione Churn Probability",
-                    font=dict(family='Outfit', size=18, color='#F0F6FC'),
-                    x=0.5
-                ),
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                font=dict(color='#8B949E'),
-                xaxis=dict(
-                    showgrid=True,
-                    gridcolor='rgba(255,255,255,0.05)',
-                    tickfont=dict(family='JetBrains Mono', size=11)
-                ),
-                yaxis=dict(
-                    showgrid=False,
-                    tickfont=dict(family='Outfit', size=12)
-                ),
-                height=400,
-                margin=dict(t=60, b=40, l=120, r=60)
-            )
+    st.pydeck_chart(deck, use_container_width=True)
     
-            st.plotly_chart(fig_churn, use_container_width=True)
+    # Legend
+    st.markdown("""
+    <div style="display: flex; gap: 2rem; justify-content: center; margin-top: 1rem; flex-wrap: wrap;">
+        <span class="risk-badge risk-critical">🔴 Critico (≥80)</span>
+        <span class="risk-badge risk-high">🟠 Alto (60-79)</span>
+        <span class="risk-badge risk-medium">🟡 Medio (40-59)</span>
+        <span class="risk-badge risk-low">🟢 Basso (<40)</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TAB 2: ANALYTICS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+with tab2:
+    st.markdown("### 📈 Analytics Dashboard")
+    
+    analytics_col1, analytics_col2 = st.columns(2)
+    
+    with analytics_col1:
+        # Risk Distribution Donut
+        risk_counts = filtered_df['risk_category'].value_counts()
         
-        st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
-        
-        # City breakdown
-        st.markdown("### 🏙️ Top 10 Città per Concentrazione Rischio")
-        
-        city_risk = filtered_df.groupby('citta').agg({
-            'risk_score': 'mean',
-            'id': 'count',
-            'clv': 'sum'
-        }).rename(columns={'id': 'n_abitazioni', 'clv': 'clv_totale'}).reset_index()
-        city_risk = city_risk.sort_values('risk_score', ascending=False).head(10)
-        
-        fig_city = go.Figure(data=[go.Bar(
-            x=city_risk['citta'],
-            y=city_risk['risk_score'],
-            marker=dict(
-                color=city_risk['risk_score'],
-                colorscale=[[0, '#30D158'], [0.5, '#FFD60A'], [1, '#FF453A']],
-                line=dict(color='rgba(255,255,255,0.2)', width=1)
-            ),
-            text=[f"{x:.0f}" for x in city_risk['risk_score']],
-            textposition='outside',
-            textfont=dict(family='JetBrains Mono', size=11, color='#F0F6FC'),
-            hovertemplate="<b>%{x}</b><br>Risk Score: %{y:.1f}<br>Abitazioni: %{customdata[0]:,}<br>CLV Totale: €%{customdata[1]:,.0f}<extra></extra>",
-            customdata=city_risk[['n_abitazioni', 'clv_totale']].values
+        fig_donut = go.Figure(data=[go.Pie(
+            labels=risk_counts.index,
+            values=risk_counts.values,
+            hole=0.65,
+            marker_colors=['#FF453A', '#FF9F0A', '#FFD60A', '#30D158'],
+            textinfo='percent+label',
+            textfont=dict(family='Outfit', size=12, color='white'),
+            hovertemplate="<b>%{label}</b><br>%{value:,} abitazioni<br>%{percent}<extra></extra>"
         )])
         
-        fig_city.update_layout(
+        fig_donut.update_layout(
+            title=dict(
+                text="Distribuzione Rischio",
+                font=dict(family='Outfit', size=18, color='#F0F6FC'),
+                x=0.5
+            ),
             paper_bgcolor='rgba(0,0,0,0)',
             plot_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='#8B949E', family='Outfit'),
+            font=dict(color='#8B949E'),
+            showlegend=True,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=-0.2,
+                xanchor="center",
+                x=0.5,
+                font=dict(family='Outfit', size=11)
+            ),
+            annotations=[dict(
+                text=f"<b>{len(filtered_df):,}</b><br>Totale",
+                x=0.5, y=0.5,
+                font=dict(family='Outfit', size=20, color='#F0F6FC'),
+                showarrow=False
+            )],
+            height=400,
+            margin=dict(t=60, b=60, l=20, r=20)
+        )
+        
+        st.plotly_chart(fig_donut, use_container_width=True)
+    
+    with analytics_col2:
+        # Seismic Zone Bar Chart
+        zone_counts = filtered_df['zona_sismica'].value_counts().sort_index()
+        
+        fig_bar = go.Figure(data=[go.Bar(
+            x=[f"Zona {z}" for z in zone_counts.index],
+            y=zone_counts.values,
+            marker=dict(
+                color=['#FF453A', '#FF9F0A', '#FFD60A', '#30D158'][:len(zone_counts)],
+                line=dict(color='rgba(255,255,255,0.2)', width=1)
+            ),
+            text=zone_counts.values,
+            textposition='outside',
+            textfont=dict(family='JetBrains Mono', size=12, color='#F0F6FC'),
+            hovertemplate="<b>%{x}</b><br>%{y:,} abitazioni<extra></extra>"
+        )])
+        
+        fig_bar.update_layout(
+            title=dict(
+                text="Distribuzione Zone Sismiche",
+                font=dict(family='Outfit', size=18, color='#F0F6FC'),
+                x=0.5
+            ),
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='#8B949E'),
             xaxis=dict(
                 showgrid=False,
-                tickfont=dict(size=11),
-                tickangle=-45
+                tickfont=dict(family='Outfit', size=12)
             ),
             yaxis=dict(
                 showgrid=True,
                 gridcolor='rgba(255,255,255,0.05)',
-                title="Risk Score Medio",
-                title_font=dict(size=12),
-                range=[0, 100]
+                tickfont=dict(family='JetBrains Mono', size=11)
             ),
-            height=350,
-            margin=dict(t=20, b=80, l=60, r=40)
+            height=400,
+            margin=dict(t=60, b=40, l=40, r=40)
         )
         
-        st.plotly_chart(fig_city, use_container_width=True)
+        st.plotly_chart(fig_bar, use_container_width=True)
     
+    st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
     
-    # ═══════════════════════════════════════════════════════════════════════════════
-    # TAB 3: CLIENT DETAIL
-    # ═══════════════════════════════════════════════════════════════════════════════
+    # Second row of charts
+    analytics_col3, analytics_col4 = st.columns(2)
     
-    with tab3:
-        st.markdown("### 🔍 Ricerca Clienti")
+    with analytics_col3:
+        # CLV vs Risk Score Scatter
+        fig_scatter = px.scatter(
+            filtered_df,
+            x='risk_score',
+            y='clv',
+            color='risk_category',
+            color_discrete_map={
+                'Critico': '#FF453A',
+                'Alto': '#FF9F0A',
+                'Medio': '#FFD60A',
+                'Basso': '#30D158'
+            },
+            size='churn_probability',
+            hover_data=['citta', 'zona_sismica'],
+            labels={
+                'risk_score': 'Risk Score',
+                'clv': 'Customer Lifetime Value (€)',
+                'risk_category': 'Categoria'
+            }
+        )
         
-        search_col1, search_col2 = st.columns([3, 1])
+        fig_scatter.update_layout(
+            title=dict(
+                text="CLV vs Risk Score",
+                font=dict(family='Outfit', size=18, color='#F0F6FC'),
+                x=0.5
+            ),
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='#8B949E', family='Outfit'),
+            xaxis=dict(
+                showgrid=True,
+                gridcolor='rgba(255,255,255,0.05)',
+                title_font=dict(size=12)
+            ),
+            yaxis=dict(
+                showgrid=True,
+                gridcolor='rgba(255,255,255,0.05)',
+                title_font=dict(size=12)
+            ),
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=-0.3,
+                xanchor="center",
+                x=0.5
+            ),
+            height=400,
+            margin=dict(t=60, b=80, l=60, r=40)
+        )
         
-        with search_col1:
-            search_term = st.text_input(
-                "🔎 Cerca per ID, città o codice cliente",
-                placeholder="Es: HAB00001, Milano, CLI1234..."
-            )
-        
-        with search_col2:
-            sort_by = st.selectbox(
-                "Ordina per",
-                ["Risk Score ↓", "Risk Score ↑", "CLV ↓", "CLV ↑", "Churn ↓"]
-            )
-        
-        # Filter and sort
-        display_df = filtered_df.copy()
-        
-        if search_term:
-            mask = (
-                display_df['id'].str.contains(search_term, case=False, na=False) |
-                display_df['citta'].str.contains(search_term, case=False, na=False) |
-                display_df['codice_cliente'].str.contains(search_term, case=False, na=False)
-            )
-            display_df = display_df[mask]
-        
-        # Sort
-        sort_mapping = {
-            "Risk Score ↓": ('risk_score', False),
-            "Risk Score ↑": ('risk_score', True),
-            "CLV ↓": ('clv', False),
-            "CLV ↑": ('clv', True),
-            "Churn ↓": ('churn_probability', False)
-        }
-        sort_col, ascending = sort_mapping[sort_by]
-        display_df = display_df.sort_values(sort_col, ascending=ascending)
-        
-        st.markdown(f"**{len(display_df):,}** risultati trovati")
-        
-        # Display as cards
-        for idx, row in display_df.head(20).iterrows():
-            risk_class = row['risk_category'].lower()
-            solar_info = f"☀️ {row['solar_potential_kwh']:,} kWh/anno" if pd.notna(row['solar_potential_kwh']) else "☀️ Non calcolato"
-            
-            st.markdown(f"""
-            <div class="glass-card" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
-                <div style="flex: 1; min-width: 200px;">
-                    <h4 style="margin: 0; color: var(--star-white); font-size: 1.1rem;">{row['id']}</h4>
-                    <p style="margin: 0.25rem 0; color: var(--comet-gray); font-size: 0.85rem;">
-                        📍 {row['citta']} · {row['codice_cliente']}
-                    </p>
-                </div>
-                <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: center;">
-                    <div style="text-align: center;">
-                        <p style="margin: 0; color: var(--comet-gray); font-size: 0.7rem; text-transform: uppercase;">Risk Score</p>
-                        <p style="margin: 0; color: var(--star-white); font-size: 1.5rem; font-weight: 700;">{row['risk_score']}</p>
-                    </div>
-                    <div style="text-align: center;">
-                        <p style="margin: 0; color: var(--comet-gray); font-size: 0.7rem; text-transform: uppercase;">Zona</p>
-                        <p style="margin: 0; color: var(--star-white); font-size: 1.5rem; font-weight: 700;">{row['zona_sismica']}</p>
-                    </div>
-                    <div style="text-align: center;">
-                        <p style="margin: 0; color: var(--comet-gray); font-size: 0.7rem; text-transform: uppercase;">CLV</p>
-                        <p style="margin: 0; color: var(--star-white); font-size: 1.5rem; font-weight: 700;">€{row['clv']:,}</p>
-                    </div>
-                    <span class="risk-badge risk-{risk_class}">{row['risk_category']}</span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        if len(display_df) > 20:
-            st.info(f"📄 Mostrati i primi 20 risultati di {len(display_df):,}. Usa i filtri per restringere la ricerca.")
+        st.plotly_chart(fig_scatter, use_container_width=True)
     
+    with analytics_col4:
+        # Churn Probability Distribution
+        churn_bins = pd.cut(filtered_df['churn_probability'], bins=[0, 0.2, 0.4, 0.6, 0.8, 1.0],
+                           labels=['Molto Basso', 'Basso', 'Medio', 'Alto', 'Molto Alto'])
+        churn_counts = churn_bins.value_counts().sort_index()
+
+        fig_churn = go.Figure(data=[go.Bar(
+            y=churn_counts.index.astype(str),
+            x=churn_counts.values,
+            orientation='h',
+            marker=dict(
+                color=['#30D158', '#0A84FF', '#FFD60A', '#FF9F0A', '#FF453A'][:len(churn_counts)],
+                line=dict(color='rgba(255,255,255,0.2)', width=1)
+            ),
+            text=churn_counts.values,
+            textposition='outside',
+            textfont=dict(family='JetBrains Mono', size=11, color='#F0F6FC'),
+            hovertemplate="<b>%{y}</b><br>%{x:,} clienti<extra></extra>"
+        )])
+
+        fig_churn.update_layout(
+            title=dict(
+                text="Distribuzione Churn Probability",
+                font=dict(family='Outfit', size=18, color='#F0F6FC'),
+                x=0.5
+            ),
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='#8B949E'),
+            xaxis=dict(
+                showgrid=True,
+                gridcolor='rgba(255,255,255,0.05)',
+                tickfont=dict(family='JetBrains Mono', size=11)
+            ),
+            yaxis=dict(
+                showgrid=False,
+                tickfont=dict(family='Outfit', size=12)
+            ),
+            height=400,
+            margin=dict(t=60, b=40, l=120, r=60)
+        )
+
+        st.plotly_chart(fig_churn, use_container_width=True)
     
-    # ═══════════════════════════════════════════════════════════════════════════════
-    # TAB 4: A.D.A. CHAT
-    # ═══════════════════════════════════════════════════════════════════════════════
+    st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
     
-    with tab4:
-        render_ada_chat()
+    # City breakdown
+    st.markdown("### 🏙️ Top 10 Città per Concentrazione Rischio")
+    
+    city_risk = filtered_df.groupby('citta').agg({
+        'risk_score': 'mean',
+        'id': 'count',
+        'clv': 'sum'
+    }).rename(columns={'id': 'n_abitazioni', 'clv': 'clv_totale'}).reset_index()
+    city_risk = city_risk.sort_values('risk_score', ascending=False).head(10)
+    
+    fig_city = go.Figure(data=[go.Bar(
+        x=city_risk['citta'],
+        y=city_risk['risk_score'],
+        marker=dict(
+            color=city_risk['risk_score'],
+            colorscale=[[0, '#30D158'], [0.5, '#FFD60A'], [1, '#FF453A']],
+            line=dict(color='rgba(255,255,255,0.2)', width=1)
+        ),
+        text=[f"{x:.0f}" for x in city_risk['risk_score']],
+        textposition='outside',
+        textfont=dict(family='JetBrains Mono', size=11, color='#F0F6FC'),
+        hovertemplate="<b>%{x}</b><br>Risk Score: %{y:.1f}<br>Abitazioni: %{customdata[0]:,}<br>CLV Totale: €%{customdata[1]:,.0f}<extra></extra>",
+        customdata=city_risk[['n_abitazioni', 'clv_totale']].values
+    )])
+    
+    fig_city.update_layout(
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        font=dict(color='#8B949E', family='Outfit'),
+        xaxis=dict(
+            showgrid=False,
+            tickfont=dict(size=11),
+            tickangle=-45
+        ),
+        yaxis=dict(
+            showgrid=True,
+            gridcolor='rgba(255,255,255,0.05)',
+            title="Risk Score Medio",
+            title_font=dict(size=12),
+            range=[0, 100]
+        ),
+        height=350,
+        margin=dict(t=20, b=80, l=60, r=40)
+    )
+    
+    st.plotly_chart(fig_city, use_container_width=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# FOOTER (Shared across all modes)
+# TAB 3: CLIENT DETAIL
+# ═══════════════════════════════════════════════════════════════════════════════
+
+with tab3:
+    st.markdown("### 🔍 Ricerca Clienti")
+    
+    search_col1, search_col2 = st.columns([3, 1])
+    
+    with search_col1:
+        search_term = st.text_input(
+            "🔎 Cerca per ID, città o codice cliente",
+            placeholder="Es: HAB00001, Milano, CLI1234..."
+        )
+    
+    with search_col2:
+        sort_by = st.selectbox(
+            "Ordina per",
+            ["Risk Score ↓", "Risk Score ↑", "CLV ↓", "CLV ↑", "Churn ↓"]
+        )
+    
+    # Filter and sort
+    display_df = filtered_df.copy()
+    
+    if search_term:
+        mask = (
+            display_df['id'].str.contains(search_term, case=False, na=False) |
+            display_df['citta'].str.contains(search_term, case=False, na=False) |
+            display_df['codice_cliente'].str.contains(search_term, case=False, na=False)
+        )
+        display_df = display_df[mask]
+    
+    # Sort
+    sort_mapping = {
+        "Risk Score ↓": ('risk_score', False),
+        "Risk Score ↑": ('risk_score', True),
+        "CLV ↓": ('clv', False),
+        "CLV ↑": ('clv', True),
+        "Churn ↓": ('churn_probability', False)
+    }
+    sort_col, ascending = sort_mapping[sort_by]
+    display_df = display_df.sort_values(sort_col, ascending=ascending)
+    
+    st.markdown(f"**{len(display_df):,}** risultati trovati")
+    
+    # Display as cards
+    for idx, row in display_df.head(20).iterrows():
+        risk_class = row['risk_category'].lower()
+        solar_info = f"☀️ {row['solar_potential_kwh']:,} kWh/anno" if pd.notna(row['solar_potential_kwh']) else "☀️ Non calcolato"
+        
+        st.markdown(f"""
+        <div class="glass-card" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+            <div style="flex: 1; min-width: 200px;">
+                <h4 style="margin: 0; color: var(--star-white); font-size: 1.1rem;">{row['id']}</h4>
+                <p style="margin: 0.25rem 0; color: var(--comet-gray); font-size: 0.85rem;">
+                    📍 {row['citta']} · {row['codice_cliente']}
+                </p>
+            </div>
+            <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: center;">
+                <div style="text-align: center;">
+                    <p style="margin: 0; color: var(--comet-gray); font-size: 0.7rem; text-transform: uppercase;">Risk Score</p>
+                    <p style="margin: 0; color: var(--star-white); font-size: 1.5rem; font-weight: 700;">{row['risk_score']}</p>
+                </div>
+                <div style="text-align: center;">
+                    <p style="margin: 0; color: var(--comet-gray); font-size: 0.7rem; text-transform: uppercase;">Zona</p>
+                    <p style="margin: 0; color: var(--star-white); font-size: 1.5rem; font-weight: 700;">{row['zona_sismica']}</p>
+                </div>
+                <div style="text-align: center;">
+                    <p style="margin: 0; color: var(--comet-gray); font-size: 0.7rem; text-transform: uppercase;">CLV</p>
+                    <p style="margin: 0; color: var(--star-white); font-size: 1.5rem; font-weight: 700;">€{row['clv']:,}</p>
+                </div>
+                <span class="risk-badge risk-{risk_class}">{row['risk_category']}</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    if len(display_df) > 20:
+        st.info(f"📄 Mostrati i primi 20 risultati di {len(display_df):,}. Usa i filtri per restringere la ricerca.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TAB 4: A.D.A. CHAT
+# ═══════════════════════════════════════════════════════════════════════════════
+
+with tab4:
+    render_ada_chat()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# FOOTER
 # ═══════════════════════════════════════════════════════════════════════════════
 
 st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)

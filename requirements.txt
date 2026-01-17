@@ -9,3 +9,8 @@ python-dotenv>=1.0.0
 
 # Per A.D.A. Python Engine
 anthropic>=0.18.0
+
+folium
+streamlit-folium
+osmnx
+tqdm
