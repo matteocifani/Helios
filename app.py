@@ -29,6 +29,16 @@ from constants import (
     ABITAZIONI_COLUMNS,
 )
 
+# Import db utilities
+from db_utils import (
+    fetch_abitazioni,
+    fetch_clienti,
+    check_client_interactions,
+    is_client_eligible_for_top20,
+    check_all_clients_interactions_batch,
+    insert_phone_call_interaction
+)
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # CONFIGURAZIONE PAGINA
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -654,22 +664,57 @@ def calculate_recommendation_score(rec, weights):
     return score
 
 
-def get_all_recommendations(data, weights):
-    """Get all recommendations with scores across all clients."""
+def get_all_recommendations(data, weights, filter_top20=True):
+    """
+    Get all recommendations with scores across all clients.
+
+    Args:
+        data: Client data with recommendations
+        weights: Scoring weights
+        filter_top20: If True, filter out clients not eligible for Top 20
+
+    Returns:
+        List of recommendations sorted by score (descending)
+    """
+    # Batch check all clients at once (MUCH faster - 3 queries instead of N*5)
+    if filter_top20:
+        all_client_codes = [client['codice_cliente'] for client in data]
+        batch_interactions = check_all_clients_interactions_batch(all_client_codes)
+    else:
+        batch_interactions = {}
+
     all_recs = []
     for client in data:
-        for rec in client['raccomandazioni']:
-            score = calculate_recommendation_score(rec, weights)
-            all_recs.append({
-                'codice_cliente': client['codice_cliente'],
-                'nome': client['anagrafica']['nome'],
-                'cognome': client['anagrafica']['cognome'],
-                'prodotto': rec['prodotto'],
-                'area_bisogno': rec['area_bisogno'],
-                'score': score,
-                'client_data': client,
-                'recommendation': rec
-            })
+        codice_cliente = client['codice_cliente']
+
+        # Get pre-fetched interaction data from batch
+        if filter_top20:
+            indicators = batch_interactions.get(codice_cliente, {})
+            is_eligible = not any(indicators.values())  # Eligible if NO interactions
+
+            # Store eligibility status in client data for later use
+            client['_is_eligible_top20'] = is_eligible
+            client['_interaction_indicators'] = indicators
+        else:
+            is_eligible = True
+            client['_is_eligible_top20'] = True
+            client['_interaction_indicators'] = {}
+
+        # Only include eligible clients in Top 20 list
+        if not filter_top20 or is_eligible:
+            for rec in client['raccomandazioni']:
+                score = calculate_recommendation_score(rec, weights)
+                all_recs.append({
+                    'codice_cliente': codice_cliente,
+                    'nome': client['anagrafica']['nome'],
+                    'cognome': client['anagrafica']['cognome'],
+                    'prodotto': rec['prodotto'],
+                    'area_bisogno': rec['area_bisogno'],
+                    'score': score,
+                    'client_data': client,
+                    'recommendation': rec
+                })
+
     return sorted(all_recs, key=lambda x: x['score'], reverse=True)
 
 
@@ -694,6 +739,14 @@ if 'selected_abitazione' not in st.session_state:
 # A.D.A. integration
 if 'ada_auto_prompt' not in st.session_state:
     st.session_state.ada_auto_prompt = None
+
+# User info (for login - to be implemented)
+if 'user_name' not in st.session_state:
+    st.session_state.user_name = "Agente Vita Sicura"  # Default until login is implemented
+if 'user_email' not in st.session_state:
+    st.session_state.user_email = "agente@vitasicura.it"  # Default until login is implemented
+if 'user_phone' not in st.session_state:
+    st.session_state.user_phone = "+39 02 1234 5678"  # Default until login is implemented
 
 # Dashboard mode
 if 'dashboard_mode' not in st.session_state:
@@ -1694,8 +1747,102 @@ else:
     if not nbo_data:
         st.error("Impossibile caricare i dati NBO. Verifica che il file Data/nbo_master.json esista.")
     else:
+        # Check if we're in Top 5 view
+        if st.session_state.nbo_page == 'top5':
+            # ═══════════════════════════════════════════════════════════════════════════════
+            # TOP 5 AZIONI PRIORITARIE VIEW
+            # ═══════════════════════════════════════════════════════════════════════════════
+
+            # Back button
+            if st.button("← Torna al Top 20", type="secondary"):
+                st.session_state.nbo_page = 'dashboard'
+                st.rerun()
+
+            st.markdown("# 🎯 Top 5 Azioni Prioritarie")
+            st.markdown("""
+            <div style="background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 1rem; margin-bottom: 1.5rem; border-radius: 4px;">
+                <p style="margin: 0; color: #92400E; font-size: 0.95rem; line-height: 1.6;">
+                    <strong>📞 Azione Immediata Richiesta</strong><br>
+                    Questi sono i clienti con il punteggio piu alto per i quali e consigliato effettuare una chiamata
+                    o aumentare la pressione commerciale. Contatta questi clienti prioritariamente.
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Get top 5 from all_recs
+            all_recs = get_all_recommendations(nbo_data, st.session_state.nbo_weights)
+            top5_recs = all_recs[:5]
+
+            # Display Top 5 clients
+            for i, rec in enumerate(top5_recs):
+                score_color = "#10B981" if rec['score'] >= 70 else "#F59E0B" if rec['score'] >= 50 else "#EF4444"
+
+                col_card, col_btn = st.columns([5, 1])
+
+                with col_card:
+                    st.markdown(f"""
+                    <div class="glass-card" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; border-left: 4px solid {score_color};">
+                        <div style="flex: 1; min-width: 200px;">
+                            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                <span style="background: linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%); color: white; padding: 0.35rem 0.85rem; border-radius: 100px; font-size: 0.85rem; font-weight: 700;">TOP #{i+1}</span>
+                                <h4 style="margin: 0; color: #1B3A5F; font-size: 1.1rem; font-weight: 700;">{rec['nome']} {rec['cognome']}</h4>
+                            </div>
+                            <p style="margin: 0.25rem 0 0 3rem; color: #64748B; font-size: 0.85rem;">
+                                {rec['codice_cliente']} · {rec['prodotto']}
+                            </p>
+                        </div>
+                        <div style="display: flex; gap: 1.5rem; align-items: center;">
+                            <div style="text-align: center;">
+                                <p style="margin: 0; color: #94A3B8; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em;">Area</p>
+                                <p style="margin: 0; color: #1B3A5F; font-size: 0.9rem; font-weight: 600;">{rec['area_bisogno'].split()[0]}</p>
+                            </div>
+                            <div style="text-align: center;">
+                                <p style="margin: 0; color: #94A3B8; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em;">Score</p>
+                                <p style="margin: 0; color: {score_color}; font-size: 1.5rem; font-weight: 700; font-family: 'JetBrains Mono', monospace;">{rec['score']:.1f}</p>
+                            </div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                with col_btn:
+                    if st.button("Dettagli", key=f"top5_detail_{i}", use_container_width=True):
+                        st.session_state.nbo_page = 'detail'
+                        st.session_state.nbo_selected_client = rec['client_data']
+                        st.session_state.nbo_selected_recommendation = rec['recommendation']
+                        st.rerun()
+
+            # ADA Section at the end of Top 5
+            st.markdown("<br><br>", unsafe_allow_html=True)
+            st.markdown("## 🤖 ADA – Sintesi e Azioni")
+            st.markdown("""
+            <div class="glass-card" style="border-left: 4px solid #00A0B0;">
+                <p style="color: #64748B; font-size: 0.95rem; line-height: 1.6; margin-bottom: 1rem;">
+                    ADA puo aiutarti ad analizzare questi clienti prioritari e preparare comunicazioni personalizzate.
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Prepare context for ADA about Top 5 clients
+            top5_context = "I Top 5 clienti prioritari sono:\n\n"
+            for i, rec in enumerate(top5_recs):
+                top5_context += f"{i+1}. {rec['nome']} {rec['cognome']} ({rec['codice_cliente']}) - Score: {rec['score']:.1f} - Prodotto raccomandato: {rec['prodotto']}\n"
+
+            # Button for mass email action
+            if st.button("📧 Prepara Email Personalizzate", type="primary", use_container_width=True, key="mass_email_top5"):
+                st.session_state.ada_auto_prompt = f"""Analizza questi {len(top5_recs)} clienti prioritari e crea una strategia di contatto:
+
+{top5_context}
+
+Per ciascun cliente, suggerisci:
+1. Il miglior approccio di contatto
+2. I punti chiave da evidenziare nella comunicazione
+3. Una bozza di email personalizzata che tenga conto del prodotto raccomandato e dello score
+
+Le email devono essere personalizzate per ogni cliente, non identiche."""
+                st.rerun()
+
         # Check if we're in detail view
-        if st.session_state.nbo_page == 'detail' and st.session_state.nbo_selected_client:
+        elif st.session_state.nbo_page == 'detail' and st.session_state.nbo_selected_client:
             # ═══════════════════════════════════════════════════════════════════════════════
             # NBO CLIENT DETAIL VIEW
             # ═══════════════════════════════════════════════════════════════════════════════
@@ -1703,12 +1850,127 @@ else:
             client_data = st.session_state.nbo_selected_client
             recommendation = st.session_state.nbo_selected_recommendation
 
-            # Back button
-            if st.button("← Torna alla Dashboard", type="secondary"):
-                st.session_state.nbo_page = 'dashboard'
-                st.session_state.nbo_selected_client = None
-                st.session_state.nbo_selected_recommendation = None
-                st.rerun()
+            # Back button and action button
+            col_back, col_action = st.columns([1, 1])
+            with col_back:
+                if st.button("← Torna alla Dashboard", type="secondary", use_container_width=True):
+                    st.session_state.nbo_page = 'dashboard'
+                    st.session_state.nbo_selected_client = None
+                    st.session_state.nbo_selected_recommendation = None
+                    st.rerun()
+
+            with col_action:
+                # Create a button instead of expander to avoid label issues
+                if st.button("📞 Ho chiamato il cliente", type="primary", use_container_width=True, key="open_call_form"):
+                    st.session_state.show_call_form = True
+
+                # Show form in a modal-like container if button was clicked
+                if st.session_state.get('show_call_form', False):
+                    st.markdown("---")
+                    st.markdown("##### 📞 Dettagli della chiamata")
+
+                    # Get top recommendation for this client
+                    top_recommendation = None
+                    if client_data.get('raccomandazioni'):
+                        # Calculate scores and get the top one
+                        recs_with_scores = []
+                        for rec in client_data['raccomandazioni']:
+                            score = calculate_recommendation_score(rec, st.session_state.nbo_weights)
+                            recs_with_scores.append((score, rec))
+                        recs_with_scores.sort(key=lambda x: x[0], reverse=True)
+                        top_recommendation = recs_with_scores[0][1] if recs_with_scores else None
+
+                    # Define available products
+                    available_products = [
+                        "Assicurazione Casa e Famiglia: Casa Serena",
+                        "Piano Individuale Pensionistico (PIP): Pensione Serenità",
+                        "Polizza Salute e Infortuni: Salute Protetta",
+                        "Polizza Vita a Premi Ricorrenti: Risparmio Costante",
+                        "Polizza Vita a Premio Unico: Futuro Sicuro"
+                    ]
+
+                    # Polizza proposta (obbligatorio) - Sì/No/Altre
+                    polizza_scelta = st.radio(
+                        "Polizza proposta *",
+                        options=["Sì", "No", "Altre"],
+                        help="Sì = raccomandata con score maggiore, Altre = scegli tra le opzioni disponibili",
+                        horizontal=True
+                    )
+
+                    # If "Sì", use top recommendation; if "Altre", show dropdown
+                    polizza_proposta = None
+                    if polizza_scelta == "Sì" and top_recommendation:
+                        polizza_proposta = top_recommendation['prodotto']
+                        st.info(f"💡 Polizza raccomandata: **{polizza_proposta}**")
+                    elif polizza_scelta == "Altre":
+                        polizza_proposta = st.selectbox(
+                            "Seleziona polizza",
+                            options=available_products,
+                            help="Scegli una polizza tra quelle disponibili"
+                        )
+                    elif polizza_scelta == "No":
+                        polizza_proposta = "Nessuna proposta"
+
+                    # Esito (obbligatorio) - no empty option
+                    esito = st.selectbox(
+                        "Esito della chiamata *",
+                        options=["Positivo", "Neutro", "Negativo"],
+                        help="Campo obbligatorio"
+                    )
+
+                    # Note aggiuntive (opzionale)
+                    note_aggiuntive = st.text_area(
+                        "Note aggiuntive",
+                        placeholder="Inserisci eventuali note sulla chiamata...",
+                        help="Campo opzionale"
+                    )
+
+                    st.markdown("<br>", unsafe_allow_html=True)
+
+                    col_cancel, col_submit = st.columns(2)
+                    with col_cancel:
+                        if st.button("❌ Annulla", use_container_width=True):
+                            st.session_state.show_call_form = False
+                            st.rerun()
+
+                    with col_submit:
+                        if st.button("✅ Registra chiamata", type="primary", use_container_width=True):
+                            codice_cliente = client_data['codice_cliente']
+
+                            # Costruisci le note complete
+                            note_complete = f"Polizza proposta: {polizza_proposta}\nEsito: {esito}"
+                            if note_aggiuntive and note_aggiuntive.strip():
+                                note_complete += f"\nNote: {note_aggiuntive}"
+
+                            success = insert_phone_call_interaction(
+                                codice_cliente,
+                                polizza_proposta=polizza_proposta,
+                                esito=esito.lower(),
+                                note=note_complete
+                            )
+
+                            if success:
+                                # Update client data to reflect the call
+                                if '_interaction_indicators' not in client_data:
+                                    client_data['_interaction_indicators'] = {}
+                                client_data['_interaction_indicators']['call_last_10_days'] = True
+                                client_data['_is_eligible_top20'] = False
+
+                                # Close form and show success
+                                st.session_state.show_call_form = False
+                                st.session_state.show_success_message = True
+                                st.rerun()
+                            else:
+                                st.error("❌ Errore nella registrazione della chiamata. Riprova.")
+
+                    st.markdown("---")
+
+                # Show success message if flag is set
+                if st.session_state.get('show_success_message', False):
+                    st.success("✅ Esito registrato! Il cliente non sara piu visibile nel Top 20/Top 5.")
+                    st.session_state.show_success_message = False
+
+            st.markdown("<br>", unsafe_allow_html=True)
 
             # Client header
             st.markdown(f"""
@@ -1770,6 +2032,49 @@ else:
                 </div>
                 """, unsafe_allow_html=True)
 
+                # Interazione cliente section
+                st.markdown("<br>", unsafe_allow_html=True)
+
+                # Get interaction indicators
+                indicators = client_data.get('_interaction_indicators', {})
+                is_eligible = client_data.get('_is_eligible_top20', True)
+
+                # Show warning icon if client has any active interaction
+                warning_icon = " ⚠️" if not is_eligible else ""
+
+                st.markdown(f"### Interazione cliente{warning_icon}")
+
+                if not is_eligible:
+                    st.markdown("""
+                    <div style="background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 0.75rem; margin-bottom: 1rem; border-radius: 4px;">
+                        <p style="margin: 0; color: #92400E; font-size: 0.85rem; font-weight: 500;">
+                            ⚠️ Cliente non eleggibile per azioni commerciali a causa di interazioni recenti
+                        </p>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                # Indicators display
+                def render_indicator(label, value):
+                    icon = "✓" if value else "✗"
+                    color = "#EF4444" if value else "#10B981"
+                    bg_color = "#FEE2E2" if value else "#DCFCE7"
+                    text = "Sì" if value else "No"
+
+                    return f"""<div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid #E2E8F0;">
+    <span style="color: #64748B; font-size: 0.85rem;">{label}</span>
+    <span style="background: {bg_color}; color: {color}; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">{icon} {text}</span>
+</div>"""
+
+                indicators_html = "".join([
+                    render_indicator("Email ultimi 5 giorni lav.", indicators.get('email_last_5_days', False)),
+                    render_indicator("Telefonata ultimi 10 giorni", indicators.get('call_last_10_days', False)),
+                    render_indicator("Nuova polizza ultimi 30 gg", indicators.get('new_policy_last_30_days', False)),
+                    render_indicator("Reclamo aperto", indicators.get('open_complaint', False)),
+                    render_indicator("Sinistro ultimi 60 giorni", indicators.get('claim_last_60_days', False))
+                ])
+
+                st.markdown(f"""<div class="glass-card">{indicators_html}</div>""", unsafe_allow_html=True)
+
             with col2:
                 st.markdown("### Prodotti Posseduti")
                 prodotti = meta.get('prodotti_posseduti', [])
@@ -1828,6 +2133,96 @@ else:
 
             folium_static(m, width=None, height=400)
 
+            # ═══════════════════════════════════════════════════════════════════
+            # Computer Vision - Satellite View Section
+            # ═══════════════════════════════════════════════════════════════════
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("### 🛰️ Abitazione – Vista Satellitare")
+
+            # For now, use simulated CV data (will be replaced with real DB fields)
+            # In production, these would come from: client_data.get('has_solar_panels', False), etc.
+            import hashlib
+            codice_cliente = client_data['codice_cliente']
+            client_hash = int(hashlib.md5(codice_cliente.encode()).hexdigest(), 16)
+
+            # Simulate CV detections based on client hash (for demonstration)
+            has_solar_panels = (client_hash % 3) == 0  # ~33% have solar panels
+            has_pool = (client_hash % 5) == 0  # ~20% have pool
+            has_garden = (client_hash % 2) == 0  # ~50% have garden
+
+            # Satellite image placeholder
+            st.markdown(f"""
+            <div class="glass-card" style="text-align: center; background: #F3F4F6; padding: 2rem;">
+                <p style="color: #94A3B8; font-size: 3rem; margin: 0;">🗺️</p>
+                <p style="color: #64748B; font-size: 0.85rem; margin-top: 0.5rem;">
+                    Immagine satellitare dell'abitazione<br>
+                    <span style="font-size: 0.75rem; color: #94A3B8;">
+                        Lat: {lat:.6f}, Lon: {lon:.6f}
+                    </span>
+                </p>
+                <p style="color: #94A3B8; font-size: 0.75rem; font-style: italic; margin-top: 1rem;">
+                    [L'immagine satellitare verra caricata dal database]
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("#### Caratteristiche Rilevate (Computer Vision)")
+
+            # CV indicators
+            col_cv1, col_cv2, col_cv3 = st.columns(3)
+
+            with col_cv1:
+                icon = "✅" if has_solar_panels else "❌"
+                color = "#10B981" if has_solar_panels else "#EF4444"
+                bg_color = "#DCFCE7" if has_solar_panels else "#FEE2E2"
+
+                st.markdown(f"""
+                <div class="glass-card" style="text-align: center; background: {bg_color}; border-left: 4px solid {color};">
+                    <p style="font-size: 2rem; margin: 0;">{icon}</p>
+                    <p style="margin: 0.5rem 0 0 0; color: {color}; font-weight: 600; font-size: 0.9rem;">
+                        Pannelli Solari
+                    </p>
+                    <p style="margin: 0.25rem 0 0 0; color: #64748B; font-size: 0.75rem;">
+                        {'Rilevati' if has_solar_panels else 'Non rilevati'}
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with col_cv2:
+                icon = "✅" if has_pool else "❌"
+                color = "#10B981" if has_pool else "#EF4444"
+                bg_color = "#DCFCE7" if has_pool else "#FEE2E2"
+
+                st.markdown(f"""
+                <div class="glass-card" style="text-align: center; background: {bg_color}; border-left: 4px solid {color};">
+                    <p style="font-size: 2rem; margin: 0;">{icon}</p>
+                    <p style="margin: 0.5rem 0 0 0; color: {color}; font-weight: 600; font-size: 0.9rem;">
+                        Piscina
+                    </p>
+                    <p style="margin: 0.25rem 0 0 0; color: #64748B; font-size: 0.75rem;">
+                        {'Rilevata' if has_pool else 'Non rilevata'}
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with col_cv3:
+                icon = "✅" if has_garden else "❌"
+                color = "#10B981" if has_garden else "#EF4444"
+                bg_color = "#DCFCE7" if has_garden else "#FEE2E2"
+
+                st.markdown(f"""
+                <div class="glass-card" style="text-align: center; background: {bg_color}; border-left: 4px solid {color};">
+                    <p style="font-size: 2rem; margin: 0;">{icon}</p>
+                    <p style="margin: 0.5rem 0 0 0; color: {color}; font-weight: 600; font-size: 0.9rem;">
+                        Giardino
+                    </p>
+                    <p style="margin: 0.25rem 0 0 0; color: #64748B; font-size: 0.75rem;">
+                        {'Rilevato' if has_garden else 'Non rilevato'}
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+
             # All recommendations for this client
             st.markdown("### Tutte le Raccomandazioni")
             recs_data = []
@@ -1845,6 +2240,137 @@ else:
 
             df_recs = pd.DataFrame(recs_data)
             st.dataframe(df_recs, use_container_width=True, hide_index=True)
+
+            # ═══════════════════════════════════════════════════════════════════
+            # ADA SECTION - Client Support
+            # ═══════════════════════════════════════════════════════════════════
+            st.markdown("<br><br>", unsafe_allow_html=True)
+            st.markdown("## 🤖 ADA – Supporto Cliente")
+
+            # Initialize session state for email draft
+            if 'client_email_draft' not in st.session_state:
+                st.session_state.client_email_draft = None
+            if 'current_draft_client' not in st.session_state:
+                st.session_state.current_draft_client = None
+
+            # Prepare client context for ADA
+            codice_cliente_ada = client_data['codice_cliente']
+            nome_completo = f"{client_data['anagrafica']['nome']} {client_data['anagrafica']['cognome']}"
+
+            # Build context string
+            client_context = f"""Cliente: {nome_completo} ({codice_cliente_ada})
+CLV Stimato: €{client_data['metadata']['clv_stimato']:,}
+Polizze Attuali: {client_data['metadata']['num_polizze_attuali']}
+Prodotto Raccomandato: {recommendation['prodotto']}
+Area Bisogno: {recommendation['area_bisogno']}
+Score Raccomandazione: {calculate_recommendation_score(recommendation, st.session_state.nbo_weights):.1f}
+Retention Gain: {recommendation['componenti']['retention_gain']:.1f}%
+Propensione: {recommendation['componenti']['propensione']:.1f}%"""
+
+            # Generate email draft button
+            if st.button("✍️ Genera Bozza Email con ADA", type="primary", use_container_width=True, key="generate_email_draft"):
+                prompt = f"""IMPORTANTE: NON usare alcun tool. Ti sto fornendo TUTTI i dati necessari qui sotto. Genera DIRETTAMENTE l'email.
+
+DATI CLIENTE (già forniti, non recuperare dal database):
+{client_context}
+
+DATI AGENTE:
+Nome: {st.session_state.user_name}
+Email: {st.session_state.user_email}
+Telefono: {st.session_state.user_phone}
+Azienda: Vita Sicura
+
+TASK: Scrivi una bozza di email commerciale professionale che:
+1. Sia personalizzata per {nome_completo}
+2. Proponga il prodotto "{recommendation['prodotto']}" evidenziandone i benefici
+3. Usi un tono professionale ma cordiale
+4. Includa una call-to-action chiara
+5. Sia lunga 150-200 parole
+6. Sia firmata da {st.session_state.user_name} di Vita Sicura
+7. Includa i contatti dell'agente (email e telefono) nella firma
+
+FORMATO RICHIESTO:
+**Oggetto:** [scrivi qui l'oggetto]
+
+---
+
+[Corpo dell'email con saluti, contenuto e firma che include nome agente, "Vita Sicura", email e telefono]
+
+GENERA L'EMAIL ORA senza usare tool."""
+
+                # Generate email using ADA engine
+                with st.spinner("🤖 ADA sta generando la bozza email..."):
+                    # Import ADA chat function
+                    from ada_chat_enhanced import init_ada_engine, get_ada_response
+
+                    # Initialize engine if needed
+                    init_ada_engine()
+
+                    # Get response from ADA
+                    result = get_ada_response(prompt)
+
+                    if result.get("success"):
+                        st.session_state.client_email_draft = result.get("response")
+                        st.session_state.current_draft_client = codice_cliente_ada
+                        st.success("✅ Bozza email generata con successo!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Errore nella generazione della bozza email. Riprova.")
+
+            # Show email draft if available
+            if st.session_state.current_draft_client == codice_cliente_ada and st.session_state.client_email_draft:
+                st.markdown("### 📧 Bozza Email Generata")
+                st.markdown(f"""
+                <div class="glass-card" style="background: #F0FDF4; border-left: 4px solid #10B981;">
+                    {st.session_state.client_email_draft}
+                </div>
+                """, unsafe_allow_html=True)
+
+                # Modify email button
+                col1, col2 = st.columns(2)
+                with col1:
+                    modify_prompt = st.text_input(
+                        "Modifica l'email con un prompt",
+                        placeholder="es. 'rendila piu formale', 'aggiungi urgenza'",
+                        key="email_modify_prompt"
+                    )
+
+                with col2:
+                    if st.button("🔄 Applica Modifica", key="apply_email_modification") and modify_prompt:
+                        updated_prompt = f"""IMPORTANTE: NON usare alcun tool. Modifica DIRETTAMENTE l'email fornita.
+
+EMAIL ATTUALE:
+{st.session_state.client_email_draft}
+
+RICHIESTA DI MODIFICA:
+{modify_prompt}
+
+CONTESTO CLIENTE (già fornito):
+{client_context}
+
+TASK: Modifica l'email secondo la richiesta mantenendo il formato:
+**Oggetto:** [oggetto modificato]
+
+---
+
+[Corpo modificato]
+
+GENERA LA VERSIONE MODIFICATA ORA senza usare tool."""
+
+                        # Update email using ADA engine
+                        with st.spinner("🤖 ADA sta modificando l'email..."):
+                            # Import ADA chat function
+                            from ada_chat_enhanced import get_ada_response
+
+                            # Get response from ADA
+                            result = get_ada_response(updated_prompt)
+
+                            if result.get("success"):
+                                st.session_state.client_email_draft = result.get("response")
+                                st.success("✅ Email modificata con successo!")
+                                st.rerun()
+                            else:
+                                st.error("❌ Errore nella modifica dell'email. Riprova.")
 
         else:
             # ═══════════════════════════════════════════════════════════════════════════════
@@ -1908,11 +2434,28 @@ else:
             with nbo_tab1:
                 st.markdown("### Top 20 Raccomandazioni per Score")
                 st.markdown("""
-                <p style="color: #64748B; font-size: 0.9rem; margin-bottom: 1rem;">
+                <p style="color: #64748B; font-size: 0.9rem; margin-bottom: 0.5rem;">
                     Le migliori opportunita di cross-selling/up-selling ordinate per score ponderato.
                     Clicca su un cliente per vedere i dettagli.
                 </p>
                 """, unsafe_allow_html=True)
+
+                # Info box about filtering criteria
+                st.markdown("""
+                <div style="background: #EFF6FF; border-left: 4px solid #3B82F6; padding: 0.75rem; margin-bottom: 1rem; border-radius: 4px;">
+                    <p style="margin: 0; color: #1E40AF; font-size: 0.85rem;">
+                        ℹ️ <strong>Filtro automatico attivo:</strong> Vengono esclusi clienti con email (ultimi 5 gg lavorativi),
+                        telefonate (ultimi 10 gg), nuove polizze (ultimi 30 gg), reclami aperti o sinistri (ultimi 60 gg).
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+
+                # Top 5 button
+                if st.button("🎯 Vai al Top 5 Azioni Prioritarie", type="primary", use_container_width=True):
+                    st.session_state.nbo_page = 'top5'
+                    st.rerun()
+
+                st.markdown("<br>", unsafe_allow_html=True)
 
                 for i, rec in enumerate(all_recs[:20]):
                     score_color = "#10B981" if rec['score'] >= 70 else "#F59E0B" if rec['score'] >= 50 else "#EF4444"
