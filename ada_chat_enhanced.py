@@ -221,7 +221,7 @@ def render_ada_chat() -> None:
 
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
-            if st.button("🚀 Usa questo prompt", key="use_auto_prompt", type="primary", use_container_width=True):
+            if st.button("🚀 Usa questo prompt", key="use_auto_prompt", type="primary", width="stretch"):
                 # Add user message with auto-prompt
                 st.session_state.ada_messages.append({"role": "user", "content": auto_prompt})
 
@@ -299,8 +299,8 @@ def get_ada_response(prompt: str) -> Dict:
     Get response from A.D.A. - tries Python engine, falls back to local.
     """
     client_id = st.session_state.get("selected_client_id")
-    history = st.session_state.ada_messages
-    
+    history = st.session_state.get("ada_messages", [])
+
     # Try Python engine
     if st.session_state.get("ada_engine"):
         try:
@@ -309,12 +309,12 @@ def get_ada_response(prompt: str) -> Dict:
                 client_id=client_id,
                 history=history
             )
-            
+
             if result.get("success"):
                 return result
         except Exception as e:
             st.error(f"A.D.A. Engine error: {e}")
-    
+
     # Fallback to local response
     return {
         "response": get_local_response(prompt),
