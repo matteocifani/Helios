@@ -649,6 +649,7 @@ def is_client_eligible_for_top20(codice_cliente: str) -> bool:
 def check_all_clients_interactions_batch(codici_clienti: list) -> Dict[str, Dict[str, bool]]:
     """
     Batch check interactions for multiple clients at once (much faster).
+    Splits into chunks to avoid URL too long errors.
 
     Args:
         codici_clienti: List of client IDs to check
@@ -699,76 +700,88 @@ def check_all_clients_interactions_batch(codici_clienti: list) -> Dict[str, Dict
         'claim_last_60_days': False
     } for cc in codici_clienti}
 
+    # Split into chunks to avoid URL too long errors
+    CHUNK_SIZE = 500  # Max clients per query
+    chunks = [cliente_ids[i:i + CHUNK_SIZE] for i in range(0, len(cliente_ids), CHUNK_SIZE)]
+    
+    total_queries = 0
+
     try:
-        # Batch query 1: All recent interactions (emails, calls, complaints)
-        try:
-            interactions_response = _retry_query(
-                lambda: client.table("interactions")
-                .select("codice_cliente, tipo_interazione, data_interazione, esito")
-                .in_("codice_cliente", cliente_ids)
-                .gte("data_interazione", five_business_days.isoformat())
-                .execute()
-            )
+        # Process each chunk
+        for chunk_idx, chunk in enumerate(chunks):
+            # Batch query 1: All recent interactions (emails, calls, complaints)
+            try:
+                interactions_response = _retry_query(
+                    lambda: client.table("interactions")
+                    .select("codice_cliente, tipo_interazione, data_interazione, esito")
+                    .in_("codice_cliente", chunk)
+                    .gte("data_interazione", five_business_days.isoformat())
+                    .execute()
+                )
+                total_queries += 1
 
-            for row in interactions_response.data:
-                cc = cliente_map.get(row['codice_cliente'])
-                if not cc:
-                    continue
+                for row in interactions_response.data:
+                    cc = cliente_map.get(row['codice_cliente'])
+                    if not cc:
+                        continue
 
-                tipo = row.get('tipo_interazione', '')
-                data = row.get('data_interazione', '')
+                    tipo = row.get('tipo_interazione', '')
+                    data = row.get('data_interazione', '')
 
-                # Check emails (last 5 business days)
-                if tipo == 'email' and data >= five_business_days.isoformat():
-                    results[cc]['email_last_5_days'] = True
+                    # Check emails (last 5 business days)
+                    if tipo == 'email' and data >= five_business_days.isoformat():
+                        results[cc]['email_last_5_days'] = True
 
-                # Check calls (last 10 days)
-                if tipo == 'telefonata' and data >= ten_days.isoformat():
-                    results[cc]['call_last_10_days'] = True
+                    # Check calls (last 10 days)
+                    if tipo == 'telefonata' and data >= ten_days.isoformat():
+                        results[cc]['call_last_10_days'] = True
 
-                # Check open complaints
-                if tipo == 'reclamo':
-                    esito = row.get('esito', '')
-                    if not esito or esito not in ['risolto', 'chiuso']:
-                        results[cc]['open_complaint'] = True
-        except Exception as e:
-            logger.debug(f"Error in batch interactions check: {e}")
+                    # Check open complaints
+                    if tipo == 'reclamo':
+                        esito = row.get('esito', '')
+                        if not esito or esito not in ['risolto', 'chiuso']:
+                            results[cc]['open_complaint'] = True
+            except Exception as e:
+                logger.warning(f"Error in batch interactions check (chunk {chunk_idx + 1}/{len(chunks)}): {e}")
 
-        # Batch query 2: Recent policies
-        try:
-            policies_response = _retry_query(
-                lambda: client.table("polizze")
-                .select("codice_cliente, data_emissione")
-                .in_("codice_cliente", cliente_ids)
-                .gte("data_emissione", thirty_days.isoformat())
-                .execute()
-            )
+            # Batch query 2: Recent policies
+            try:
+                policies_response = _retry_query(
+                    lambda: client.table("polizze")
+                    .select("codice_cliente, data_emissione")
+                    .in_("codice_cliente", chunk)
+                    .gte("data_emissione", thirty_days.isoformat())
+                    .execute()
+                )
+                total_queries += 1
 
-            for row in policies_response.data:
-                cc = cliente_map.get(row['codice_cliente'])
-                if cc:
-                    results[cc]['new_policy_last_30_days'] = True
-        except Exception as e:
-            logger.debug(f"Error in batch policies check: {e}")
+                for row in policies_response.data:
+                    cc = cliente_map.get(row['codice_cliente'])
+                    if cc:
+                        results[cc]['new_policy_last_30_days'] = True
+            except Exception as e:
+                logger.warning(f"Error in batch policies check (chunk {chunk_idx + 1}/{len(chunks)}): {e}")
 
-        # Batch query 3: Recent claims
-        try:
-            claims_response = _retry_query(
-                lambda: client.table("sinistri")
-                .select("codice_cliente, data_sinistro")
-                .in_("codice_cliente", cliente_ids)
-                .gte("data_sinistro", sixty_days.isoformat())
-                .execute()
-            )
+            # Batch query 3: Recent claims
+            try:
+                claims_response = _retry_query(
+                    lambda: client.table("sinistri")
+                    .select("codice_cliente, data_sinistro")
+                    .in_("codice_cliente", chunk)
+                    .gte("data_sinistro", sixty_days.isoformat())
+                    .execute()
+                )
+                total_queries += 1
 
-            for row in claims_response.data:
-                cc = cliente_map.get(row['codice_cliente'])
-                if cc:
-                    results[cc]['claim_last_60_days'] = True
-        except Exception as e:
-            logger.debug(f"Error in batch claims check: {e}")
+                for row in claims_response.data:
+                    cc = cliente_map.get(row['codice_cliente'])
+                    if cc:
+                        results[cc]['claim_last_60_days'] = True
+            except Exception as e:
+                logger.warning(f"Error in batch claims check (chunk {chunk_idx + 1}/{len(chunks)}): {e}")
 
-        logger.info(f"Batch checked interactions for {len(codici_clienti)} clients with 3 queries instead of {len(codici_clienti) * 5}")
+        logger.info(f"Batch checked interactions for {len(codici_clienti)} clients with {total_queries} queries "
+                   f"({len(chunks)} chunks of max {CHUNK_SIZE}) instead of {len(codici_clienti) * 5}")
         return results
 
     except Exception as e:

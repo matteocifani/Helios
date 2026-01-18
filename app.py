@@ -686,6 +686,9 @@ def calculate_recommendation_score(rec, weights):
 def get_all_recommendations(data, weights, filter_top20=True):
     """
     Get all recommendations with scores across all clients.
+    
+    Optimized to only check interactions for top-scoring candidates when filtering for Top 20,
+    reducing DB queries from thousands to dozens.
 
     Args:
         data: Client data with recommendations
@@ -695,46 +698,69 @@ def get_all_recommendations(data, weights, filter_top20=True):
     Returns:
         List of recommendations sorted by score (descending)
     """
-    # Batch check all clients at once (MUCH faster - 3 queries instead of N*5)
-    if filter_top20:
-        all_client_codes = [client['codice_cliente'] for client in data]
-        batch_interactions = check_all_clients_interactions_batch(all_client_codes)
-    else:
-        batch_interactions = {}
-
+    # STEP 1: Score ALL clients first (no DB queries, just calculations)
     all_recs = []
     for client in data:
         codice_cliente = client['codice_cliente']
-
-        # Get pre-fetched interaction data from batch
-        if filter_top20:
-            indicators = batch_interactions.get(codice_cliente, {})
-            is_eligible = not any(indicators.values())  # Eligible if NO interactions
-
-            # Store eligibility status in client data for later use
-            client['_is_eligible_top20'] = is_eligible
-            client['_interaction_indicators'] = indicators
-        else:
-            is_eligible = True
-            client['_is_eligible_top20'] = True
-            client['_interaction_indicators'] = {}
-
-        # Only include eligible clients in Top 20 list
-        if not filter_top20 or is_eligible:
-            for rec in client['raccomandazioni']:
-                score = calculate_recommendation_score(rec, weights)
-                all_recs.append({
-                    'codice_cliente': codice_cliente,
-                    'nome': client['anagrafica']['nome'],
-                    'cognome': client['anagrafica']['cognome'],
-                    'prodotto': rec['prodotto'],
-                    'area_bisogno': rec['area_bisogno'],
-                    'score': score,
-                    'client_data': client,
-                    'recommendation': rec
-                })
-
-    return sorted(all_recs, key=lambda x: x['score'], reverse=True)
+        # Initialize eligibility flags (updated later if filter_top20)
+        client['_is_eligible_top20'] = True
+        client['_interaction_indicators'] = {}
+        
+        for rec in client['raccomandazioni']:
+            score = calculate_recommendation_score(rec, weights)
+            all_recs.append({
+                'codice_cliente': codice_cliente,
+                'nome': client['anagrafica']['nome'],
+                'cognome': client['anagrafica']['cognome'],
+                'prodotto': rec['prodotto'],
+                'area_bisogno': rec['area_bisogno'],
+                'score': score,
+                'client_data': client,
+                'recommendation': rec
+            })
+    
+    # Sort by score descending
+    all_recs.sort(key=lambda x: x['score'], reverse=True)
+    
+    # STEP 2: If filtering for Top 20, only check interactions for top candidates
+    # Check more than 20 to account for some being filtered out
+    if filter_top20:
+        # Get unique client codes from top 100 recommendations (covers edge cases)
+        top_candidates = []
+        seen_clients = set()
+        for rec in all_recs:
+            cc = rec['codice_cliente']
+            if cc not in seen_clients:
+                seen_clients.add(cc)
+                top_candidates.append(cc)
+                if len(top_candidates) >= 100:  # Check only top 100 clients instead of all 11k+
+                    break
+        
+        # Batch check only these top candidates (3 queries for 100 clients instead of thousands)
+        batch_interactions = check_all_clients_interactions_batch(top_candidates)
+        
+        # Filter out ineligible clients and update their flags
+        filtered_recs = []
+        for rec in all_recs:
+            cc = rec['codice_cliente']
+            client = rec['client_data']
+            
+            if cc in batch_interactions:
+                indicators = batch_interactions[cc]
+                is_eligible = not any(indicators.values())  # Eligible if NO interactions
+                client['_is_eligible_top20'] = is_eligible
+                client['_interaction_indicators'] = indicators
+                
+                if is_eligible:
+                    filtered_recs.append(rec)
+            else:
+                # Client wasn't in top candidates, include them (they're lower scored anyway)
+                filtered_recs.append(rec)
+        
+        return filtered_recs
+    else:
+        # No filtering needed
+        return all_recs
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2445,79 +2471,78 @@ GENERA LA VERSIONE MODIFICATA ORA senza usare tool."""
 
             st.markdown("<br>", unsafe_allow_html=True)
 
-            # Tabs for NBO
-            nbo_tab1, nbo_tab2, nbo_tab3 = st.tabs([
-                "🏆 Top Raccomandazioni",
-                "📊 Analytics NBO",
-                "🔍 Ricerca Clienti"
-            ])
+            # Main Top 20 Content
+            st.markdown("### 🏆 Top 20 Raccomandazioni per Score")
+            st.markdown("""
+            <p style="color: #64748B; font-size: 0.9rem; margin-bottom: 0.5rem;">
+                Le migliori opportunita di cross-selling/up-selling ordinate per score ponderato.
+                Clicca su un cliente per vedere i dettagli.
+            </p>
+            """, unsafe_allow_html=True)
 
-            with nbo_tab1:
-                st.markdown("### Top 20 Raccomandazioni per Score")
-                st.markdown("""
-                <p style="color: #64748B; font-size: 0.9rem; margin-bottom: 0.5rem;">
-                    Le migliori opportunita di cross-selling/up-selling ordinate per score ponderato.
-                    Clicca su un cliente per vedere i dettagli.
+            # Info box about filtering criteria
+            st.markdown("""
+            <div style="background: #EFF6FF; border-left: 4px solid #3B82F6; padding: 0.75rem; margin-bottom: 1rem; border-radius: 4px;">
+                <p style="margin: 0; color: #1E40AF; font-size: 0.85rem;">
+                    ℹ️ <strong>Filtro automatico attivo:</strong> Vengono esclusi clienti con email (ultimi 5 gg lavorativi),
+                    telefonate (ultimi 10 gg), nuove polizze (ultimi 30 gg), reclami aperti o sinistri (ultimi 60 gg).
                 </p>
-                """, unsafe_allow_html=True)
+            </div>
+            """, unsafe_allow_html=True)
 
-                # Info box about filtering criteria
-                st.markdown("""
-                <div style="background: #EFF6FF; border-left: 4px solid #3B82F6; padding: 0.75rem; margin-bottom: 1rem; border-radius: 4px;">
-                    <p style="margin: 0; color: #1E40AF; font-size: 0.85rem;">
-                        ℹ️ <strong>Filtro automatico attivo:</strong> Vengono esclusi clienti con email (ultimi 5 gg lavorativi),
-                        telefonate (ultimi 10 gg), nuove polizze (ultimi 30 gg), reclami aperti o sinistri (ultimi 60 gg).
-                    </p>
-                </div>
-                """, unsafe_allow_html=True)
+            # Top 5 button
+            if st.button("🎯 Vai al Top 5 Azioni Prioritarie", type="primary", use_container_width=True):
+                st.session_state.nbo_page = 'top5'
+                st.rerun()
 
-                # Top 5 button
-                if st.button("🎯 Vai al Top 5 Azioni Prioritarie", type="primary", use_container_width=True):
-                    st.session_state.nbo_page = 'top5'
-                    st.rerun()
+            st.markdown("<br>", unsafe_allow_html=True)
 
-                st.markdown("<br>", unsafe_allow_html=True)
+            # Top 20 list
+            for i, rec in enumerate(all_recs[:20]):
+                score_color = "#10B981" if rec['score'] >= 70 else "#F59E0B" if rec['score'] >= 50 else "#EF4444"
 
-                for i, rec in enumerate(all_recs[:20]):
-                    score_color = "#10B981" if rec['score'] >= 70 else "#F59E0B" if rec['score'] >= 50 else "#EF4444"
+                col_card, col_btn = st.columns([5, 1])
 
-                    col_card, col_btn = st.columns([5, 1])
-
-                    with col_card:
-                        st.markdown(f"""
-                        <div class="glass-card" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
-                            <div style="flex: 1; min-width: 200px;">
-                                <div style="display: flex; align-items: center; gap: 0.75rem;">
-                                    <span style="background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); color: white; padding: 0.25rem 0.75rem; border-radius: 100px; font-size: 0.75rem; font-weight: 600;">#{i+1}</span>
-                                    <h4 style="margin: 0; color: #1B3A5F; font-size: 1rem; font-weight: 600;">{rec['nome']} {rec['cognome']}</h4>
-                                </div>
-                                <p style="margin: 0.25rem 0 0 2.5rem; color: #64748B; font-size: 0.85rem;">
-                                    {rec['codice_cliente']} · {rec['prodotto']}
-                                </p>
+                with col_card:
+                    st.markdown(f"""
+                    <div class="glass-card" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                        <div style="flex: 1; min-width: 200px;">
+                            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                <span style="background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); color: white; padding: 0.25rem 0.75rem; border-radius: 100px; font-size: 0.75rem; font-weight: 600;">#{i+1}</span>
+                                <h4 style="margin: 0; color: #1B3A5F; font-size: 1rem; font-weight: 600;">{rec['nome']} {rec['cognome']}</h4>
                             </div>
-                            <div style="display: flex; gap: 1.5rem; align-items: center;">
-                                <div style="text-align: center;">
-                                    <p style="margin: 0; color: #94A3B8; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em;">Area</p>
-                                    <p style="margin: 0; color: #1B3A5F; font-size: 0.85rem; font-weight: 500;">{rec['area_bisogno'].split()[0]}</p>
-                                </div>
-                                <div style="text-align: center;">
-                                    <p style="margin: 0; color: #94A3B8; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em;">Score</p>
-                                    <p style="margin: 0; color: {score_color}; font-size: 1.25rem; font-weight: 700; font-family: 'JetBrains Mono', monospace;">{rec['score']:.1f}</p>
-                                </div>
+                            <p style="margin: 0.25rem 0 0 2.5rem; color: #64748B; font-size: 0.85rem;">
+                                {rec['codice_cliente']} · {rec['prodotto']}
+                            </p>
+                        </div>
+                        <div style="display: flex; gap: 1.5rem; align-items: center;">
+                            <div style="text-align: center;">
+                                <p style="margin: 0; color: #94A3B8; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em;">Area</p>
+                                <p style="margin: 0; color: #1B3A5F; font-size: 0.85rem; font-weight: 500;">{rec['area_bisogno'].split()[0]}</p>
+                            </div>
+                            <div style="text-align: center;">
+                                <p style="margin: 0; color: #94A3B8; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em;">Score</p>
+                                <p style="margin: 0; color: {score_color}; font-size: 1.25rem; font-weight: 700; font-family: 'JetBrains Mono', monospace;">{rec['score']:.1f}</p>
                             </div>
                         </div>
-                        """, unsafe_allow_html=True)
+                    </div>
+                    """, unsafe_allow_html=True)
 
-                    with col_btn:
-                        if st.button("Dettagli", key=f"detail_{i}", use_container_width=True):
-                            st.session_state.nbo_page = 'detail'
-                            st.session_state.nbo_selected_client = rec['client_data']
-                            st.session_state.nbo_selected_recommendation = rec['recommendation']
-                            st.rerun()
+                with col_btn:
+                    if st.button("Dettagli", key=f"detail_{i}", use_container_width=True):
+                        st.session_state.nbo_page = 'detail'
+                        st.session_state.nbo_selected_client = rec['client_data']
+                        st.session_state.nbo_selected_recommendation = rec['recommendation']
+                        st.rerun()
 
-            with nbo_tab2:
-                st.markdown("### Analytics NBO")
+            # Separator
+            st.markdown("<br><br>", unsafe_allow_html=True)
+            st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
 
+            # Analytics Expander at bottom
+            with st.expander("📊 Analytics NBO", expanded=False):
+                st.markdown("### Analisi Statistiche delle Raccomandazioni")
+                
                 analytics_col1, analytics_col2 = st.columns(2)
 
                 with analytics_col1:
@@ -2628,8 +2653,9 @@ GENERA LA VERSIONE MODIFICATA ORA senza usare tool."""
 
                 st.plotly_chart(fig_products, use_container_width=True)
 
-            with nbo_tab3:
-                st.markdown("### Ricerca Clienti NBO")
+            # Search Expander at bottom
+            with st.expander("🔍 Ricerca Clienti NBO", expanded=False):
+                st.markdown("### Cerca e Visualizza Dettagli Cliente")
 
                 search_term = st.text_input(
                     "Cerca cliente",
@@ -2690,6 +2716,7 @@ GENERA LA VERSIONE MODIFICATA ORA senza usare tool."""
                             st.session_state.nbo_selected_client = client
                             st.session_state.nbo_selected_recommendation = best_rec
                             st.rerun()
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # FOOTER
