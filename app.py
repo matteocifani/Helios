@@ -27,9 +27,6 @@ from src.config.constants import (
     DEFAULT_SEISMIC_ZONE,
     SEISMIC_ZONE_COLORS,
     ABITAZIONI_COLUMNS,
-    POLICY_ICONS,
-    EMILIA_ROMAGNA_PROVINCES,
-    BOLOGNA_COORDINATES,
 )
 from src.data.db_utils import (
     fetch_abitazioni,
@@ -61,17 +58,6 @@ st.markdown("""
        GOOGLE FONTS IMPORT
     ═══════════════════════════════════════════════════════════════════════ */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap');
-
-    /* Hide sidebar completely for new navigation */
-    [data-testid="stSidebar"] {
-        display: none !important;
-    }
-    [data-testid="stSidebarNav"] {
-        display: none !important;
-    }
-    .css-1d391kg {
-        display: none !important;
-    }
 
     /* Fix for Streamlit sidebar toggle button showing text instead of icon */
     [data-testid="collapsedControl"],
@@ -709,200 +695,46 @@ def get_all_recommendations(data, weights, filter_top20=True):
     Returns:
         List of recommendations sorted by score (descending)
     """
-    # STEP 1: Score ALL clients first (no DB queries, just JSON data)
+    # Batch check all clients at once (MUCH faster - 3 queries instead of N*5)
+    if filter_top20:
+        all_client_codes = [client['codice_cliente'] for client in data]
+        batch_interactions = check_all_clients_interactions_batch(all_client_codes)
+    else:
+        batch_interactions = {}
+
     all_recs = []
     for client in data:
         codice_cliente = client['codice_cliente']
-        # Initialize eligibility flags (will be updated later if filter_top20)
-        client['_is_eligible_top20'] = True
-        client['_interaction_indicators'] = {}
 
-        for rec in client['raccomandazioni']:
-            score = calculate_recommendation_score(rec, weights)
-            all_recs.append({
-                'codice_cliente': codice_cliente,
-                'nome': client['anagrafica']['nome'],
-                'cognome': client['anagrafica']['cognome'],
-                'prodotto': rec['prodotto'],
-                'area_bisogno': rec['area_bisogno'],
-                'score': score,
-                'client_data': client,
-                'recommendation': rec
-            })
+        # Get pre-fetched interaction data from batch
+        if filter_top20:
+            indicators = batch_interactions.get(codice_cliente, {})
+            is_eligible = not any(indicators.values())  # Eligible if NO interactions
 
-    # Sort by score descending
-    all_recs.sort(key=lambda x: x['score'], reverse=True)
+            # Store eligibility status in client data for later use
+            client['_is_eligible_top20'] = is_eligible
+            client['_interaction_indicators'] = indicators
+        else:
+            is_eligible = True
+            client['_is_eligible_top20'] = True
+            client['_interaction_indicators'] = {}
 
-    # STEP 2: If filtering, only check interactions for top candidates
-    # Check more than 20 to account for some being filtered out
-    if filter_top20:
-        # Get unique client codes from top 100 recommendations (covers edge cases)
-        top_candidates = []
-        seen_clients = set()
-        for rec in all_recs:
-            cc = rec['codice_cliente']
-            if cc not in seen_clients:
-                seen_clients.add(cc)
-                top_candidates.append(cc)
-                if len(top_candidates) >= 100:
-                    break
+        # Only include eligible clients in Top 20 list
+        if not filter_top20 or is_eligible:
+            for rec in client['raccomandazioni']:
+                score = calculate_recommendation_score(rec, weights)
+                all_recs.append({
+                    'codice_cliente': codice_cliente,
+                    'nome': client['anagrafica']['nome'],
+                    'cognome': client['anagrafica']['cognome'],
+                    'prodotto': rec['prodotto'],
+                    'area_bisogno': rec['area_bisogno'],
+                    'score': score,
+                    'client_data': client,
+                    'recommendation': rec
+                })
 
-        # Batch check only these candidates (3-6 queries instead of 336)
-        batch_interactions = check_all_clients_interactions_batch(top_candidates)
-
-        # Filter out ineligible clients and update their flags
-        filtered_recs = []
-        for rec in all_recs:
-            cc = rec['codice_cliente']
-            client = rec['client_data']
-
-            if cc in batch_interactions:
-                indicators = batch_interactions[cc]
-                is_eligible = not any(indicators.values())
-                client['_is_eligible_top20'] = is_eligible
-                client['_interaction_indicators'] = indicators
-
-                if is_eligible:
-                    filtered_recs.append(rec)
-            else:
-                # Client wasn't in top candidates, include them (they're lower scored anyway)
-                filtered_recs.append(rec)
-
-        return filtered_recs
-
-    return all_recs
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# HELPER FUNCTIONS - Score Display and Policy Icons
-# ═══════════════════════════════════════════════════════════════════════════════
-
-def get_score_display(score: float) -> dict:
-    """
-    Convert numeric score to visual display with label and color.
-
-    Returns:
-        dict with 'label', 'color', 'bg_color', 'percentage'
-    """
-    if score >= 75:
-        return {
-            'label': 'Eccellente',
-            'color': '#10B981',
-            'bg_color': '#DCFCE7',
-            'percentage': min(score, 100)
-        }
-    elif score >= 60:
-        return {
-            'label': 'Alta',
-            'color': '#00A0B0',
-            'bg_color': '#E0F7FA',
-            'percentage': score
-        }
-    elif score >= 45:
-        return {
-            'label': 'Media',
-            'color': '#F59E0B',
-            'bg_color': '#FEF3C7',
-            'percentage': score
-        }
-    else:
-        return {
-            'label': 'Bassa',
-            'color': '#94A3B8',
-            'bg_color': '#F1F5F9',
-            'percentage': score
-        }
-
-
-def render_opportunity_bar(score: float) -> str:
-    """
-    Generate HTML for opportunity progress bar with label.
-    """
-    display = get_score_display(score)
-
-    return f'''
-    <div class="opportunity-bar-container">
-        <div class="opportunity-bar">
-            <div class="opportunity-bar-fill" style="width: {display['percentage']}%; background: {display['color']};"></div>
-        </div>
-        <span class="opportunity-label" style="color: {display['color']};">{display['label']}</span>
-    </div>
-    '''
-
-
-def render_policy_icons(policies: list) -> str:
-    """
-    Generate HTML for policy icons based on owned policies.
-    Uses emoji icons for better Streamlit compatibility.
-
-    Args:
-        policies: List of policy names
-
-    Returns:
-        HTML string with emoji icons
-    """
-    # Emoji mapping for policies (more compatible than SVG)
-    POLICY_EMOJI = {
-        "Polizza Salute e Infortuni: Salute Protetta": ("❤️", "#EF4444", "Salute"),
-        "Assicurazione Casa e Famiglia: Casa Serena": ("🏠", "#F59E0B", "Casa"),
-        "Polizza Vita a Premio Unico: Futuro Sicuro": ("📈", "#10B981", "Invest"),
-        "Polizza Vita a Premi Ricorrenti: Risparmio Costante": ("💰", "#3B82F6", "Risp"),
-        "Piano Individuale Pensionistico (PIP): Pensione Serenità": ("🛡️", "#8B5CF6", "PIP"),
-    }
-
-    if not policies:
-        return '<span style="color: #94A3B8; font-size: 0.75rem;">-</span>'
-
-    icons_html = '<div style="display: flex; gap: 0.25rem; align-items: center;">'
-
-    for policy in policies:
-        if policy in POLICY_EMOJI:
-            emoji, color, label = POLICY_EMOJI[policy]
-            icons_html += f'<span title="{label}" style="font-size: 1rem; cursor: help;">{emoji}</span>'
-
-    icons_html += '</div>'
-    return icons_html
-
-
-def get_premium_clients(nbo_data: list, weights: dict, top_n: int = 5) -> list:
-    """
-    Get top premium clients with high CLV and good NBO score.
-
-    Strategy: Find clients that maximize revenue potential.
-    - Considers all clients (not filtered by interactions)
-    - Prioritizes high CLV clients with good opportunity scores
-    - Returns unique clients (one recommendation per client)
-    """
-    # Get all recommendations WITHOUT filtering (we want to see all opportunities)
-    all_recs = get_all_recommendations(nbo_data, weights, filter_top20=False)
-
-    if not all_recs:
-        return []
-
-    # Get best recommendation per client (avoid duplicates)
-    client_best_recs = {}
-    for rec in all_recs:
-        codice = rec['codice_cliente']
-        if codice not in client_best_recs or rec['score'] > client_best_recs[codice]['score']:
-            client_best_recs[codice] = rec
-
-    unique_recs = list(client_best_recs.values())
-
-    # Calculate combined score for premium ranking
-    # CLV is key indicator, score is secondary
-    clv_values = [rec['client_data']['metadata']['clv_stimato'] for rec in unique_recs]
-    max_clv = max(clv_values) if clv_values else 1
-
-    for rec in unique_recs:
-        clv = rec['client_data']['metadata']['clv_stimato']
-        normalized_clv = (clv / max_clv) * 100 if max_clv > 0 else 0
-        # Premium score: 50% CLV, 50% opportunity score
-        rec['combined_score'] = (normalized_clv * 0.5) + (rec['score'] * 0.5)
-
-    # Sort by combined score and return top N
-    unique_recs.sort(key=lambda x: x['combined_score'], reverse=True)
-
-    return unique_recs[:top_n]
+    return sorted(all_recs, key=lambda x: x['score'], reverse=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -927,38 +759,17 @@ if 'selected_abitazione' not in st.session_state:
 if 'ada_auto_prompt' not in st.session_state:
     st.session_state.ada_auto_prompt = None
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# AGENT PROFILE - Mario Rossi (Bologna)
-# ═══════════════════════════════════════════════════════════════════════════════
-if 'agent_profile' not in st.session_state:
-    st.session_state.agent_profile = {
-        'name': 'Mario Rossi',
-        'initials': 'MR',
-        'email': 'mario.rossi@vitasicura.com',
-        'phone': '+39 051 234 5678',
-        'city': 'Bologna',
-        'region': 'Emilia Romagna',
-        'lat': 44.4949,
-        'lon': 11.3426
-    }
-
-# User info (legacy aliases for compatibility)
+# User info (for login - to be implemented)
 if 'user_name' not in st.session_state:
-    st.session_state.user_name = st.session_state.agent_profile['name']
+    st.session_state.user_name = "Agente Vita Sicura"  # Default until login is implemented
 if 'user_email' not in st.session_state:
-    st.session_state.user_email = st.session_state.agent_profile['email']
+    st.session_state.user_email = "agente@vitasicura.it"  # Default until login is implemented
 if 'user_phone' not in st.session_state:
-    st.session_state.user_phone = st.session_state.agent_profile['phone']
+    st.session_state.user_phone = "+39 02 1234 5678"  # Default until login is implemented
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# ACTIVE MODE (replaces dashboard_mode)
-# ═══════════════════════════════════════════════════════════════════════════════
-if 'active_mode' not in st.session_state:
-    st.session_state.active_mode = 'policy_advisor'
-
-# Dashboard mode (legacy - for compatibility during transition)
+# Dashboard mode
 if 'dashboard_mode' not in st.session_state:
-    st.session_state.dashboard_mode = 'Helios NBO'  # Default to NBO which becomes Policy Advisor
+    st.session_state.dashboard_mode = 'Helios View'
 
 # NBO state
 if 'nbo_page' not in st.session_state:
@@ -975,253 +786,384 @@ if 'nbo_selected_recommendation' not in st.session_state:
     st.session_state.nbo_selected_recommendation = None
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# TOP NAVIGATION BAR
+# SIDEBAR
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# Load data early (needed for both modes)
-df = load_data()
+with st.sidebar:
+    # Sidebar header with logo
+    st.markdown("""
+    <div style="text-align: center; padding: 1rem 0 0.5rem;">
+        <div style="display: inline-flex; align-items: center; gap: 0.5rem;">
+            <svg width="44" height="44" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <linearGradient id="tealGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="#00A0B0"/>
+                        <stop offset="100%" stop-color="#00C9D4"/>
+                    </linearGradient>
+                    <radialGradient id="centerGlow" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stop-color="#FFFFFF"/>
+                        <stop offset="60%" stop-color="#B8E6E8"/>
+                        <stop offset="100%" stop-color="#00C9D4"/>
+                    </radialGradient>
+                </defs>
+                <circle cx="50" cy="50" r="20" fill="url(#centerGlow)"/>
+                <circle cx="50" cy="50" r="20" fill="none" stroke="url(#tealGrad)" stroke-width="2"/>
+                <circle cx="50" cy="50" r="35" fill="none" stroke="url(#tealGrad)" stroke-width="1.5"/>
+                <g stroke="url(#tealGrad)" stroke-width="2" fill="none">
+                    <line x1="50" y1="10" x2="50" y2="25"/>
+                    <line x1="50" y1="75" x2="50" y2="90"/>
+                    <line x1="10" y1="50" x2="25" y2="50"/>
+                    <line x1="75" y1="50" x2="90" y2="50"/>
+                    <line x1="22" y1="22" x2="32" y2="32"/>
+                    <line x1="68" y1="68" x2="78" y2="78"/>
+                    <line x1="78" y1="22" x2="68" y2="32"/>
+                    <line x1="32" y1="68" x2="22" y2="78"/>
+                </g>
+            </svg>
+            <span style="font-family: 'Inter', sans-serif; font-size: 2rem; font-weight: 800; background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">HELIOS</span>
+        </div>
+        <p style="font-family: 'Inter', sans-serif; font-size: 0.85rem; color: #94A3B8; letter-spacing: 0.08em; margin-top: 0.25rem;">VITA SICURA INTELLIGENCE</p>
+    </div>
+    """, unsafe_allow_html=True)
 
-# Add CSS for top navigation
+    st.markdown("---")
+
+    # Dashboard mode selector
+    st.markdown("""
+    <p style="font-family: 'Inter', sans-serif; font-size: 0.7rem; font-weight: 600; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.75rem;">
+        Modalita Dashboard
+    </p>
+    """, unsafe_allow_html=True)
+
+    dashboard_mode = st.radio(
+        "Seleziona modalita",
+        ["Helios View", "Helios NBO"],
+        index=0 if st.session_state.dashboard_mode == 'Helios View' else 1,
+        label_visibility="collapsed",
+        horizontal=True
+    )
+    st.session_state.dashboard_mode = dashboard_mode
+
+    st.markdown("---")
+
+    # Load data (always needed)
+    df = load_data()
+
+    # Conditional sidebar content based on mode
+    if st.session_state.dashboard_mode == 'Helios View':
+        # Filter section title
+        st.markdown("""
+        <p style="font-family: 'Inter', sans-serif; font-size: 0.7rem; font-weight: 600; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.75rem;">
+            Filtri Analisi
+        </p>
+        """, unsafe_allow_html=True)
+
+        # City filter
+        cities_list = ['Tutte le città'] + sorted(df['citta'].unique().tolist())
+        selected_city = st.selectbox("Città", cities_list, label_visibility="collapsed")
+        st.caption("📍 Filtra per città")
+
+        # Risk category filter
+        risk_options = ['Tutti i rischi', 'Critico', 'Alto', 'Medio', 'Basso']
+        selected_risk = st.selectbox("Categoria Rischio", risk_options, label_visibility="collapsed")
+        st.caption("⚠️ Filtra per livello di rischio")
+
+        # Seismic zone filter
+        zone_options = ['Tutte le zone', 'Zona 1', 'Zona 2', 'Zona 3', 'Zona 4']
+        selected_zone = st.selectbox("Zona Sismica", zone_options, label_visibility="collapsed")
+        st.caption("🌍 Filtra per zona sismica")
+
+        st.markdown("---")
+
+        # Apply filters
+        filtered_df = df.copy()
+        if selected_city != 'Tutte le città':
+            filtered_df = filtered_df[filtered_df['citta'] == selected_city]
+        if selected_risk != 'Tutti i rischi':
+            filtered_df = filtered_df[filtered_df['risk_category'] == selected_risk]
+        if selected_zone != 'Tutte le zone':
+            zone_num = int(selected_zone.split()[-1])
+            filtered_df = filtered_df[filtered_df['zona_sismica'] == zone_num]
+
+        # Quick stats card
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, rgba(0, 160, 176, 0.08) 0%, rgba(0, 201, 212, 0.05) 100%); border: 1px solid rgba(0, 160, 176, 0.15); border-radius: 16px; padding: 1.25rem; margin: 0.5rem 0;">
+            <p style="font-family: 'Inter', sans-serif; font-size: 0.65rem; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em; margin: 0;">Abitazioni Filtrate</p>
+            <p style="font-family: 'JetBrains Mono', monospace; font-size: 2.25rem; font-weight: 700; background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin: 0.25rem 0; line-height: 1.1;">{len(filtered_df):,}</p>
+            <p style="font-family: 'Inter', sans-serif; font-size: 0.75rem; color: #94A3B8; margin: 0;">di {len(df):,} totali ({round(len(filtered_df)/len(df)*100) if len(df) > 0 else 0}%)</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("---")
+
+        # Connections status
+        st.markdown("""
+        <p style="font-family: 'Inter', sans-serif; font-size: 0.7rem; font-weight: 600; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.75rem;">
+            Connessioni
+        </p>
+        """, unsafe_allow_html=True)
+
+        st.markdown("""
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: rgba(16, 185, 129, 0.08); border-radius: 8px;">
+                <span style="width: 6px; height: 6px; background: #10B981; border-radius: 50%;"></span>
+                <span style="font-family: 'Inter', sans-serif; font-size: 0.7rem; color: #1B3A5F; font-weight: 500;">Supabase</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: rgba(16, 185, 129, 0.08); border-radius: 8px;">
+                <span style="width: 6px; height: 6px; background: #10B981; border-radius: 50%;"></span>
+                <span style="font-family: 'Inter', sans-serif; font-size: 0.7rem; color: #1B3A5F; font-weight: 500;">INGV</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: rgba(16, 185, 129, 0.08); border-radius: 8px;">
+                <span style="width: 6px; height: 6px; background: #10B981; border-radius: 50%;"></span>
+                <span style="font-family: 'Inter', sans-serif; font-size: 0.7rem; color: #1B3A5F; font-weight: 500;">n8n</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: rgba(16, 185, 129, 0.08); border-radius: 8px;">
+                <span style="width: 6px; height: 6px; background: #10B981; border-radius: 50%;"></span>
+                <span style="font-family: 'Inter', sans-serif; font-size: 0.7rem; color: #1B3A5F; font-weight: 500;">ISPRA</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("---")
+
+    else:
+        # NBO Mode sidebar
+        st.markdown("""
+        <p style="font-family: 'Inter', sans-serif; font-size: 0.7rem; font-weight: 600; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.75rem;">
+            Pesi Componenti NBO
+        </p>
+        """, unsafe_allow_html=True)
+
+        st.markdown("""
+        <p style="font-family: 'Inter', sans-serif; font-size: 0.75rem; color: #64748B; margin-bottom: 1rem;">
+            Regola i pesi per calcolare lo score delle raccomandazioni
+        </p>
+        """, unsafe_allow_html=True)
+
+        retention_weight = st.slider(
+            "Retention Gain",
+            min_value=0.0,
+            max_value=1.0,
+            value=st.session_state.nbo_weights['retention'],
+            step=0.01,
+            help="Peso per la componente Retention Gain"
+        )
+
+        redditivita_weight = st.slider(
+            "Redditivita",
+            min_value=0.0,
+            max_value=1.0,
+            value=st.session_state.nbo_weights['redditivita'],
+            step=0.01,
+            help="Peso per la componente Redditivita"
+        )
+
+        propensione_weight = st.slider(
+            "Propensione",
+            min_value=0.0,
+            max_value=1.0,
+            value=st.session_state.nbo_weights['propensione'],
+            step=0.01,
+            help="Peso per la componente Propensione"
+        )
+
+        # Update weights
+        st.session_state.nbo_weights = {
+            'retention': retention_weight,
+            'redditivita': redditivita_weight,
+            'propensione': propensione_weight
+        }
+
+        # Show total weight
+        total_weight = retention_weight + redditivita_weight + propensione_weight
+        weight_color = "#10B981" if abs(total_weight - 1.0) < 0.01 else "#DC2626"
+
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, rgba(0, 160, 176, 0.08) 0%, rgba(0, 201, 212, 0.05) 100%); border: 1px solid rgba(0, 160, 176, 0.15); border-radius: 16px; padding: 1.25rem; margin: 0.5rem 0;">
+            <p style="font-family: 'Inter', sans-serif; font-size: 0.65rem; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em; margin: 0;">Somma Pesi</p>
+            <p style="font-family: 'JetBrains Mono', monospace; font-size: 2rem; font-weight: 700; color: {weight_color}; margin: 0.25rem 0; line-height: 1.1;">{total_weight:.2f}</p>
+            <p style="font-family: 'Inter', sans-serif; font-size: 0.7rem; color: #94A3B8; margin: 0;">{"Ottimo" if abs(total_weight - 1.0) < 0.01 else "Somma consigliata: 1.00"}</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("---")
+
+        # Load NBO data and show stats
+        nbo_data = load_nbo_data()
+        if nbo_data:
+            st.markdown(f"""
+            <div style="background: linear-gradient(135deg, rgba(0, 160, 176, 0.08) 0%, rgba(0, 201, 212, 0.05) 100%); border: 1px solid rgba(0, 160, 176, 0.15); border-radius: 16px; padding: 1.25rem; margin: 0.5rem 0;">
+                <p style="font-family: 'Inter', sans-serif; font-size: 0.65rem; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em; margin: 0;">Clienti NBO</p>
+                <p style="font-family: 'JetBrains Mono', monospace; font-size: 2.25rem; font-weight: 700; background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin: 0.25rem 0; line-height: 1.1;">{len(nbo_data):,}</p>
+                <p style="font-family: 'Inter', sans-serif; font-size: 0.75rem; color: #94A3B8; margin: 0;">clienti con raccomandazioni</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("---")
+
+        # Set default for filtered_df to avoid NameError
+        filtered_df = df
+
+    # Footer
+    st.markdown("""
+    <div style="text-align: center; padding: 0.5rem 0;">
+        <p style="font-family: 'Inter', sans-serif; font-size: 0.65rem; color: #94A3B8; margin: 0;">
+            Powered by <strong style="color: #1B3A5F;">Vita Sicura</strong>
+        </p>
+        <p style="font-family: 'Inter', sans-serif; font-size: 0.6rem; color: #CBD5E1; margin-top: 0.25rem;">
+            Helios v2.0 • Generali AI Challenge
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MAIN CONTENT
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Hero Header with Vita Sicura Logo + Helios Brand
 st.markdown("""
 <style>
-    /* Top Navigation Bar */
-    .top-nav-container {
+    .header-container {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 1rem 0;
-        margin-bottom: 1.5rem;
-        border-bottom: 1px solid #E2E8F0;
+        padding: 1rem 0 1.5rem;
+        margin-bottom: 1rem;
     }
 
-    .nav-left {
+    .logo-section {
         display: flex;
         align-items: center;
-        gap: 2rem;
+        gap: 1.5rem;
     }
 
-    .nav-logo {
+    .vita-sicura-logo {
+        height: 60px;
+        width: auto;
+    }
+
+    .logo-divider {
+        width: 1px;
+        height: 45px;
+        background: linear-gradient(180deg, transparent 0%, #E2E8F0 50%, transparent 100%);
+    }
+
+    .helios-brand {
         display: flex;
-        align-items: center;
-        gap: 0.5rem;
+        flex-direction: column;
+        gap: 0.15rem;
     }
 
-    .nav-logo-text {
+    .helios-title {
         font-family: 'Inter', sans-serif;
         font-size: 1.5rem;
         font-weight: 800;
         background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
+        background-clip: text;
+        letter-spacing: -0.025em;
+        line-height: 1.1;
     }
 
-    .nav-buttons {
-        display: flex;
-        gap: 0.5rem;
-    }
-
-    .nav-button {
-        padding: 0.5rem 1.25rem;
-        border-radius: 100px;
+    .helios-subtitle {
         font-family: 'Inter', sans-serif;
-        font-size: 0.875rem;
+        font-size: 0.65rem;
         font-weight: 500;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        text-decoration: none;
-        border: none;
-    }
-
-    .nav-button-active {
-        background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%);
-        color: white;
-    }
-
-    .nav-button-inactive {
-        background: #F3F4F6;
         color: #64748B;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
     }
 
-    .nav-button-inactive:hover {
-        background: #E2E8F0;
-        color: #1B3A5F;
-    }
-
-    /* User Profile Section */
-    .user-profile {
+    .header-status {
         display: flex;
         align-items: center;
-        gap: 0.75rem;
+        gap: 1rem;
     }
 
-    .avatar-circle {
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-family: 'Inter', sans-serif;
-        font-weight: 600;
-        font-size: 0.875rem;
-    }
-
-    .user-info {
-        display: flex;
-        flex-direction: column;
-        gap: 0.1rem;
-    }
-
-    .user-name {
-        font-family: 'Inter', sans-serif;
-        font-size: 0.875rem;
-        font-weight: 600;
-        color: #1B3A5F;
-    }
-
-    .user-location {
-        font-family: 'Inter', sans-serif;
-        font-size: 0.75rem;
-        color: #64748B;
-    }
-
-    /* Opportunity Bar Styles */
-    .opportunity-bar-container {
+    .status-badge {
         display: flex;
         align-items: center;
         gap: 0.5rem;
-    }
-
-    .opportunity-bar {
-        width: 80px;
-        height: 8px;
-        background: #E2E8F0;
+        padding: 0.5rem 1rem;
+        background: rgba(16, 185, 129, 0.1);
+        border: 1px solid rgba(16, 185, 129, 0.2);
         border-radius: 100px;
-        overflow: hidden;
-    }
-
-    .opportunity-bar-fill {
-        height: 100%;
-        border-radius: 100px;
-        transition: width 0.3s ease;
-    }
-
-    .opportunity-label {
         font-family: 'Inter', sans-serif;
         font-size: 0.75rem;
-        font-weight: 600;
-        min-width: 70px;
+        font-weight: 500;
+        color: #10B981;
     }
 
-    .opportunity-eccellente { color: #10B981; }
-    .opportunity-alta { color: #00A0B0; }
-    .opportunity-media { color: #F59E0B; }
-    .opportunity-bassa { color: #94A3B8; }
-
-    /* Policy Icons Container */
-    .policy-icons {
-        display: flex;
-        gap: 0.25rem;
-        align-items: center;
+    .status-dot {
+        width: 8px;
+        height: 8px;
+        background: #10B981;
+        border-radius: 50%;
+        animation: pulse-dot 2s ease-in-out infinite;
     }
 
-    .policy-icon {
-        width: 24px;
-        height: 24px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+    @keyframes pulse-dot {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.7; transform: scale(0.9); }
+    }
+
+    .page-title-section {
+        text-align: center;
+        padding: 0.5rem 0 1rem;
+    }
+
+    .page-title {
+        font-family: 'Playfair Display', serif;
+        font-size: 2rem;
+        font-weight: 700;
+        color: #1B3A5F;
+        margin: 0;
+        letter-spacing: -0.02em;
+    }
+
+    .page-description {
+        font-family: 'Inter', sans-serif;
+        font-size: 0.85rem;
+        color: #64748B;
+        margin-top: 0.25rem;
+        font-weight: 400;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# HEADER - Logo Vita Sicura | HELIOS | User Card
-# ═══════════════════════════════════════════════════════════════════════════════
+# Dynamic header content based on mode
+page_title = "Dashboard Geo-Rischio" if st.session_state.dashboard_mode == 'Helios View' else "NBO Dashboard - Raccomandazioni Prodotti"
+page_description = "Monitoraggio in tempo reale del portafoglio assicurativo territoriale" if st.session_state.dashboard_mode == 'Helios View' else "Sistema intelligente di Next Best Offer per cross-selling e up-selling"
 
-agent = st.session_state.agent_profile
+# Header with logo - centered layout
+header_col1, header_col2 = st.columns([8, 2])
 
-# Header using Streamlit columns for better compatibility
-header_left, header_center, header_right = st.columns([3, 4, 3])
-
-with header_left:
-    st.markdown("""
-    <div style="display: flex; align-items: center; gap: 0.75rem;">
-        <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #1B3A5F 0%, #2C5282 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
-            <span style="color: white; font-weight: 700; font-size: 0.9rem;">VS</span>
-        </div>
-        <div>
-            <p style="margin: 0; font-size: 0.9rem; font-weight: 700; color: #1B3A5F;">Vita Sicura</p>
-            <p style="margin: 0; font-size: 0.65rem; color: #94A3B8;">Insurance Partner</p>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with header_center:
-    st.markdown("""
-    <div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
-        <span style="font-size: 1.5rem;">☀️</span>
-        <div>
-            <p style="margin: 0; font-size: 1.5rem; font-weight: 800; background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">HELIOS</p>
-            <p style="margin: 0; font-size: 0.6rem; color: #94A3B8; letter-spacing: 0.05em; text-align: center;">GEO-COGNITIVE INTELLIGENCE</p>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with header_right:
+with header_col1:
     st.markdown(f"""
-    <div style="display: flex; align-items: center; justify-content: flex-end; gap: 1rem;">
-        <div style="display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.75rem; background: rgba(16, 185, 129, 0.1); border-radius: 100px;">
-            <span style="width: 6px; height: 6px; background: #10B981; border-radius: 50%; display: inline-block;"></span>
-            <span style="font-size: 0.7rem; color: #10B981; font-weight: 500;">Online</span>
+    <div style="text-align: center; padding-left: 10%;">
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 0.25rem;">
+            <span style="font-family: 'Inter', sans-serif; font-size: 5rem; font-weight: 800; background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: -0.02em; line-height: 1;">HELIOS</span>
+            <span style="font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 500; color: #64748B; letter-spacing: 0.15em; text-transform: uppercase;">Geo-Cognitive Intelligence</span>
         </div>
-        <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; background: #F8FAFC; border-radius: 10px; border: 1px solid #E2E8F0;">
-            <div style="width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 0.75rem;">{agent['initials']}</div>
-            <div>
-                <p style="margin: 0; font-size: 0.8rem; font-weight: 600; color: #1B3A5F;">{agent['name']}</p>
-                <p style="margin: 0; font-size: 0.65rem; color: #64748B;">{agent['city']}</p>
-            </div>
+        <h1 style="font-family: 'Playfair Display', serif; font-size: 1.5rem; font-weight: 700; color: #1B3A5F; margin: 0.75rem 0 0; letter-spacing: -0.02em;">{page_title}</h1>
+        <p style="font-family: 'Inter', sans-serif; font-size: 0.85rem; color: #64748B; margin-top: 0.25rem; font-weight: 400;">{page_description}</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+with header_col2:
+    st.markdown("""
+    <div style="display: flex; justify-content: flex-end; align-items: flex-start; padding-top: 0.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 100px; font-family: 'Inter', sans-serif; font-size: 0.75rem; font-weight: 500; color: #10B981; white-space: nowrap;">
+            <span style="width: 8px; height: 8px; background: #10B981; border-radius: 50%;"></span>
+            Sistema Attivo
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-st.markdown("<hr style='margin: 0.5rem 0 1rem; border: none; border-top: 1px solid #E2E8F0;'>", unsafe_allow_html=True)
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# MODE SELECTOR - Policy Advisor | Analytics
-# ═══════════════════════════════════════════════════════════════════════════════
-
-mode_col1, mode_col2, mode_col3 = st.columns([1, 2, 1])
-
-with mode_col2:
-    btn_col1, btn_col2 = st.columns(2)
-    with btn_col1:
-        if st.button(
-            "📋 Policy Advisor",
-            key="nav_policy_advisor",
-            type="primary" if st.session_state.active_mode == 'policy_advisor' else "secondary",
-            use_container_width=True
-        ):
-            st.session_state.active_mode = 'policy_advisor'
-            st.session_state.dashboard_mode = 'Helios NBO'
-            st.rerun()
-    with btn_col2:
-        if st.button(
-            "📊 Analytics",
-            key="nav_analytics",
-            type="primary" if st.session_state.active_mode == 'analytics' else "secondary",
-            use_container_width=True
-        ):
-            st.session_state.active_mode = 'analytics'
-            st.session_state.dashboard_mode = 'Helios View'
-            st.rerun()
-
-st.markdown("<br>", unsafe_allow_html=True)
-
-# Set default filtered_df for analytics mode
-filtered_df = df
+# Divider
+st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CONDITIONAL CONTENT BASED ON DASHBOARD MODE
@@ -1229,61 +1171,12 @@ filtered_df = df
 
 if st.session_state.dashboard_mode == 'Helios View':
     # ═══════════════════════════════════════════════════════════════════════════════
-    # ANALYTICS MODE CONTENT (formerly Helios View)
+    # HELIOS VIEW CONTENT
     # ═══════════════════════════════════════════════════════════════════════════════
-
-    # Import regional constants
-    from src.config.constants import EMILIA_ROMAGNA_PROVINCES, BOLOGNA_COORDINATES
-
-    # ═══════════════════════════════════════════════════════════════════════════════
-    # INLINE FILTERS (replacing sidebar filters)
-    # ═══════════════════════════════════════════════════════════════════════════════
-
-    with st.expander("🔍 Filtri Analisi", expanded=False):
-        filter_col1, filter_col2, filter_col3, filter_col4 = st.columns(4)
-
-        with filter_col1:
-            # City filter - pre-filtered to Emilia Romagna
-            emilia_cities = df[df['citta'].str.contains('|'.join(EMILIA_ROMAGNA_PROVINCES), case=False, na=False)]['citta'].unique().tolist()
-            cities_list = ['Tutte le città (E.R.)'] + sorted(emilia_cities)
-            selected_city = st.selectbox("Città", cities_list, label_visibility="collapsed")
-
-        with filter_col2:
-            risk_options = ['Tutti i rischi', 'Critico', 'Alto', 'Medio', 'Basso']
-            selected_risk = st.selectbox("Categoria Rischio", risk_options, label_visibility="collapsed")
-
-        with filter_col3:
-            zone_options = ['Tutte le zone', 'Zona 1', 'Zona 2', 'Zona 3', 'Zona 4']
-            selected_zone = st.selectbox("Zona Sismica", zone_options, label_visibility="collapsed")
-
-        with filter_col4:
-            st.markdown(f"""
-            <div style="background: linear-gradient(135deg, rgba(0, 160, 176, 0.08) 0%, rgba(0, 201, 212, 0.05) 100%); border-radius: 8px; padding: 0.5rem; text-align: center;">
-                <p style="margin: 0; color: #64748B; font-size: 0.7rem;">Focus Regionale</p>
-                <p style="margin: 0; color: #00A0B0; font-weight: 600;">Emilia Romagna</p>
-            </div>
-            """, unsafe_allow_html=True)
-
-    # Apply regional filter first (Emilia Romagna only)
-    if 'citta' in df.columns:
-        emilia_mask = df['citta'].str.contains('|'.join(EMILIA_ROMAGNA_PROVINCES), case=False, na=False)
-    else:
-        emilia_mask = pd.Series([True] * len(df))
-
-    filtered_df = df[emilia_mask].copy()
-
-    # Apply additional filters
-    if selected_city != 'Tutte le città (E.R.)':
-        filtered_df = filtered_df[filtered_df['citta'] == selected_city]
-    if selected_risk != 'Tutti i rischi':
-        filtered_df = filtered_df[filtered_df['risk_category'] == selected_risk]
-    if selected_zone != 'Tutte le zone':
-        zone_num = int(selected_zone.split()[-1])
-        filtered_df = filtered_df[filtered_df['zona_sismica'] == zone_num]
 
     # Warning if no results match filters
     if len(filtered_df) == 0:
-        st.warning("⚠️ Nessuna abitazione corrisponde ai filtri selezionati in Emilia Romagna.")
+        st.warning("⚠️ Nessuna abitazione corrisponde ai filtri selezionati. Prova a modificare i criteri nella sidebar.")
 
     # Get stats
     stats = get_risk_stats(filtered_df)
@@ -1400,12 +1293,12 @@ if st.session_state.dashboard_mode == 'Helios View':
             map_df['color'] = map_df['risk_category'].apply(lambda x: RISK_COLOR_MAP.get(x, DEFAULT_COLOR))
             
             # 2. PyDeck Layers
-
-            # View State (centered on Bologna for Emilia Romagna focus)
+            
+            # View State (Initialize centered on data or Italy)
             view_state = pdk.ViewState(
-                latitude=BOLOGNA_COORDINATES['lat'],  # 44.4949
-                longitude=BOLOGNA_COORDINATES['lon'],  # 11.3426
-                zoom=8,  # Regional view for Emilia Romagna
+                latitude=map_df['latitudine'].mean() if len(map_df) > 0 else 41.8719,
+                longitude=map_df['longitudine'].mean() if len(map_df) > 0 else 12.5674,
+                zoom=5.5,
                 pitch=0,
             )
 
@@ -2265,107 +2158,91 @@ Le email devono essere personalizzate per ogni cliente, non identiche."""
             # Computer Vision - Satellite View Section
             # ═══════════════════════════════════════════════════════════════════
             st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("""
-            <h3 style="font-family: 'Inter', sans-serif; color: #1B3A5F; margin-bottom: 0.5rem;">
-                🛰️ Cosa sappiamo dell'abitazione
-            </h3>
-            <p style="color: #64748B; font-size: 0.85rem; margin-bottom: 1rem;">
-                Caratteristiche rilevate dall'analisi satellitare
-            </p>
-            """, unsafe_allow_html=True)
+            st.markdown("### 🛰️ Abitazione – Vista Satellitare")
 
-            # CV feature data (from database or simulated)
+            # For now, use simulated CV data (will be replaced with real DB fields)
+            # In production, these would come from: client_data.get('has_solar_panels', False), etc.
             import hashlib
             codice_cliente = client_data['codice_cliente']
             client_hash = int(hashlib.md5(codice_cliente.encode()).hexdigest(), 16)
 
-            # CV detections with more detail
-            cv_features = {
-                'solar_panels': {
-                    'detected': (client_hash % 3) == 0,
-                    'label': 'Pannelli Solari',
-                    'icon': '☀️',
-                    'risk_note': 'Potenziale per polizza green energy'
-                },
-                'pool': {
-                    'detected': (client_hash % 5) == 0,
-                    'label': 'Piscina',
-                    'icon': '🏊',
-                    'risk_note': 'Richiede copertura aggiuntiva'
-                },
-                'garden': {
-                    'detected': (client_hash % 2) == 0,
-                    'label': 'Giardino',
-                    'icon': '🌳',
-                    'risk_note': 'Area esterna da considerare'
-                },
-                'trees_near_roof': {
-                    'detected': (client_hash % 7) == 0,
-                    'label': 'Alberi vicino al tetto',
-                    'icon': '🌲',
-                    'risk_note': 'Potenziale rischio danni'
-                },
-                'garage': {
-                    'detected': (client_hash % 4) == 0,
-                    'label': 'Garage',
-                    'icon': '🚗',
-                    'risk_note': 'Struttura aggiuntiva'
-                }
-            }
+            # Simulate CV detections based on client hash (for demonstration)
+            has_solar_panels = (client_hash % 3) == 0  # ~33% have solar panels
+            has_pool = (client_hash % 5) == 0  # ~20% have pool
+            has_garden = (client_hash % 2) == 0  # ~50% have garden
 
-            # Two-column layout: Image + Features
-            cv_col1, cv_col2 = st.columns([1, 1])
+            # Satellite image placeholder
+            st.markdown(f"""
+            <div class="glass-card" style="text-align: center; background: #F3F4F6; padding: 2rem;">
+                <p style="color: #94A3B8; font-size: 3rem; margin: 0;">🗺️</p>
+                <p style="color: #64748B; font-size: 0.85rem; margin-top: 0.5rem;">
+                    Immagine satellitare dell'abitazione<br>
+                    <span style="font-size: 0.75rem; color: #94A3B8;">
+                        Lat: {lat:.6f}, Lon: {lon:.6f}
+                    </span>
+                </p>
+                <p style="color: #94A3B8; font-size: 0.75rem; font-style: italic; margin-top: 1rem;">
+                    [L'immagine satellitare verra caricata dal database]
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
 
-            with cv_col1:
-                # Satellite image placeholder
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("#### Caratteristiche Rilevate (Computer Vision)")
+
+            # CV indicators
+            col_cv1, col_cv2, col_cv3 = st.columns(3)
+
+            with col_cv1:
+                icon = "✅" if has_solar_panels else "❌"
+                color = "#10B981" if has_solar_panels else "#EF4444"
+                bg_color = "#DCFCE7" if has_solar_panels else "#FEE2E2"
+
                 st.markdown(f"""
-                <div class="glass-card" style="text-align: center; background: #F8FAFC; padding: 2rem; height: 280px; display: flex; flex-direction: column; justify-content: center;">
-                    <p style="color: #94A3B8; font-size: 3rem; margin: 0;">🗺️</p>
-                    <p style="color: #64748B; font-size: 0.85rem; margin-top: 0.5rem;">
-                        Vista satellitare dell'abitazione
+                <div class="glass-card" style="text-align: center; background: {bg_color}; border-left: 4px solid {color};">
+                    <p style="font-size: 2rem; margin: 0;">{icon}</p>
+                    <p style="margin: 0.5rem 0 0 0; color: {color}; font-weight: 600; font-size: 0.9rem;">
+                        Pannelli Solari
                     </p>
-                    <p style="color: #94A3B8; font-size: 0.75rem; margin-top: 0.25rem;">
-                        Lat: {lat:.4f}, Lon: {lon:.4f}
+                    <p style="margin: 0.25rem 0 0 0; color: #64748B; font-size: 0.75rem;">
+                        {'Rilevati' if has_solar_panels else 'Non rilevati'}
                     </p>
                 </div>
                 """, unsafe_allow_html=True)
 
-            with cv_col2:
-                st.markdown("""
-                <div class="glass-card" style="padding: 1rem;">
-                    <p style="color: #94A3B8; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.75rem; font-weight: 600;">
-                        Caratteristiche rilevate
+            with col_cv2:
+                icon = "✅" if has_pool else "❌"
+                color = "#10B981" if has_pool else "#EF4444"
+                bg_color = "#DCFCE7" if has_pool else "#FEE2E2"
+
+                st.markdown(f"""
+                <div class="glass-card" style="text-align: center; background: {bg_color}; border-left: 4px solid {color};">
+                    <p style="font-size: 2rem; margin: 0;">{icon}</p>
+                    <p style="margin: 0.5rem 0 0 0; color: {color}; font-weight: 600; font-size: 0.9rem;">
+                        Piscina
                     </p>
+                    <p style="margin: 0.25rem 0 0 0; color: #64748B; font-size: 0.75rem;">
+                        {'Rilevata' if has_pool else 'Non rilevata'}
+                    </p>
+                </div>
                 """, unsafe_allow_html=True)
 
-                for feature_key, feature in cv_features.items():
-                    if feature['detected']:
-                        icon = "✅"
-                        color = "#10B981"
-                        status = "Rilevato"
-                    else:
-                        icon = "—"
-                        color = "#CBD5E1"
-                        status = "Non rilevato"
+            with col_cv3:
+                icon = "✅" if has_garden else "❌"
+                color = "#10B981" if has_garden else "#EF4444"
+                bg_color = "#DCFCE7" if has_garden else "#FEE2E2"
 
-                    # Special case for trees (warning)
-                    if feature_key == 'trees_near_roof' and feature['detected']:
-                        icon = "⚠️"
-                        color = "#F59E0B"
-                        status = "Attenzione"
-
-                    st.markdown(f"""
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid #F1F5F9;">
-                        <span style="color: #1B3A5F; font-size: 0.85rem;">
-                            {feature['icon']} {feature['label']}
-                        </span>
-                        <span style="color: {color}; font-size: 0.75rem; font-weight: 500;">
-                            {icon} {status}
-                        </span>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-                st.markdown("</div>", unsafe_allow_html=True)
+                st.markdown(f"""
+                <div class="glass-card" style="text-align: center; background: {bg_color}; border-left: 4px solid {color};">
+                    <p style="font-size: 2rem; margin: 0;">{icon}</p>
+                    <p style="margin: 0.5rem 0 0 0; color: {color}; font-weight: 600; font-size: 0.9rem;">
+                        Giardino
+                    </p>
+                    <p style="margin: 0.25rem 0 0 0; color: #64748B; font-size: 0.75rem;">
+                        {'Rilevato' if has_garden else 'Non rilevato'}
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
 
             # All recommendations for this client
             st.markdown("### Tutte le Raccomandazioni")
@@ -2518,332 +2395,301 @@ GENERA LA VERSIONE MODIFICATA ORA senza usare tool."""
 
         else:
             # ═══════════════════════════════════════════════════════════════════════════════
-            # POLICY ADVISOR MAIN VIEW
+            # NBO MAIN DASHBOARD VIEW
             # ═══════════════════════════════════════════════════════════════════════════════
 
             # Get all recommendations with current weights
             all_recs = get_all_recommendations(nbo_data, st.session_state.nbo_weights)
-            weights = st.session_state.nbo_weights
 
-            # ═══════════════════════════════════════════════════════════════════════════════
-            # STRATEGY HEADER CARD
-            # ═══════════════════════════════════════════════════════════════════════════════
+            # KPI Metrics
+            total_clients = len(nbo_data)
+            total_recs = len(all_recs)
+            avg_score = sum(r['score'] for r in all_recs) / len(all_recs) if all_recs else 0
 
-            st.markdown(f"""
-            <div style="background: linear-gradient(135deg, #F8FAFC 0%, #EFF6FF 100%); border: 1px solid #E2E8F0; border-radius: 12px; padding: 1rem 1.5rem; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
-                <div>
-                    <p style="margin: 0; font-family: 'Inter', sans-serif; font-size: 0.7rem; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em;">Strategia Attiva</p>
-                    <p style="margin: 0.25rem 0 0; font-family: 'Playfair Display', serif; font-size: 1.25rem; font-weight: 600; color: #1B3A5F;">Q1 2026 - Focus Retention</p>
-                </div>
-                <div style="display: flex; gap: 1.5rem; align-items: center;">
-                    <div style="text-align: center;">
-                        <p style="margin: 0; font-size: 0.65rem; color: #94A3B8; text-transform: uppercase;">Retention</p>
-                        <p style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 1.1rem; font-weight: 600; color: #00A0B0;">{int(weights['retention']*100)}%</p>
-                    </div>
-                    <div style="width: 1px; height: 30px; background: #E2E8F0;"></div>
-                    <div style="text-align: center;">
-                        <p style="margin: 0; font-size: 0.65rem; color: #94A3B8; text-transform: uppercase;">Redditivita</p>
-                        <p style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 1.1rem; font-weight: 600; color: #F59E0B;">{int(weights['redditivita']*100)}%</p>
-                    </div>
-                    <div style="width: 1px; height: 30px; background: #E2E8F0;"></div>
-                    <div style="text-align: center;">
-                        <p style="margin: 0; font-size: 0.65rem; color: #94A3B8; text-transform: uppercase;">Propensione</p>
-                        <p style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 1.1rem; font-weight: 600; color: #8B5CF6;">{int(weights['propensione']*100)}%</p>
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-            # ═══════════════════════════════════════════════════════════════════════════════
-            # SECTION 1: TOP 5 PREMIUM CLIENTS
-            # ═══════════════════════════════════════════════════════════════════════════════
-
-            st.markdown("""
-            <h2 style="font-family: 'Playfair Display', serif; color: #1B3A5F; font-size: 1.5rem; margin-bottom: 0.5rem;">
-                I tuoi clienti piu preziosi
-            </h2>
-            <p style="color: #64748B; font-size: 0.9rem; margin-bottom: 1.5rem;">
-                Clienti con alto valore e le migliori opportunita di vendita
-            </p>
-            """, unsafe_allow_html=True)
-
-            # Get premium clients
-            premium_clients = get_premium_clients(nbo_data, st.session_state.nbo_weights, top_n=5)
-
-            if premium_clients:
-                # Display as 5 horizontal cards using native Streamlit
-                premium_cols = st.columns(5)
-
-                for idx, rec in enumerate(premium_clients):
-                    with premium_cols[idx]:
-                        client = rec['client_data']
-                        score_display = get_score_display(rec['score'])
-                        clv = client['metadata']['clv_stimato']
-
-                        # Get policies as HTML icons
-                        policies = client['metadata'].get('prodotti_posseduti', [])
-                        if isinstance(policies, str):
-                            policies = [policies]
-                        policy_icons = render_policy_icons(policies)
-
-                        # Card container
-                        with st.container():
-                            st.markdown(f"**#{idx + 1}** 🏆")
-                            st.markdown(f"**{rec['nome']} {rec['cognome']}**")
-
-                            # Progress bar for score
-                            score_pct = min(rec['score'] / 100, 1.0)
-                            st.progress(score_pct, text=f"{score_display['label']} ({rec['score']:.0f})")
-
-                            st.caption(f"💰 CLV: €{clv:,}")
-                            st.markdown(f"📋 {policy_icons}", unsafe_allow_html=True)
-
-                            if st.button("Dettagli", key=f"premium_{idx}", use_container_width=True):
-                                st.session_state.nbo_page = 'detail'
-                                st.session_state.nbo_selected_client = client
-                                st.session_state.nbo_selected_recommendation = rec['recommendation']
-                                st.rerun()
-            else:
-                st.info("Nessun cliente premium trovato con i criteri attuali.")
-
-            st.divider()
-
-            # ═══════════════════════════════════════════════════════════════════════════════
-            # SECTION 2: TOP 20 OPPORTUNITIES
-            # ═══════════════════════════════════════════════════════════════════════════════
-
-            st.subheader("📋 Le migliori opportunità di vendita")
-            st.caption("Raccomandazioni ordinate per potenziale, già filtrate per eleggibilità commerciale")
-
-            st.info("ℹ️ Esclusi clienti con interazioni recenti (email, chiamate, polizze, reclami, sinistri)", icon="ℹ️")
-
-            # Display Top 20 using native Streamlit components
-            for i, rec in enumerate(all_recs[:20]):
-                client = rec['client_data']
-                score_display = get_score_display(rec['score'])
-
-                # Get policies as HTML icons
-                policies = client['metadata'].get('prodotti_posseduti', [])
-                if isinstance(policies, str):
-                    policies = [policies]
-                policy_icons = render_policy_icons(policies)
-
-                col_num, col_name, col_product, col_score, col_policies, col_btn = st.columns([0.5, 2, 2, 1.5, 1, 1])
-
-                with col_num:
-                    st.markdown(f"**{i+1}**")
-
-                with col_name:
-                    st.markdown(f"**{rec['nome']} {rec['cognome']}**")
-
-                with col_product:
-                    st.caption(rec['prodotto'])
-
-                with col_score:
-                    score_pct = min(rec['score'] / 100, 1.0)
-                    st.progress(score_pct, text=score_display['label'])
-
-                with col_policies:
-                    st.markdown(policy_icons, unsafe_allow_html=True)
-
-                with col_btn:
-                    if st.button("👁️", key=f"top20_{i}", help="Vedi dettagli"):
-                        st.session_state.nbo_page = 'detail'
-                        st.session_state.nbo_selected_client = client
-                        st.session_state.nbo_selected_recommendation = rec['recommendation']
-                        st.rerun()
-
-            # Count by area (for analytics tab)
+            # Count by area
             area_counts = {}
             for rec in all_recs:
                 area = rec['area_bisogno']
                 area_counts[area] = area_counts.get(area, 0) + 1
 
-            total_clients = len(nbo_data)
-            total_recs = len(all_recs)
+            col1, col2, col3, col4 = st.columns(4)
 
-            # Hidden tabs for Analytics and Search (keep functionality but collapse)
-            with st.expander("📊 Analytics e Ricerca Avanzata", expanded=False):
-                nbo_tab2, nbo_tab3 = st.tabs([
-                    "📊 Analytics NBO",
-                    "🔍 Ricerca Clienti"
-                ])
+            with col1:
+                st.metric(
+                    label="👥 Clienti Analizzati",
+                    value=f"{total_clients:,}",
+                    delta="con raccomandazioni"
+                )
 
-                with nbo_tab2:
-                    st.markdown("### Analytics NBO")
+            with col2:
+                st.metric(
+                    label="📋 Raccomandazioni Totali",
+                    value=f"{total_recs:,}",
+                    delta=f"{total_recs/total_clients:.1f} per cliente" if total_clients > 0 else "0"
+                )
 
-                    analytics_col1, analytics_col2 = st.columns(2)
+            with col3:
+                st.metric(
+                    label="📈 Score Medio",
+                    value=f"{avg_score:.2f}",
+                    delta="ponderato"
+                )
 
-                    with analytics_col1:
-                        # Area distribution pie chart
-                        fig_area = go.Figure(data=[go.Pie(
-                            labels=list(area_counts.keys()),
-                            values=list(area_counts.values()),
-                            hole=0.6,
-                            marker_colors=['#00A0B0', '#F59E0B', '#10B981', '#8B5CF6', '#EC4899'],
-                            textinfo='percent+label',
-                            textfont=dict(family='Inter', size=11, color='#1B3A5F')
-                        )])
+            with col4:
+                top_area = max(area_counts, key=area_counts.get) if area_counts else "N/A"
+                st.metric(
+                    label="🎯 Top Area Bisogno",
+                    value=top_area.split()[0] if top_area != "N/A" else "N/A",
+                    delta=f"{area_counts.get(top_area, 0)} recs" if top_area != "N/A" else ""
+                )
 
-                        fig_area.update_layout(
-                            title=dict(
-                                text="Distribuzione per Area Bisogno",
-                                font=dict(family='Inter', size=16, color='#1B3A5F', weight=600),
-                                x=0.5
-                            ),
-                            paper_bgcolor='rgba(255,255,255,0)',
-                            plot_bgcolor='rgba(255,255,255,0)',
-                            font=dict(color='#64748B', family='Inter'),
-                            showlegend=False,
-                            height=350,
-                            margin=dict(t=50, b=30, l=30, r=30),
-                            annotations=[dict(
-                                text=f"<b>{total_recs}</b><br>Totale",
-                                x=0.5, y=0.5,
-                                font=dict(family='JetBrains Mono', size=16, color='#1B3A5F'),
-                                showarrow=False
-                            )]
-                        )
+            st.markdown("<br>", unsafe_allow_html=True)
 
-                        st.plotly_chart(fig_area, use_container_width=True)
+            # Tabs for NBO
+            nbo_tab1, nbo_tab2, nbo_tab3 = st.tabs([
+                "🏆 Top Raccomandazioni",
+                "📊 Analytics NBO",
+                "🔍 Ricerca Clienti"
+            ])
 
-                    with analytics_col2:
-                        # Score distribution histogram
-                        scores = [r['score'] for r in all_recs]
-                        fig_score = go.Figure(data=[go.Histogram(
-                            x=scores,
-                            nbinsx=20,
-                            marker_color='#00A0B0',
-                            marker_line_color='white',
-                            marker_line_width=1
-                        )])
+            with nbo_tab1:
+                st.markdown("### Top 20 Raccomandazioni per Score")
+                st.markdown("""
+                <p style="color: #64748B; font-size: 0.9rem; margin-bottom: 0.5rem;">
+                    Le migliori opportunita di cross-selling/up-selling ordinate per score ponderato.
+                    Clicca su un cliente per vedere i dettagli.
+                </p>
+                """, unsafe_allow_html=True)
 
-                        fig_score.update_layout(
-                            title=dict(
-                                text="Distribuzione Score",
-                                font=dict(family='Inter', size=16, color='#1B3A5F', weight=600),
-                                x=0.5
-                            ),
-                            paper_bgcolor='rgba(255,255,255,0)',
-                            plot_bgcolor='rgba(255,255,255,0)',
-                            font=dict(color='#64748B', family='Inter'),
-                            xaxis=dict(
-                                title="Score",
-                                showgrid=True,
-                                gridcolor='rgba(226, 232, 240, 0.5)',
-                                linecolor='#E2E8F0'
-                            ),
-                            yaxis=dict(
-                                title="Frequenza",
-                                showgrid=True,
-                                gridcolor='rgba(226, 232, 240, 0.5)',
-                                linecolor='#E2E8F0'
-                            ),
-                            height=350,
-                            margin=dict(t=50, b=50, l=50, r=30)
-                        )
+                # Info box about filtering criteria
+                st.markdown("""
+                <div style="background: #EFF6FF; border-left: 4px solid #3B82F6; padding: 0.75rem; margin-bottom: 1rem; border-radius: 4px;">
+                    <p style="margin: 0; color: #1E40AF; font-size: 0.85rem;">
+                        ℹ️ <strong>Filtro automatico attivo:</strong> Vengono esclusi clienti con email (ultimi 5 gg lavorativi),
+                        telefonate (ultimi 10 gg), nuove polizze (ultimi 30 gg), reclami aperti o sinistri (ultimi 60 gg).
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
 
-                        st.plotly_chart(fig_score, use_container_width=True)
+                # Top 5 button
+                if st.button("🎯 Vai al Top 5 Azioni Prioritarie", type="primary", use_container_width=True):
+                    st.session_state.nbo_page = 'top5'
+                    st.rerun()
 
-                    # Product distribution
-                    st.markdown("### Top Prodotti Raccomandati")
-                    product_counts = {}
-                    for rec in all_recs:
-                        prod = rec['prodotto']
-                        product_counts[prod] = product_counts.get(prod, 0) + 1
+                st.markdown("<br>", unsafe_allow_html=True)
 
-                    sorted_products = sorted(product_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+                for i, rec in enumerate(all_recs[:20]):
+                    score_color = "#10B981" if rec['score'] >= 70 else "#F59E0B" if rec['score'] >= 50 else "#EF4444"
 
-                    fig_products = go.Figure(data=[go.Bar(
-                        y=[p[0] for p in sorted_products][::-1],
-                        x=[p[1] for p in sorted_products][::-1],
-                        orientation='h',
+                    col_card, col_btn = st.columns([5, 1])
+
+                    with col_card:
+                        st.markdown(f"""
+                        <div class="glass-card" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                            <div style="flex: 1; min-width: 200px;">
+                                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                    <span style="background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); color: white; padding: 0.25rem 0.75rem; border-radius: 100px; font-size: 0.75rem; font-weight: 600;">#{i+1}</span>
+                                    <h4 style="margin: 0; color: #1B3A5F; font-size: 1rem; font-weight: 600;">{rec['nome']} {rec['cognome']}</h4>
+                                </div>
+                                <p style="margin: 0.25rem 0 0 2.5rem; color: #64748B; font-size: 0.85rem;">
+                                    {rec['codice_cliente']} · {rec['prodotto']}
+                                </p>
+                            </div>
+                            <div style="display: flex; gap: 1.5rem; align-items: center;">
+                                <div style="text-align: center;">
+                                    <p style="margin: 0; color: #94A3B8; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em;">Area</p>
+                                    <p style="margin: 0; color: #1B3A5F; font-size: 0.85rem; font-weight: 500;">{rec['area_bisogno'].split()[0]}</p>
+                                </div>
+                                <div style="text-align: center;">
+                                    <p style="margin: 0; color: #94A3B8; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em;">Score</p>
+                                    <p style="margin: 0; color: {score_color}; font-size: 1.25rem; font-weight: 700; font-family: 'JetBrains Mono', monospace;">{rec['score']:.1f}</p>
+                                </div>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    with col_btn:
+                        if st.button("Dettagli", key=f"detail_{i}", use_container_width=True):
+                            st.session_state.nbo_page = 'detail'
+                            st.session_state.nbo_selected_client = rec['client_data']
+                            st.session_state.nbo_selected_recommendation = rec['recommendation']
+                            st.rerun()
+
+            with nbo_tab2:
+                st.markdown("### Analytics NBO")
+
+                analytics_col1, analytics_col2 = st.columns(2)
+
+                with analytics_col1:
+                    # Area distribution pie chart
+                    fig_area = go.Figure(data=[go.Pie(
+                        labels=list(area_counts.keys()),
+                        values=list(area_counts.values()),
+                        hole=0.6,
+                        marker_colors=['#00A0B0', '#F59E0B', '#10B981', '#8B5CF6', '#EC4899'],
+                        textinfo='percent+label',
+                        textfont=dict(family='Inter', size=11, color='#1B3A5F')
+                    )])
+
+                    fig_area.update_layout(
+                        title=dict(
+                            text="Distribuzione per Area Bisogno",
+                            font=dict(family='Inter', size=16, color='#1B3A5F', weight=600),
+                            x=0.5
+                        ),
+                        paper_bgcolor='rgba(255,255,255,0)',
+                        plot_bgcolor='rgba(255,255,255,0)',
+                        font=dict(color='#64748B', family='Inter'),
+                        showlegend=False,
+                        height=350,
+                        margin=dict(t=50, b=30, l=30, r=30),
+                        annotations=[dict(
+                            text=f"<b>{total_recs}</b><br>Totale",
+                            x=0.5, y=0.5,
+                            font=dict(family='JetBrains Mono', size=16, color='#1B3A5F'),
+                            showarrow=False
+                        )]
+                    )
+
+                    st.plotly_chart(fig_area, use_container_width=True)
+
+                with analytics_col2:
+                    # Score distribution histogram
+                    scores = [r['score'] for r in all_recs]
+                    fig_score = go.Figure(data=[go.Histogram(
+                        x=scores,
+                        nbinsx=20,
                         marker_color='#00A0B0',
                         marker_line_color='white',
                         marker_line_width=1
                     )])
 
-                    fig_products.update_layout(
+                    fig_score.update_layout(
+                        title=dict(
+                            text="Distribuzione Score",
+                            font=dict(family='Inter', size=16, color='#1B3A5F', weight=600),
+                            x=0.5
+                        ),
                         paper_bgcolor='rgba(255,255,255,0)',
                         plot_bgcolor='rgba(255,255,255,0)',
                         font=dict(color='#64748B', family='Inter'),
                         xaxis=dict(
-                            title="Numero Raccomandazioni",
+                            title="Score",
                             showgrid=True,
-                            gridcolor='rgba(226, 232, 240, 0.5)'
+                            gridcolor='rgba(226, 232, 240, 0.5)',
+                            linecolor='#E2E8F0'
                         ),
                         yaxis=dict(
-                            showgrid=False,
-                            tickfont=dict(size=10)
+                            title="Frequenza",
+                            showgrid=True,
+                            gridcolor='rgba(226, 232, 240, 0.5)',
+                            linecolor='#E2E8F0'
                         ),
-                        height=400,
-                        margin=dict(t=20, b=50, l=250, r=30)
+                        height=350,
+                        margin=dict(t=50, b=50, l=50, r=30)
                     )
 
-                    st.plotly_chart(fig_products, use_container_width=True)
+                    st.plotly_chart(fig_score, use_container_width=True)
 
-                with nbo_tab3:
-                    st.markdown("### Ricerca Clienti NBO")
+                # Product distribution
+                st.markdown("### Top Prodotti Raccomandati")
+                product_counts = {}
+                for rec in all_recs:
+                    prod = rec['prodotto']
+                    product_counts[prod] = product_counts.get(prod, 0) + 1
 
-                    search_term = st.text_input(
-                        "Cerca cliente",
-                        placeholder="Inserisci nome, cognome o codice cliente...",
-                        key="nbo_search"
-                    )
+                sorted_products = sorted(product_counts.items(), key=lambda x: x[1], reverse=True)[:10]
 
-                    if search_term:
-                        search_lower = search_term.lower()
-                        filtered_clients = [
-                            c for c in nbo_data
-                            if search_lower in c['codice_cliente'].lower() or
-                               search_lower in c['anagrafica']['nome'].lower() or
-                               search_lower in c['anagrafica']['cognome'].lower() or
-                               search_lower in c['anagrafica']['citta'].lower()
-                        ]
-                    else:
-                        filtered_clients = nbo_data[:20]
+                fig_products = go.Figure(data=[go.Bar(
+                    y=[p[0] for p in sorted_products][::-1],
+                    x=[p[1] for p in sorted_products][::-1],
+                    orientation='h',
+                    marker_color='#00A0B0',
+                    marker_line_color='white',
+                    marker_line_width=1
+                )])
 
-                    st.markdown(f"**{len(filtered_clients)}** clienti trovati")
+                fig_products.update_layout(
+                    paper_bgcolor='rgba(255,255,255,0)',
+                    plot_bgcolor='rgba(255,255,255,0)',
+                    font=dict(color='#64748B', family='Inter'),
+                    xaxis=dict(
+                        title="Numero Raccomandazioni",
+                        showgrid=True,
+                        gridcolor='rgba(226, 232, 240, 0.5)'
+                    ),
+                    yaxis=dict(
+                        showgrid=False,
+                        tickfont=dict(size=10)
+                    ),
+                    height=400,
+                    margin=dict(t=20, b=50, l=250, r=30)
+                )
 
-                    for client in filtered_clients[:20]:
-                        meta = client['metadata']
-                        best_rec = max(client['raccomandazioni'], key=lambda r: calculate_recommendation_score(r, st.session_state.nbo_weights))
-                        best_score = calculate_recommendation_score(best_rec, st.session_state.nbo_weights)
+                st.plotly_chart(fig_products, use_container_width=True)
 
-                        col_info, col_btn = st.columns([5, 1])
+            with nbo_tab3:
+                st.markdown("### Ricerca Clienti NBO")
 
-                        with col_info:
-                            st.markdown(f"""
-                            <div class="glass-card" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
-                                <div style="flex: 1; min-width: 200px;">
-                                    <h4 style="margin: 0; color: #1B3A5F; font-size: 1rem; font-weight: 600;">{client['anagrafica']['nome']} {client['anagrafica']['cognome']}</h4>
-                                    <p style="margin: 0.25rem 0; color: #64748B; font-size: 0.85rem;">
-                                        {client['codice_cliente']} · {client['anagrafica']['citta']}
-                                    </p>
+                search_term = st.text_input(
+                    "Cerca cliente",
+                    placeholder="Inserisci nome, cognome o codice cliente...",
+                    key="nbo_search"
+                )
+
+                if search_term:
+                    search_lower = search_term.lower()
+                    filtered_clients = [
+                        c for c in nbo_data
+                        if search_lower in c['codice_cliente'].lower() or
+                           search_lower in c['anagrafica']['nome'].lower() or
+                           search_lower in c['anagrafica']['cognome'].lower() or
+                           search_lower in c['anagrafica']['citta'].lower()
+                    ]
+                else:
+                    filtered_clients = nbo_data[:20]
+
+                st.markdown(f"**{len(filtered_clients)}** clienti trovati")
+
+                for client in filtered_clients[:20]:
+                    meta = client['metadata']
+                    best_rec = max(client['raccomandazioni'], key=lambda r: calculate_recommendation_score(r, st.session_state.nbo_weights))
+                    best_score = calculate_recommendation_score(best_rec, st.session_state.nbo_weights)
+
+                    col_info, col_btn = st.columns([5, 1])
+
+                    with col_info:
+                        st.markdown(f"""
+                        <div class="glass-card" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                            <div style="flex: 1; min-width: 200px;">
+                                <h4 style="margin: 0; color: #1B3A5F; font-size: 1rem; font-weight: 600;">{client['anagrafica']['nome']} {client['anagrafica']['cognome']}</h4>
+                                <p style="margin: 0.25rem 0; color: #64748B; font-size: 0.85rem;">
+                                    {client['codice_cliente']} · {client['anagrafica']['citta']}
+                                </p>
+                            </div>
+                            <div style="display: flex; gap: 1.5rem; align-items: center;">
+                                <div style="text-align: center;">
+                                    <p style="margin: 0; color: #94A3B8; font-size: 0.6rem; text-transform: uppercase;">Polizze</p>
+                                    <p style="margin: 0; color: #1B3A5F; font-size: 1.1rem; font-weight: 600;">{meta['num_polizze_attuali']}</p>
                                 </div>
-                                <div style="display: flex; gap: 1.5rem; align-items: center;">
-                                    <div style="text-align: center;">
-                                        <p style="margin: 0; color: #94A3B8; font-size: 0.6rem; text-transform: uppercase;">Polizze</p>
-                                        <p style="margin: 0; color: #1B3A5F; font-size: 1.1rem; font-weight: 600;">{meta['num_polizze_attuali']}</p>
-                                    </div>
-                                    <div style="text-align: center;">
-                                        <p style="margin: 0; color: #94A3B8; font-size: 0.6rem; text-transform: uppercase;">CLV</p>
-                                        <p style="margin: 0; color: #00A0B0; font-size: 1.1rem; font-weight: 600;">€{meta['clv_stimato']:,}</p>
-                                    </div>
-                                    <div style="text-align: center;">
-                                        <p style="margin: 0; color: #94A3B8; font-size: 0.6rem; text-transform: uppercase;">Best Score</p>
-                                        <p style="margin: 0; color: #10B981; font-size: 1.1rem; font-weight: 600;">{best_score:.1f}</p>
-                                    </div>
+                                <div style="text-align: center;">
+                                    <p style="margin: 0; color: #94A3B8; font-size: 0.6rem; text-transform: uppercase;">CLV</p>
+                                    <p style="margin: 0; color: #00A0B0; font-size: 1.1rem; font-weight: 600;">€{meta['clv_stimato']:,}</p>
+                                </div>
+                                <div style="text-align: center;">
+                                    <p style="margin: 0; color: #94A3B8; font-size: 0.6rem; text-transform: uppercase;">Best Score</p>
+                                    <p style="margin: 0; color: #10B981; font-size: 1.1rem; font-weight: 600;">{best_score:.1f}</p>
                                 </div>
                             </div>
-                            """, unsafe_allow_html=True)
+                        </div>
+                        """, unsafe_allow_html=True)
 
-                        with col_btn:
-                            if st.button("Vedi", key=f"client_{client['codice_cliente']}", use_container_width=True):
-                                st.session_state.nbo_page = 'detail'
-                                st.session_state.nbo_selected_client = client
-                                st.session_state.nbo_selected_recommendation = best_rec
-                                st.rerun()
+                    with col_btn:
+                        if st.button("Vedi", key=f"client_{client['codice_cliente']}", use_container_width=True):
+                            st.session_state.nbo_page = 'detail'
+                            st.session_state.nbo_selected_client = client
+                            st.session_state.nbo_selected_recommendation = best_rec
+                            st.rerun()
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # FOOTER

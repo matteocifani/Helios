@@ -56,58 +56,6 @@ SEISMIC_ZONES: Dict[int, Dict[str, any]] = {
 # Default seismic zone if missing
 DEFAULT_SEISMIC_ZONE: int = 4
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# POLICY ICONS - Custom SVG Icons for Insurance Products
-# ═══════════════════════════════════════════════════════════════════════════════
-
-POLICY_ICONS = {
-    "Polizza Salute e Infortuni: Salute Protetta": {
-        "svg": '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="#EF4444"/><path d="M12 8v4m-2-2h4" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>',
-        "color": "#EF4444",
-        "label": "Salute",
-        "short": "Salute"
-    },
-    "Assicurazione Casa e Famiglia: Casa Serena": {
-        "svg": '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" stroke="#F59E0B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-        "color": "#F59E0B",
-        "label": "Casa",
-        "short": "Casa"
-    },
-    "Polizza Vita a Premio Unico: Futuro Sicuro": {
-        "svg": '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="7" cy="17" r="2" fill="#10B981"/></svg>',
-        "color": "#10B981",
-        "label": "Investimento",
-        "short": "Invest"
-    },
-    "Polizza Vita a Premi Ricorrenti: Risparmio Costante": {
-        "svg": '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" fill="#3B82F6" fill-opacity="0.2"/><path d="M12 6v6l4 2" stroke="#3B82F6" stroke-width="2" stroke-linecap="round"/><path d="M17 12a5 5 0 11-10 0 5 5 0 0110 0z" stroke="#3B82F6" stroke-width="1.5"/><circle cx="12" cy="12" r="1.5" fill="#3B82F6"/></svg>',
-        "color": "#3B82F6",
-        "label": "Risparmio",
-        "short": "Risp"
-    },
-    "Piano Individuale Pensionistico (PIP): Pensione Serenità": {
-        "svg": '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L2 8.5V12c0 5.55 4.27 10.74 10 12 5.73-1.26 10-6.45 10-12V8.5L12 2z" fill="#8B5CF6" fill-opacity="0.2" stroke="#8B5CF6" stroke-width="1.5"/><path d="M12 8v4m0 4h.01" stroke="#8B5CF6" stroke-width="2" stroke-linecap="round"/></svg>',
-        "color": "#8B5CF6",
-        "label": "Pensione",
-        "short": "PIP"
-    }
-}
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# EMILIA ROMAGNA PROVINCES (for regional filtering)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-EMILIA_ROMAGNA_PROVINCES = [
-    'Bologna', 'Modena', 'Reggio Emilia', 'Parma',
-    'Piacenza', 'Ferrara', 'Ravenna', 'Forlì-Cesena', 'Rimini'
-]
-
-# Bologna coordinates (for map centering)
-BOLOGNA_COORDINATES = {
-    'lat': 44.4949,
-    'lon': 11.3426
-}
-
 # Zone color mapping for map visualization
 SEISMIC_ZONE_COLORS: Dict[int, List[int]] = {
     1: [255, 69, 58],    # Red (RGB)
