@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(python -m py_compile:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(source .venv/bin/activate)",
+      "Bash(python scripts/python/generate_nbo_master.py:*)",
+      "Bash(python scripts/python/export_supabase_schema.py:*)"
     ]
   }
 }

@@ -5,8 +5,8 @@
 ╚═══════════════════════════════════════════════════════════════════════════════╝
 
 This script generates the nbo_master.json file using:
-- REAL data from Supabase tables (clienti, polizze, etc.)
-- SYNTHETIC model scores (propensity, churn simulation)
+- REAL data from Supabase tables (clienti, polizze, abitazioni)
+- All fields properly joined without nesting
 
 Equivalent to the R script genera_prototipo_master.R but using Python + Supabase.
 """
@@ -17,15 +17,14 @@ import json
 import random
 import math
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Tuple
-from dataclasses import dataclass
+from typing import Dict, List, Optional
+import argparse
 
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from dotenv import load_dotenv
 from supabase import create_client, Client
-import numpy as np
 
 # Load environment variables
 load_dotenv()
@@ -36,13 +35,12 @@ load_dotenv()
 
 # Set random seed for reproducibility
 random.seed(42)
-np.random.seed(42)
 
 # Output path
 OUTPUT_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'Data', 'nbo_master.json')
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# PROFITABILITY TABLE (Same as R script)
+# PROFITABILITY TABLE
 # ═══════════════════════════════════════════════════════════════════════════════
 
 PROFITABILITY_TABLE = {
@@ -74,27 +72,27 @@ PROFITABILITY_TABLE = {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# CHURN MODEL PARAMETERS (Simulated Logit - Same as R script)
+# CHURN MODEL PARAMETERS (Simulated Logit)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 CHURN_MODEL_PARAMS = {
     "intercept": -0.5,
-    "coef_num_polizze": -0.42,      # More policies = less churn
-    "coef_anzianita": -0.08,        # More years = less churn
-    "coef_visite": -0.15,           # More visits = less churn
-    "coef_satisfaction": -0.025,    # Higher satisfaction = less churn
-    "coef_reclami": 0.35,           # More complaints = more churn
-    "coef_eta": 0.015,              # Older = slightly more churn
-    "coef_reddito": -0.00001,       # Higher income = less churn (scaled)
-    "coef_engagement": -0.018,      # Higher engagement = less churn
-    "coef_num_figli": -0.05,        # More children = less churn (family ties)
-    "coef_protezione": -0.25,       # Has protection products = less churn
-    "coef_risparmio": -0.30,        # Has investment products = less churn
-    "coef_previdenza": -0.35        # Has pension products = less churn (strongest)
+    "coef_num_polizze": -0.42,
+    "coef_anzianita": -0.08,
+    "coef_visite": -0.15,
+    "coef_satisfaction": -0.025,
+    "coef_reclami": 0.35,
+    "coef_eta": 0.015,
+    "coef_reddito": -0.00001,
+    "coef_engagement": -0.018,
+    "coef_num_figli": -0.05,
+    "coef_protezione": -0.25,
+    "coef_risparmio": -0.30,
+    "coef_previdenza": -0.35
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# CLUSTER AFFINITY TABLE (Same as R script)
+# CLUSTER AFFINITY TABLE
 # ═══════════════════════════════════════════════════════════════════════════════
 
 CLUSTER_AFFINITY = {
@@ -106,17 +104,6 @@ CLUSTER_AFFINITY = {
     6: {"Protezione": 1.00, "Risparmio e Investimento": 0.50, "Previdenza": 0.75},
     7: {"Protezione": 0.67, "Risparmio e Investimento": 0.58, "Previdenza": 0.50}
 }
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# CLUSTER RISPOSTA MAPPING
-# ═══════════════════════════════════════════════════════════════════════════════
-
-CLUSTER_RISPOSTA_LABELS = [
-    "High_Responder",
-    "Moderate_Responder",
-    "Low_Responder",
-    "Selective_Responder"
-]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -258,19 +245,19 @@ def generate_cluster_nba(eta: int, num_polizze: int, reddito: float,
     """Generate NBA cluster based on demographic + behavioral patterns."""
 
     if eta < 35 and reddito < 40000:
-        return 1  # Young, low income
+        return 1
     elif eta < 35 and reddito >= 40000:
-        return 2  # Young, high income
+        return 2
     elif 35 <= eta < 55 and num_polizze <= 2:
-        return 3  # Middle age, low engagement
+        return 3
     elif 35 <= eta < 55 and num_polizze > 2:
-        return 4  # Middle age, high engagement
+        return 4
     elif eta >= 55 and propensione_vita > 0.6:
-        return 5  # Senior, investment-focused
+        return 5
     elif eta >= 55 and propensione_danni > 0.6:
-        return 6  # Senior, protection-focused
+        return 6
     else:
-        return 7  # Other
+        return 7
 
 
 def generate_recommendations(client_data: Dict) -> List[Dict]:
@@ -283,15 +270,12 @@ def generate_recommendations(client_data: Dict) -> List[Dict]:
 
     recommendations = []
 
-    # Calculate scores for each product
     for prodotto, info in PROFITABILITY_TABLE.items():
-        # Skip if client already owns this product
         if prodotto in prodotti_posseduti:
             continue
 
         area_bisogno = info["area_bisogno"]
 
-        # Propensity score based on area (0-100)
         if "Risparmio" in area_bisogno or "Investimento" in area_bisogno:
             propensione_score = propensione_vita * 100
         elif area_bisogno == "Protezione":
@@ -301,13 +285,8 @@ def generate_recommendations(client_data: Dict) -> List[Dict]:
         else:
             propensione_score = 50.0
 
-        # Calculate retention gain
         delta_result = calculate_delta_churn(client_data, area_bisogno)
-
-        # Profitability score (0-100)
         redditivita_score = info["redditivita_norm"] * 100
-
-        # Cluster affinity score (0-100)
         affinita_norm = CLUSTER_AFFINITY.get(cluster_nba, {}).get(area_bisogno, 0.5)
         affinita_cluster_score = affinita_norm * 100
 
@@ -323,20 +302,17 @@ def generate_recommendations(client_data: Dict) -> List[Dict]:
             "churn_dopo": delta_result["churn_dopo"]
         })
 
-    # Normalize retention gain to 0-100 scale
     if recommendations:
         max_delta = max(r["retention_gain_score"] for r in recommendations) or 0.001
         for r in recommendations:
             r["retention_gain_score"] = (r["retention_gain_score"] / max_delta) * 100
 
-    # Sort by combined score (for display purposes)
     recommendations.sort(
         key=lambda x: x["retention_gain_score"] + x["redditivita_score"] +
                       x["propensione_score"] + x["affinita_cluster_score"],
         reverse=True
     )
 
-    # Convert to output format
     output_recs = []
     for r in recommendations:
         output_recs.append({
@@ -359,62 +335,30 @@ def generate_recommendations(client_data: Dict) -> List[Dict]:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# SYNTHETIC DATA GENERATION (for fields not in DB)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-def generate_synthetic_fields(client: Dict) -> Dict:
-    """Generate synthetic fields that may not exist in the database."""
-
-    # Use client ID as seed for reproducibility
-    client_seed = hash(client.get("codice_cliente", 0)) % (2**31)
-    rng = random.Random(client_seed)
-
-    # Generate synthetic values if not present
-    synthetic = {}
-
-    # Anzianità (years with company) - synthetic
-    synthetic["anzianita"] = client.get("anzianita", rng.uniform(1, 20))
-
-    # Visite ultimo anno - synthetic
-    synthetic["visite"] = client.get("visite_ultimo_anno", rng.randint(0, 12))
-
-    # Satisfaction score - synthetic (60-100)
-    synthetic["satisfaction"] = client.get("satisfaction_score", rng.uniform(60, 100))
-
-    # Reclami - synthetic (0-3)
-    synthetic["reclami"] = client.get("reclami_totali", rng.choices([0, 1, 2, 3], weights=[0.7, 0.2, 0.08, 0.02])[0])
-
-    # Engagement score - synthetic (20-100)
-    synthetic["engagement"] = client.get("engagement_score", rng.uniform(20, 100))
-
-    # Numero figli - synthetic (0-4)
-    synthetic["num_figli"] = client.get("num_figli", rng.choices([0, 1, 2, 3, 4], weights=[0.3, 0.25, 0.3, 0.1, 0.05])[0])
-
-    # Propensione acquisto vita (0-1) - synthetic
-    synthetic["propensione_vita"] = client.get("propensione_vita", rng.uniform(0.2, 0.9))
-
-    # Propensione acquisto danni (0-1) - synthetic
-    synthetic["propensione_danni"] = client.get("propensione_danni", rng.uniform(0.2, 0.9))
-
-    return synthetic
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
 # MAIN PROCESSING
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def main():
+    parser = argparse.ArgumentParser(description='Generate NBO Master JSON from Supabase')
+    parser.add_argument('--sample', type=int, default=None,
+                        help='Extract only N clients (must have abitazioni). If not set, processes all.')
+    parser.add_argument('--only-with-abitazioni', action='store_true',
+                        help='Only include clients that have abitazioni records')
+    args = parser.parse_args()
+
     print("=" * 70)
     print("         NBO MASTER JSON GENERATOR")
     print("=" * 70)
     print()
 
-    # Initialize Supabase client
     client = get_supabase_client()
     if not client:
         sys.exit(1)
 
-    # Fetch data from Supabase
+    # ═══════════════════════════════════════════════════════════════════════════
+    # FETCH DATA
+    # ═══════════════════════════════════════════════════════════════════════════
+
     print("\n📥 Fetching data from Supabase...")
 
     print("\n1. Fetching clienti...")
@@ -425,7 +369,7 @@ def main():
     polizze = fetch_all_records(client, "polizze")
     print(f"   Total: {len(polizze)} policies")
 
-    print("\n3. Fetching abitazioni (for addresses)...")
+    print("\n3. Fetching abitazioni...")
     abitazioni = fetch_all_records(client, "abitazioni")
     print(f"   Total: {len(abitazioni)} properties")
 
@@ -433,11 +377,17 @@ def main():
         print("❌ No clients found in database!")
         sys.exit(1)
 
-    # Build policy ownership map
-    print("\n📊 Processing policy ownership...")
-    policy_map = {}  # codice_cliente -> list of products
+    # ═══════════════════════════════════════════════════════════════════════════
+    # BUILD LOOKUP MAPS
+    # ═══════════════════════════════════════════════════════════════════════════
+
+    print("\n📊 Building lookup maps...")
+
+    # Policy ownership map: codice_cliente -> list of active products
+    policy_map = {}
     for p in polizze:
-        if p.get("stato_polizza") == "Attiva" or p.get("Stato_Polizza") == "Attiva":
+        stato = p.get("stato_polizza") or p.get("Stato_Polizza")
+        if stato == "Attiva":
             cc = p.get("codice_cliente")
             prodotto = p.get("prodotto") or p.get("Prodotto")
             if cc and prodotto:
@@ -446,23 +396,38 @@ def main():
                 if prodotto not in policy_map[cc]:
                     policy_map[cc].append(prodotto)
 
-    # Build address map from abitazioni
-    print("📊 Processing addresses...")
-    address_map = {}  # codice_cliente -> address info
+    # Abitazioni map: codice_cliente -> first abitazione record
+    abitazioni_map = {}
     for a in abitazioni:
         cc = a.get("codice_cliente")
-        if cc and cc not in address_map:
-            address_map[cc] = {
-                "citta": a.get("citta", ""),
-                "provincia": a.get("provincia", ""),
-                "regione": a.get("regione", ""),
-                "latitudine": a.get("latitudine"),
-                "longitudine": a.get("longitudine"),
-                "indirizzo": a.get("indirizzo", "")
-            }
+        if cc and cc not in abitazioni_map:
+            abitazioni_map[cc] = a
 
-    # Process each client
-    print(f"\n🔄 Generating NBO recommendations for {len(clienti)} clients...")
+    print(f"   Clients with policies: {len(policy_map)}")
+    print(f"   Clients with abitazioni: {len(abitazioni_map)}")
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # FILTER CLIENTS IF NEEDED
+    # ═══════════════════════════════════════════════════════════════════════════
+
+    if args.only_with_abitazioni or args.sample:
+        # Filter to only clients with abitazioni
+        clienti_filtered = [c for c in clienti if c.get("codice_cliente") in abitazioni_map]
+        print(f"\n📋 Filtered to clients with abitazioni: {len(clienti_filtered)}")
+
+        if args.sample and args.sample < len(clienti_filtered):
+            # Random sample
+            random.shuffle(clienti_filtered)
+            clienti_filtered = clienti_filtered[:args.sample]
+            print(f"   Sampled {args.sample} clients")
+
+        clienti = clienti_filtered
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # PROCESS CLIENTS
+    # ═══════════════════════════════════════════════════════════════════════════
+
+    print(f"\n🔄 Generating NBO data for {len(clienti)} clients...")
 
     nbo_master_list = []
 
@@ -476,7 +441,7 @@ def main():
         prodotti_posseduti = policy_map.get(codice_cliente, [])
         num_polizze = len(prodotti_posseduti)
 
-        # Determine product area flags
+        # Product area flags
         has_protezione = any(
             "Casa Serena" in p or "Salute Protetta" in p
             for p in prodotti_posseduti
@@ -490,24 +455,31 @@ def main():
             for p in prodotti_posseduti
         )
 
-        # Get synthetic fields
-        synthetic = generate_synthetic_fields(c)
+        # Get real values from clienti table
+        eta = c.get("eta") or 45
+        reddito = c.get("reddito") or c.get("reddito_stimato") or 35000
+        anzianita = c.get("anzianita_compagnia") or 5
+        visite = c.get("visite_ultimo_anno") or 0
+        satisfaction = c.get("satisfaction_score") or 75
+        reclami = c.get("reclami_totali") or 0
+        engagement = c.get("engagement_score") or 50
+        num_figli = c.get("numero_figli") or 0
+        propensione_vita = c.get("propensione_vita") or 0.5
+        propensione_danni = c.get("propensione_danni") or 0.5
+        cluster_risposta = c.get("cluster_risposta") or "Moderate_Responder"
+        clv_stimato = c.get("clv_stimato") or 10000
 
-        # Get basic client info
-        eta = c.get("eta") or c.get("Età") or 45
-        reddito = c.get("reddito") or c.get("reddito_stimato") or c.get("Reddito Stimato") or 35000
-
-        # Calculate churn probability
+        # Calculate churn using model (synthetic based on real features)
         churn_prob = calculate_churn_logit(
             num_polizze=num_polizze,
-            anzianita=synthetic["anzianita"],
-            visite=synthetic["visite"],
-            satisfaction=synthetic["satisfaction"],
-            reclami=synthetic["reclami"],
+            anzianita=anzianita,
+            visite=visite,
+            satisfaction=satisfaction,
+            reclami=reclami,
             eta=eta,
             reddito=reddito,
-            engagement=synthetic["engagement"],
-            num_figli=synthetic["num_figli"],
+            engagement=engagement,
+            num_figli=num_figli,
             has_protezione=has_protezione,
             has_risparmio=has_risparmio,
             has_previdenza=has_previdenza
@@ -518,11 +490,11 @@ def main():
             eta=eta,
             num_polizze=num_polizze,
             reddito=reddito,
-            propensione_vita=synthetic["propensione_vita"],
-            propensione_danni=synthetic["propensione_danni"]
+            propensione_vita=propensione_vita,
+            propensione_danni=propensione_danni
         )
 
-        # Build client data dict for recommendation generation
+        # Build client data for recommendations
         client_data = {
             "codice_cliente": codice_cliente,
             "eta": eta,
@@ -530,72 +502,163 @@ def main():
             "num_polizze": num_polizze,
             "churn_probability": churn_prob,
             "cluster_nba": cluster_nba,
-            "propensione_vita": synthetic["propensione_vita"],
-            "propensione_danni": synthetic["propensione_danni"],
+            "propensione_vita": propensione_vita,
+            "propensione_danni": propensione_danni,
             "prodotti_posseduti": prodotti_posseduti,
             "has_protezione": has_protezione,
             "has_risparmio": has_risparmio,
             "has_previdenza": has_previdenza,
-            "anzianita": synthetic["anzianita"],
-            "visite": synthetic["visite"],
-            "satisfaction": synthetic["satisfaction"],
-            "reclami": synthetic["reclami"],
-            "engagement": synthetic["engagement"],
-            "num_figli": synthetic["num_figli"]
+            "anzianita": anzianita,
+            "visite": visite,
+            "satisfaction": satisfaction,
+            "reclami": reclami,
+            "engagement": engagement,
+            "num_figli": num_figli
         }
 
         # Generate recommendations
         raccomandazioni = generate_recommendations(client_data)
 
-        # Get address info
-        addr = address_map.get(codice_cliente, {})
+        # Get abitazione data (if exists)
+        abit = abitazioni_map.get(codice_cliente, {})
 
-        # Generate cluster risposta (synthetic)
-        rng = random.Random(hash(codice_cliente) % (2**31))
-        cluster_risposta = rng.choice(CLUSTER_RISPOSTA_LABELS)
-
-        # Build output object
+        # Build output JSON - FLAT STRUCTURE with all real data
         cliente_json = {
-            "codice_cliente": f"CLI_{codice_cliente}",
+            "codice_cliente": codice_cliente,
             "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+
+            # Anagrafica - from clienti + abitazioni
             "anagrafica": {
-                "nome": c.get("nome") or c.get("Nome") or "",
-                "cognome": c.get("cognome") or c.get("Cognome") or "",
+                "nome": c.get("nome") or "",
+                "cognome": c.get("cognome") or "",
                 "eta": eta,
-                "indirizzo": addr.get("indirizzo", f"Via {rng.choice(['Roma', 'Garibaldi', 'Mazzini', 'Dante'])}, {rng.randint(1, 200)}"),
-                "citta": addr.get("citta", ""),
-                "provincia": addr.get("provincia", ""),
-                "regione": addr.get("regione", ""),
-                "latitudine": round(addr.get("latitudine") or c.get("latitudine") or 44.5, 6),
-                "longitudine": round(addr.get("longitudine") or c.get("longitudine") or 11.3, 6)
+                "luogo_nascita": c.get("luogo_nascita") or "",
+                "luogo_residenza": c.get("luogo_residenza") or "",
+                "professione": c.get("professione") or "",
+                "stato_civile": c.get("stato_civile") or "",
+                "numero_figli": num_figli,
+                # From abitazioni
+                "indirizzo": abit.get("indirizzo_completo") or "",
+                "via": abit.get("via") or "",
+                "civico": abit.get("civico") or "",
+                "citta": abit.get("citta") or c.get("luogo_residenza") or "",
+                "cap": abit.get("cap") or "",
+                "provincia": abit.get("provincia") or "",
+                "latitudine": abit.get("latitudine") or c.get("latitudine"),
+                "longitudine": abit.get("longitudine") or c.get("longitudine"),
             },
+
+            # Raccomandazioni NBO
             "raccomandazioni": raccomandazioni,
+
+            # Metadata - all real values from DB
             "metadata": {
                 "churn_attuale": round(churn_prob, 4),
                 "num_polizze_attuali": num_polizze,
                 "cluster_nba": cluster_nba,
                 "cluster_risposta": cluster_risposta,
                 "prodotti_posseduti": prodotti_posseduti,
-                "satisfaction_score": round(synthetic["satisfaction"], 1),
-                "engagement_score": round(synthetic["engagement"], 0),
-                "clv_stimato": c.get("clv_stimato") or c.get("CLV_Stimato") or rng.randint(5000, 50000)
+                "satisfaction_score": round(satisfaction, 1) if satisfaction else None,
+                "engagement_score": round(engagement, 1) if engagement else None,
+                "clv_stimato": clv_stimato,
+                # Additional real data
+                "reddito": reddito,
+                "reddito_familiare": c.get("reddito_familiare"),
+                "patrimonio_finanziario": c.get("patrimonio_finanziario_stimato"),
+                "patrimonio_reale": c.get("patrimonio_reale_stimato"),
+                "propensione_vita": round(propensione_vita, 4) if propensione_vita else None,
+                "propensione_danni": round(propensione_danni, 4) if propensione_danni else None,
+                "anzianita_compagnia": anzianita,
+                "visite_ultimo_anno": visite,
+                "reclami_totali": reclami,
+                "agenzia": c.get("agenzia") or "",
+                "zona_residenza": c.get("zona_residenza") or "",
             }
         }
 
         nbo_master_list.append(cliente_json)
 
-    # Save output
-    print(f"\n💾 Saving to {OUTPUT_PATH}...")
+    # ═══════════════════════════════════════════════════════════════════════════
+    # SAVE OUTPUT
+    # ═══════════════════════════════════════════════════════════════════════════
 
-    # Ensure directory exists
+    print(f"\n💾 Saving JSON to {OUTPUT_PATH}...")
+
     os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
 
     with open(OUTPUT_PATH, 'w', encoding='utf-8') as f:
         json.dump(nbo_master_list, f, indent=2, ensure_ascii=False)
 
-    print(f"\n✅ Successfully generated nbo_master.json")
+    # Also save as flat CSV
+    csv_path = OUTPUT_PATH.replace('.json', '.csv')
+    if args.sample:
+        csv_path = os.path.join(os.path.dirname(OUTPUT_PATH), f'sample_{args.sample}_customers.csv')
+
+    print(f"💾 Saving CSV to {csv_path}...")
+
+    # Flatten the nested structure for CSV
+    csv_rows = []
+    for client in nbo_master_list:
+        row = {
+            'codice_cliente': client['codice_cliente'],
+            'timestamp': client['timestamp'],
+            # Anagrafica
+            'nome': client['anagrafica']['nome'],
+            'cognome': client['anagrafica']['cognome'],
+            'eta': client['anagrafica']['eta'],
+            'luogo_nascita': client['anagrafica'].get('luogo_nascita', ''),
+            'luogo_residenza': client['anagrafica'].get('luogo_residenza', ''),
+            'professione': client['anagrafica'].get('professione', ''),
+            'stato_civile': client['anagrafica'].get('stato_civile', ''),
+            'numero_figli': client['anagrafica'].get('numero_figli', 0),
+            'indirizzo': client['anagrafica'].get('indirizzo', ''),
+            'via': client['anagrafica'].get('via', ''),
+            'civico': client['anagrafica'].get('civico', ''),
+            'citta': client['anagrafica'].get('citta', ''),
+            'cap': client['anagrafica'].get('cap', ''),
+            'provincia': client['anagrafica'].get('provincia', ''),
+            'latitudine': client['anagrafica'].get('latitudine'),
+            'longitudine': client['anagrafica'].get('longitudine'),
+            # Metadata
+            'churn_attuale': client['metadata']['churn_attuale'],
+            'num_polizze_attuali': client['metadata']['num_polizze_attuali'],
+            'cluster_nba': client['metadata']['cluster_nba'],
+            'cluster_risposta': client['metadata']['cluster_risposta'],
+            'prodotti_posseduti': '; '.join(client['metadata'].get('prodotti_posseduti', [])),
+            'satisfaction_score': client['metadata'].get('satisfaction_score'),
+            'engagement_score': client['metadata'].get('engagement_score'),
+            'clv_stimato': client['metadata'].get('clv_stimato'),
+            'reddito': client['metadata'].get('reddito'),
+            'reddito_familiare': client['metadata'].get('reddito_familiare'),
+            'patrimonio_finanziario': client['metadata'].get('patrimonio_finanziario'),
+            'patrimonio_reale': client['metadata'].get('patrimonio_reale'),
+            'propensione_vita': client['metadata'].get('propensione_vita'),
+            'propensione_danni': client['metadata'].get('propensione_danni'),
+            'anzianita_compagnia': client['metadata'].get('anzianita_compagnia'),
+            'visite_ultimo_anno': client['metadata'].get('visite_ultimo_anno'),
+            'reclami_totali': client['metadata'].get('reclami_totali'),
+            'agenzia': client['metadata'].get('agenzia', ''),
+            'zona_residenza': client['metadata'].get('zona_residenza', ''),
+            # Best recommendation (first one)
+            'best_prodotto': client['raccomandazioni'][0]['prodotto'] if client['raccomandazioni'] else '',
+            'best_area_bisogno': client['raccomandazioni'][0]['area_bisogno'] if client['raccomandazioni'] else '',
+            'best_retention_gain': client['raccomandazioni'][0]['componenti']['retention_gain'] if client['raccomandazioni'] else None,
+            'best_redditivita': client['raccomandazioni'][0]['componenti']['redditivita'] if client['raccomandazioni'] else None,
+            'best_propensione': client['raccomandazioni'][0]['componenti']['propensione'] if client['raccomandazioni'] else None,
+            'best_affinita_cluster': client['raccomandazioni'][0]['componenti']['affinita_cluster'] if client['raccomandazioni'] else None,
+        }
+        csv_rows.append(row)
+
+    import csv
+    with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.DictWriter(f, fieldnames=csv_rows[0].keys())
+        writer.writeheader()
+        writer.writerows(csv_rows)
+
+    print(f"\n✅ Successfully generated:")
+    print(f"   JSON: {OUTPUT_PATH}")
+    print(f"   CSV:  {csv_path}")
     print(f"   Total clients: {len(nbo_master_list)}")
-    print(f"   Output: {OUTPUT_PATH}")
 
     # Print sample
     print("\n" + "=" * 70)

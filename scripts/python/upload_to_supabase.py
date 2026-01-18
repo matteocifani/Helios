@@ -169,46 +169,69 @@ def extract_prodotti_posseduti(customer: Dict[str, Any]) -> List[Dict[str, Any]]
     ]
 
 
+def clear_tables(supabase: Client):
+    """Svuota le tabelle prima del caricamento (per idempotenza)."""
+    print("\n🗑️  Pulizia tabelle esistenti...")
+
+    # Ordine importante: prima le tabelle con FK, poi la master
+    tables_to_clear = [
+        "master_raccomandazioni",
+        "master_prodotti_posseduti",
+        "master"
+    ]
+
+    for table in tables_to_clear:
+        try:
+            # Cancella tutti i record dalla tabella
+            supabase.table(table).delete().neq("codice_cliente", "").execute()
+            print(f"   ✅ Tabella '{table}' svuotata")
+        except Exception as e:
+            print(f"   ⚠️  Tabella '{table}': {e}")
+
+
 def upload_data(supabase: Client, customers: List[Dict[str, Any]]):
-    """Carica i dati su Supabase in batch."""
+    """Carica i dati su Supabase in batch (idempotente)."""
     total = len(customers)
     print(f"\n📊 Totale clienti da caricare: {total}")
-    
+
+    # Svuota le tabelle prima del caricamento
+    clear_tables(supabase)
+
     # Prepara i dati
     master_records = []
     raccomandazioni_records = []
     prodotti_records = []
-    
-    print("📦 Preparazione dati...")
+
+    print("\n📦 Preparazione dati...")
     for i, customer in enumerate(customers, 1):
         if i % 1000 == 0:
             print(f"   Processati {i}/{total} clienti...")
-        
+
         # Appiattisci il record principale
         master_records.append(flatten_customer_record(customer))
-        
+
         # Estrai raccomandazioni
         raccomandazioni_records.extend(extract_raccomandazioni(customer))
-        
+
         # Estrai prodotti posseduti
         prodotti_records.extend(extract_prodotti_posseduti(customer))
-    
+
     print(f"✅ Dati preparati:")
     print(f"   - {len(master_records)} clienti")
     print(f"   - {len(raccomandazioni_records)} raccomandazioni")
     print(f"   - {len(prodotti_records)} prodotti posseduti")
-    
+
     # Carica tabella master
     print(f"\n📤 Caricamento tabella 'master'...")
     for i in range(0, len(master_records), BATCH_SIZE):
         batch = master_records[i:i + BATCH_SIZE]
         try:
-            supabase.table("master").upsert(batch).execute()
+            supabase.table("master").insert(batch).execute()
             print(f"   ✅ Caricati {min(i + BATCH_SIZE, len(master_records))}/{len(master_records)} record")
         except Exception as e:
             print(f"   ❌ Errore nel batch {i}-{i + BATCH_SIZE}: {e}")
             raise
-    
+
     # Carica tabella raccomandazioni
     print(f"\n📤 Caricamento tabella 'master_raccomandazioni'...")
     for i in range(0, len(raccomandazioni_records), BATCH_SIZE):
@@ -219,7 +242,7 @@ def upload_data(supabase: Client, customers: List[Dict[str, Any]]):
         except Exception as e:
             print(f"   ❌ Errore nel batch {i}-{i + BATCH_SIZE}: {e}")
             raise
-    
+
     # Carica tabella prodotti posseduti
     print(f"\n📤 Caricamento tabella 'master_prodotti_posseduti'...")
     for i in range(0, len(prodotti_records), BATCH_SIZE):
@@ -230,7 +253,7 @@ def upload_data(supabase: Client, customers: List[Dict[str, Any]]):
         except Exception as e:
             print(f"   ❌ Errore nel batch {i}-{i + BATCH_SIZE}: {e}")
             raise
-    
+
     print("\n✅ Tutti i dati sono stati caricati con successo!")
 
 
