@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(python -m py_compile:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Read(//Users/matteocifani/Documents/**)",
+      "Bash(cd:*)",
+      "Bash(curl:*)"
     ]
   }
 }

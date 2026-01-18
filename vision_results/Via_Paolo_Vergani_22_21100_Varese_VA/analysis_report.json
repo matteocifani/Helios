@@ -1,0 +1,119 @@
+{
+  "address": "Via Paolo Vergani, 22, 21100 Varese VA",
+  "timestamp": "2026-01-18T00:33:09.227141",
+  "output_dir": "/Users/matteocifani/Documents/AI Challenge Generali/Streamlit App/vision_results/Via_Paolo_Vergani_22_21100_Varese_VA",
+  "success": true,
+  "steps": {
+    "screenshot": {
+      "completed": true,
+      "path": "/Users/matteocifani/Documents/AI Challenge Generali/Streamlit App/vision_results/Via_Paolo_Vergani_22_21100_Varese_VA/satellite_view.png"
+    },
+    "solar_detection": {
+      "completed": true,
+      "data": {
+        "source": "/Users/matteocifani/Documents/AI Challenge Generali/Streamlit App/vision_results/Via_Paolo_Vergani_22_21100_Varese_VA/satellite_view.png",
+        "total_area_pixels": 1000000,
+        "solar_panel_instances": 0,
+        "solar_panel_area_pixels": 0,
+        "coverage_percentage": 0.0,
+        "detections": [],
+        "annotated_image_path": "/Users/matteocifani/Documents/AI Challenge Generali/Streamlit App/vision_results/Via_Paolo_Vergani_22_21100_Varese_VA/solar_annotated.png"
+      }
+    },
+    "llm_analysis": {
+      "completed": true,
+      "data": {
+        "pannelli_solari": {
+          "presenti": false,
+          "quantita_stimata": null,
+          "copertura_tetto_percentuale": null,
+          "note": "Non sono visibili pannelli solari sul tetto."
+        },
+        "piscina": {
+          "presente": false,
+          "forma": null,
+          "dimensione": null,
+          "note": "Non è presente una piscina nella proprietà."
+        },
+        "vegetazione": {
+          "alberi_vicino_casa": true,
+          "alberi_ombra_tetto": false,
+          "giardino_curato": false,
+          "note": "Ci sono alberi ai margini della proprietà. Il giardino sembra essere principalmente prato e non particolarmente curato."
+        },
+        "tetto": {
+          "tipo": "Non visibile",
+          "condizioni": "Non visibile",
+          "lucernari": false,
+          "antenne": false,
+          "camini": false,
+          "note": "Il tetto non è visibile nell'immagine."
+        },
+        "proprieta": {
+          "dimensione_lotto": "Grande",
+          "garage": false,
+          "edifici_annessi": false,
+          "recinzione": "Non visibile",
+          "note": "Il lotto sembra essere di dimensioni considerevoli. Non sono visibili garage o edifici annessi."
+        },
+        "altre_osservazioni": "L'immagine mostra principalmente un grande prato con alcuni alberi ai bordi. La casa non è visibile.",
+        "sintesi": "L'immagine mostra un grande lotto con prato e alcuni alberi. La casa non è visibile e non ci sono indicazioni di pannelli solari o piscina.",
+        "_metadata": {
+          "model": "google/gemini-2.0-flash-001",
+          "tokens_used": 2444
+        }
+      }
+    }
+  },
+  "screenshot_path": "/Users/matteocifani/Documents/AI Challenge Generali/Streamlit App/vision_results/Via_Paolo_Vergani_22_21100_Varese_VA/satellite_view.png",
+  "solar_detection": {
+    "source": "/Users/matteocifani/Documents/AI Challenge Generali/Streamlit App/vision_results/Via_Paolo_Vergani_22_21100_Varese_VA/satellite_view.png",
+    "total_area_pixels": 1000000,
+    "solar_panel_instances": 0,
+    "solar_panel_area_pixels": 0,
+    "coverage_percentage": 0.0,
+    "detections": [],
+    "annotated_image_path": "/Users/matteocifani/Documents/AI Challenge Generali/Streamlit App/vision_results/Via_Paolo_Vergani_22_21100_Varese_VA/solar_annotated.png"
+  },
+  "llm_analysis": {
+    "pannelli_solari": {
+      "presenti": false,
+      "quantita_stimata": null,
+      "copertura_tetto_percentuale": null,
+      "note": "Non sono visibili pannelli solari sul tetto."
+    },
+    "piscina": {
+      "presente": false,
+      "forma": null,
+      "dimensione": null,
+      "note": "Non è presente una piscina nella proprietà."
+    },
+    "vegetazione": {
+      "alberi_vicino_casa": true,
+      "alberi_ombra_tetto": false,
+      "giardino_curato": false,
+      "note": "Ci sono alberi ai margini della proprietà. Il giardino sembra essere principalmente prato e non particolarmente curato."
+    },
+    "tetto": {
+      "tipo": "Non visibile",
+      "condizioni": "Non visibile",
+      "lucernari": false,
+      "antenne": false,
+      "camini": false,
+      "note": "Il tetto non è visibile nell'immagine."
+    },
+    "proprieta": {
+      "dimensione_lotto": "Grande",
+      "garage": false,
+      "edifici_annessi": false,
+      "recinzione": "Non visibile",
+      "note": "Il lotto sembra essere di dimensioni considerevoli. Non sono visibili garage o edifici annessi."
+    },
+    "altre_osservazioni": "L'immagine mostra principalmente un grande prato con alcuni alberi ai bordi. La casa non è visibile.",
+    "sintesi": "L'immagine mostra un grande lotto con prato e alcuni alberi. La casa non è visibile e non ci sono indicazioni di pannelli solari o piscina.",
+    "_metadata": {
+      "model": "google/gemini-2.0-flash-001",
+      "tokens_used": 2444
+    }
+  }
+}

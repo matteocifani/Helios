@@ -1,0 +1,119 @@
+{
+  "address": "via dei campi lunghi 7, varese",
+  "timestamp": "2026-01-18T00:27:18.090183",
+  "output_dir": "/Users/matteocifani/Documents/AI Challenge Generali/Streamlit App/vision_results/via_dei_campi_lunghi_7_varese",
+  "success": true,
+  "steps": {
+    "screenshot": {
+      "completed": true,
+      "path": "/Users/matteocifani/Documents/AI Challenge Generali/Streamlit App/vision_results/via_dei_campi_lunghi_7_varese/satellite_view.png"
+    },
+    "solar_detection": {
+      "completed": true,
+      "data": {
+        "source": "/Users/matteocifani/Documents/AI Challenge Generali/Streamlit App/vision_results/via_dei_campi_lunghi_7_varese/satellite_view.png",
+        "total_area_pixels": 1000000,
+        "solar_panel_instances": 0,
+        "solar_panel_area_pixels": 0,
+        "coverage_percentage": 0.0,
+        "detections": [],
+        "annotated_image_path": "/Users/matteocifani/Documents/AI Challenge Generali/Streamlit App/vision_results/via_dei_campi_lunghi_7_varese/solar_annotated.png"
+      }
+    },
+    "llm_analysis": {
+      "completed": true,
+      "data": {
+        "pannelli_solari": {
+          "presenti": false,
+          "quantita_stimata": null,
+          "copertura_tetto_percentuale": null,
+          "note": "Non sono visibili pannelli solari sul tetto."
+        },
+        "piscina": {
+          "presente": false,
+          "forma": null,
+          "dimensione": null,
+          "note": "Non è presente una piscina visibile nella proprietà."
+        },
+        "vegetazione": {
+          "alberi_vicino_casa": true,
+          "alberi_ombra_tetto": true,
+          "giardino_curato": false,
+          "note": "Ci sono diversi alberi intorno alla proprietà, alcuni dei quali potrebbero proiettare ombra sul tetto. Il giardino sembra trascurato."
+        },
+        "tetto": {
+          "tipo": "Probabilmente lamiera o materiale simile, coperto da una rete.",
+          "condizioni": "medio",
+          "lucernari": false,
+          "antenne": false,
+          "camini": false,
+          "note": "Il tetto sembra essere coperto da una rete verde, rendendo difficile valutare il materiale e le condizioni sottostanti."
+        },
+        "proprieta": {
+          "dimensione_lotto": "Grande",
+          "garage": false,
+          "edifici_annessi": true,
+          "recinzione": "Non visibile",
+          "note": "La proprietà sembra essere di dimensioni considerevoli e include diversi edifici annessi, probabilmente serre o strutture simili."
+        },
+        "altre_osservazioni": "La proprietà sembra essere un vivaio o un'attività commerciale legata alla coltivazione di piante. Sono visibili diverse serre e aree di stoccaggio.",
+        "sintesi": "La proprietà è un vivaio o un'attività commerciale simile, con diverse serre e aree di stoccaggio. Non sono presenti pannelli solari o piscine. Il giardino sembra trascurato.",
+        "_metadata": {
+          "model": "google/gemini-2.0-flash-001",
+          "tokens_used": 2490
+        }
+      }
+    }
+  },
+  "screenshot_path": "/Users/matteocifani/Documents/AI Challenge Generali/Streamlit App/vision_results/via_dei_campi_lunghi_7_varese/satellite_view.png",
+  "solar_detection": {
+    "source": "/Users/matteocifani/Documents/AI Challenge Generali/Streamlit App/vision_results/via_dei_campi_lunghi_7_varese/satellite_view.png",
+    "total_area_pixels": 1000000,
+    "solar_panel_instances": 0,
+    "solar_panel_area_pixels": 0,
+    "coverage_percentage": 0.0,
+    "detections": [],
+    "annotated_image_path": "/Users/matteocifani/Documents/AI Challenge Generali/Streamlit App/vision_results/via_dei_campi_lunghi_7_varese/solar_annotated.png"
+  },
+  "llm_analysis": {
+    "pannelli_solari": {
+      "presenti": false,
+      "quantita_stimata": null,
+      "copertura_tetto_percentuale": null,
+      "note": "Non sono visibili pannelli solari sul tetto."
+    },
+    "piscina": {
+      "presente": false,
+      "forma": null,
+      "dimensione": null,
+      "note": "Non è presente una piscina visibile nella proprietà."
+    },
+    "vegetazione": {
+      "alberi_vicino_casa": true,
+      "alberi_ombra_tetto": true,
+      "giardino_curato": false,
+      "note": "Ci sono diversi alberi intorno alla proprietà, alcuni dei quali potrebbero proiettare ombra sul tetto. Il giardino sembra trascurato."
+    },
+    "tetto": {
+      "tipo": "Probabilmente lamiera o materiale simile, coperto da una rete.",
+      "condizioni": "medio",
+      "lucernari": false,
+      "antenne": false,
+      "camini": false,
+      "note": "Il tetto sembra essere coperto da una rete verde, rendendo difficile valutare il materiale e le condizioni sottostanti."
+    },
+    "proprieta": {
+      "dimensione_lotto": "Grande",
+      "garage": false,
+      "edifici_annessi": true,
+      "recinzione": "Non visibile",
+      "note": "La proprietà sembra essere di dimensioni considerevoli e include diversi edifici annessi, probabilmente serre o strutture simili."
+    },
+    "altre_osservazioni": "La proprietà sembra essere un vivaio o un'attività commerciale legata alla coltivazione di piante. Sono visibili diverse serre e aree di stoccaggio.",
+    "sintesi": "La proprietà è un vivaio o un'attività commerciale simile, con diverse serre e aree di stoccaggio. Non sono presenti pannelli solari o piscine. Il giardino sembra trascurato.",
+    "_metadata": {
+      "model": "google/gemini-2.0-flash-001",
+      "tokens_used": 2490
+    }
+  }
+}

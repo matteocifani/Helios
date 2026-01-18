@@ -1,0 +1,74 @@
+{
+  "source": "/Users/matteocifani/Documents/AI Challenge Generali/Streamlit App/vision_results/Via_del_Corso_1_Roma/satellite_view.png",
+  "total_area_pixels": 1000000,
+  "solar_panel_instances": 13,
+  "solar_panel_area_pixels": 8892,
+  "coverage_percentage": 0.89,
+  "detections": [
+    {
+      "instance": 1,
+      "area_pixels": 656,
+      "confidence": 0.785
+    },
+    {
+      "instance": 2,
+      "area_pixels": 583,
+      "confidence": 0.76
+    },
+    {
+      "instance": 3,
+      "area_pixels": 574,
+      "confidence": 0.76
+    },
+    {
+      "instance": 4,
+      "area_pixels": 600,
+      "confidence": 0.687
+    },
+    {
+      "instance": 5,
+      "area_pixels": 1008,
+      "confidence": 0.537
+    },
+    {
+      "instance": 6,
+      "area_pixels": 790,
+      "confidence": 0.508
+    },
+    {
+      "instance": 7,
+      "area_pixels": 1177,
+      "confidence": 0.437
+    },
+    {
+      "instance": 8,
+      "area_pixels": 317,
+      "confidence": 0.422
+    },
+    {
+      "instance": 9,
+      "area_pixels": 474,
+      "confidence": 0.397
+    },
+    {
+      "instance": 10,
+      "area_pixels": 835,
+      "confidence": 0.318
+    },
+    {
+      "instance": 11,
+      "area_pixels": 656,
+      "confidence": 0.272
+    },
+    {
+      "instance": 12,
+      "area_pixels": 387,
+      "confidence": 0.262
+    },
+    {
+      "instance": 13,
+      "area_pixels": 835,
+      "confidence": 0.26
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "pannelli_solari": {
+    "presenti": false,
+    "quantita_stimata": null,
+    "copertura_tetto_percentuale": null,
+    "note": "Non sono visibili pannelli solari sul tetto."
+  },
+  "piscina": {
+    "presente": false,
+    "forma": null,
+    "dimensione": null,
+    "note": "Non è presente una piscina nella proprietà."
+  },
+  "vegetazione": {
+    "alberi_vicino_casa": true,
+    "alberi_ombra_tetto": false,
+    "giardino_curato": false,
+    "note": "Ci sono alberi ai margini della proprietà. Il giardino sembra essere principalmente prato e non particolarmente curato."
+  },
+  "tetto": {
+    "tipo": "Non visibile",
+    "condizioni": "Non visibile",
+    "lucernari": false,
+    "antenne": false,
+    "camini": false,
+    "note": "Il tetto non è visibile nell'immagine."
+  },
+  "proprieta": {
+    "dimensione_lotto": "Grande",
+    "garage": false,
+    "edifici_annessi": false,
+    "recinzione": "Non visibile",
+    "note": "Il lotto sembra essere di dimensioni considerevoli. Non sono visibili garage o edifici annessi."
+  },
+  "altre_osservazioni": "L'immagine mostra principalmente un grande prato con alcuni alberi ai bordi. La casa non è visibile.",
+  "sintesi": "L'immagine mostra un grande lotto con prato e alcuni alberi. La casa non è visibile e non ci sono indicazioni di pannelli solari o piscina.",
+  "_metadata": {
+    "model": "google/gemini-2.0-flash-001",
+    "tokens_used": 2444
+  }
+}

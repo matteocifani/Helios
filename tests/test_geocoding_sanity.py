@@ -1,28 +1,16 @@
+import os
+import pytest
 from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
-import pandas as pd
+
+# Disable by default because it requires external network access
+RUN_GEOCODING_TESTS = os.getenv("RUN_GEOCODING_TESTS") == "1"
 
 # Initialize geocoder exactly as in the main script
 geolocator = Nominatim(user_agent="helios_geocoder_vitasicura")
 geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1.1)
 
-def test_address(name, address_parts):
-    print(f"\nTesting: {name}")
-    full_address = ", ".join(address_parts)
-    print(f"Address: {full_address}")
-    
-    try:
-        location = geocode(full_address)
-        if location:
-            print(f"✅ Success: {location.address}")
-            print(f"   Coords: {location.latitude}, {location.longitude}")
-        else:
-            print("❌ Failed (Location not found)")
-            
-    except Exception as e:
-        print(f"❌ Error: {e}")
-
-# Test Cases
+# Test cases taken from production data anomalies
 test_cases = [
     ("Valid Address (Rome)", ["Piazza del Colosseo", "Roma", "Lazio", "Italia"]),
     ("Valid Address (Milan)", ["Piazza del Duomo", "Milano", "Lombardia", "Italia"]),
@@ -30,8 +18,15 @@ test_cases = [
     ("Problematic Record 2", ["Piazza Duomo, 144", "Collecalcioni", "Italia"]),
 ]
 
-print("🔍 Geocoding Sanity Check")
-print("=========================")
 
-for name, parts in test_cases:
-    test_address(name, parts)
+@pytest.mark.skipif(
+    not RUN_GEOCODING_TESTS,
+    reason="Geocoding sanity check requires external network; enable with RUN_GEOCODING_TESTS=1",
+)
+@pytest.mark.parametrize("name,address_parts", test_cases)
+def test_geocoding_lookup(name, address_parts):
+    full_address = ", ".join(address_parts)
+    location = geocode(full_address)
+
+    # We only assert that the geocoder returns something; failures give actionable context
+    assert location is not None, f"Geocoding failed for {name}: {full_address}"

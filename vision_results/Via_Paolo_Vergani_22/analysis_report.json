@@ -1,0 +1,119 @@
+{
+  "address": "Via Paolo Vergani, 22",
+  "timestamp": "2026-01-18T02:01:45.349709",
+  "output_dir": "/Users/matteocifani/Documents/AI Challenge Generali/Streamlit App/vision_results/Via_Paolo_Vergani_22",
+  "success": true,
+  "steps": {
+    "screenshot": {
+      "completed": true,
+      "path": "/Users/matteocifani/Documents/AI Challenge Generali/Streamlit App/vision_results/Via_Paolo_Vergani_22/satellite_view.png"
+    },
+    "solar_detection": {
+      "completed": true,
+      "data": {
+        "source": "/Users/matteocifani/Documents/AI Challenge Generali/Streamlit App/vision_results/Via_Paolo_Vergani_22/satellite_view.png",
+        "total_area_pixels": 490000,
+        "solar_panel_instances": 0,
+        "solar_panel_area_pixels": 0,
+        "coverage_percentage": 0.0,
+        "detections": [],
+        "annotated_image_path": "/Users/matteocifani/Documents/AI Challenge Generali/Streamlit App/vision_results/Via_Paolo_Vergani_22/solar_annotated.png"
+      }
+    },
+    "llm_analysis": {
+      "completed": true,
+      "data": {
+        "pannelli_solari": {
+          "presenti": false,
+          "quantita_stimata": null,
+          "copertura_tetto_percentuale": null,
+          "note": "Non sono visibili pannelli solari sul tetto."
+        },
+        "piscina": {
+          "presente": false,
+          "forma": null,
+          "dimensione": null,
+          "note": "Non è presente una piscina visibile nella proprietà."
+        },
+        "vegetazione": {
+          "alberi_vicino_casa": true,
+          "alberi_ombra_tetto": true,
+          "giardino_curato": false,
+          "note": "Ci sono diversi alberi intorno alla casa, alcuni dei quali potrebbero proiettare ombra sul tetto. Il giardino sembra trascurato."
+        },
+        "tetto": {
+          "tipo": "tegole",
+          "condizioni": "buono",
+          "lucernari": false,
+          "antenne": true,
+          "camini": true,
+          "note": "Il tetto è fatto di tegole e sembra in buone condizioni. Sono presenti antenne e camini."
+        },
+        "proprieta": {
+          "dimensione_lotto": "medio-grande",
+          "garage": false,
+          "edifici_annessi": true,
+          "recinzione": null,
+          "note": "La dimensione del lotto sembra medio-grande. Non è visibile un garage, ma ci sono altri edifici annessi."
+        },
+        "altre_osservazioni": "Sembra esserci un'area di parcheggio o deposito con diversi veicoli o oggetti coperti da teloni.",
+        "sintesi": "La proprietà è una casa con tetto in tegole, giardino trascurato e diversi alberi. Non ci sono pannelli solari o piscina visibili. Sono presenti antenne e camini sul tetto. Ci sono altri edifici annessi e un'area di parcheggio/deposito.",
+        "_metadata": {
+          "model": "google/gemini-2.0-flash-001",
+          "tokens_used": 2493
+        }
+      }
+    }
+  },
+  "screenshot_path": "/Users/matteocifani/Documents/AI Challenge Generali/Streamlit App/vision_results/Via_Paolo_Vergani_22/satellite_view.png",
+  "solar_detection": {
+    "source": "/Users/matteocifani/Documents/AI Challenge Generali/Streamlit App/vision_results/Via_Paolo_Vergani_22/satellite_view.png",
+    "total_area_pixels": 490000,
+    "solar_panel_instances": 0,
+    "solar_panel_area_pixels": 0,
+    "coverage_percentage": 0.0,
+    "detections": [],
+    "annotated_image_path": "/Users/matteocifani/Documents/AI Challenge Generali/Streamlit App/vision_results/Via_Paolo_Vergani_22/solar_annotated.png"
+  },
+  "llm_analysis": {
+    "pannelli_solari": {
+      "presenti": false,
+      "quantita_stimata": null,
+      "copertura_tetto_percentuale": null,
+      "note": "Non sono visibili pannelli solari sul tetto."
+    },
+    "piscina": {
+      "presente": false,
+      "forma": null,
+      "dimensione": null,
+      "note": "Non è presente una piscina visibile nella proprietà."
+    },
+    "vegetazione": {
+      "alberi_vicino_casa": true,
+      "alberi_ombra_tetto": true,
+      "giardino_curato": false,
+      "note": "Ci sono diversi alberi intorno alla casa, alcuni dei quali potrebbero proiettare ombra sul tetto. Il giardino sembra trascurato."
+    },
+    "tetto": {
+      "tipo": "tegole",
+      "condizioni": "buono",
+      "lucernari": false,
+      "antenne": true,
+      "camini": true,
+      "note": "Il tetto è fatto di tegole e sembra in buone condizioni. Sono presenti antenne e camini."
+    },
+    "proprieta": {
+      "dimensione_lotto": "medio-grande",
+      "garage": false,
+      "edifici_annessi": true,
+      "recinzione": null,
+      "note": "La dimensione del lotto sembra medio-grande. Non è visibile un garage, ma ci sono altri edifici annessi."
+    },
+    "altre_osservazioni": "Sembra esserci un'area di parcheggio o deposito con diversi veicoli o oggetti coperti da teloni.",
+    "sintesi": "La proprietà è una casa con tetto in tegole, giardino trascurato e diversi alberi. Non ci sono pannelli solari o piscina visibili. Sono presenti antenne e camini sul tetto. Ci sono altri edifici annessi e un'area di parcheggio/deposito.",
+    "_metadata": {
+      "model": "google/gemini-2.0-flash-001",
+      "tokens_used": 2493
+    }
+  }
+}

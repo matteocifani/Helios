@@ -862,3 +862,175 @@ def insert_phone_call_interaction(
     except Exception as e:
         logger.error(f"Error upserting phone call interaction for {codice_cliente}: {e}")
         return False
+
+
+def fetch_client_risk_data(codice_cliente: str) -> Dict:
+    """
+    Fetch aggregated risk data for a client's properties.
+
+    Args:
+        codice_cliente: Client ID (can be string like "CLI_9500" or integer)
+
+    Returns:
+        Dictionary with risk data:
+        - zona_sismica: Highest seismic zone (1-4)
+        - hydro_risk_p3: Max hydrogeological risk P3 percentage
+        - flood_risk_p4: Max flood risk P4 percentage
+        - risk_score: Average risk score
+        - risk_category: Overall risk category
+        - num_properties: Number of properties
+    """
+    client = get_supabase_client()
+    if not client:
+        logger.warning("No Supabase client available for risk data fetch")
+        return {
+            'zona_sismica': 4,
+            'hydro_risk_p3': 0,
+            'flood_risk_p4': 0,
+            'risk_score': 0,
+            'risk_category': 'Non valutato',
+            'num_properties': 0
+        }
+
+    # Convert codice_cliente to integer
+    cliente_id = codice_cliente
+    if isinstance(codice_cliente, str) and codice_cliente.startswith("CLI_"):
+        try:
+            cliente_id = int(codice_cliente.replace("CLI_", ""))
+        except ValueError:
+            logger.warning(f"Could not parse codice_cliente: {codice_cliente}")
+            return {
+                'zona_sismica': 4,
+                'hydro_risk_p3': 0,
+                'flood_risk_p4': 0,
+                'risk_score': 0,
+                'risk_category': 'Non valutato',
+                'num_properties': 0
+            }
+
+    try:
+        response = _retry_query(
+            lambda: client.table("abitazioni")
+            .select("zona_sismica, hydro_risk_p3, flood_risk_p4, risk_score, risk_category")
+            .eq("codice_cliente", cliente_id)
+            .execute()
+        )
+
+        if not response.data:
+            return {
+                'zona_sismica': 4,
+                'hydro_risk_p3': 0,
+                'flood_risk_p4': 0,
+                'risk_score': 0,
+                'risk_category': 'Non valutato',
+                'num_properties': 0
+            }
+
+        # Aggregate data from all properties
+        properties = response.data
+        zona_sismica = min(p.get('zona_sismica', 4) for p in properties)  # Lower = higher risk
+        hydro_risk_p3 = max(p.get('hydro_risk_p3', 0) or 0 for p in properties)
+        flood_risk_p4 = max(p.get('flood_risk_p4', 0) or 0 for p in properties)
+        avg_score = sum(p.get('risk_score', 0) or 0 for p in properties) / len(properties)
+
+        # Determine overall category from highest risk property
+        risk_categories = [p.get('risk_category', 'Basso') for p in properties]
+        category_priority = {'Critico': 4, 'Alto': 3, 'Medio': 2, 'Basso': 1, 'Non valutato': 0}
+        overall_category = max(risk_categories, key=lambda x: category_priority.get(x, 0))
+
+        logger.info(f"Fetched risk data for client {codice_cliente}: {len(properties)} properties")
+        return {
+            'zona_sismica': zona_sismica,
+            'hydro_risk_p3': round(hydro_risk_p3, 1),
+            'flood_risk_p4': round(flood_risk_p4, 1),
+            'risk_score': round(avg_score, 1),
+            'risk_category': overall_category,
+            'num_properties': len(properties)
+        }
+
+    except Exception as e:
+        logger.error(f"Error fetching risk data for {codice_cliente}: {e}")
+        return {
+            'zona_sismica': 4,
+            'hydro_risk_p3': 0,
+            'flood_risk_p4': 0,
+            'risk_score': 0,
+            'risk_category': 'Non valutato',
+            'num_properties': 0
+        }
+
+
+def fetch_client_active_policies(codice_cliente: str) -> list:
+    """
+    Fetch active policies for a client.
+
+    Args:
+        codice_cliente: Client ID (can be string like "CLI_9500" or integer)
+
+    Returns:
+        List of dictionaries with policy data:
+        - nome_prodotto: Product name
+        - premio_annuo: Annual premium
+        - data_scadenza: Expiry date
+        - data_emissione: Issue date
+        - days_to_expiry: Days until expiry
+    """
+    from datetime import datetime
+
+    client = get_supabase_client()
+    if not client:
+        logger.warning("No Supabase client available for policies fetch")
+        return []
+
+    # Convert codice_cliente to integer
+    cliente_id = codice_cliente
+    if isinstance(codice_cliente, str) and codice_cliente.startswith("CLI_"):
+        try:
+            cliente_id = int(codice_cliente.replace("CLI_", ""))
+        except ValueError:
+            logger.warning(f"Could not parse codice_cliente: {codice_cliente}")
+            return []
+
+    try:
+        response = _retry_query(
+            lambda: client.table("polizze")
+            .select("nome_prodotto, premio_annuo, data_scadenza, data_emissione")
+            .eq("codice_cliente", cliente_id)
+            .execute()
+        )
+
+        if not response.data:
+            return []
+
+        # Process policies and add days_to_expiry
+        today = datetime.now().date()
+        policies = []
+        for p in response.data:
+            policy = {
+                'nome_prodotto': p.get('nome_prodotto', 'Polizza'),
+                'premio_annuo': p.get('premio_annuo', 0),
+                'data_scadenza': p.get('data_scadenza'),
+                'data_emissione': p.get('data_emissione'),
+                'days_to_expiry': None
+            }
+
+            # Calculate days to expiry
+            if p.get('data_scadenza'):
+                try:
+                    expiry = datetime.fromisoformat(p['data_scadenza']).date()
+                    policy['days_to_expiry'] = (expiry - today).days
+                except (ValueError, TypeError):
+                    pass
+
+            policies.append(policy)
+
+        # Sort by days_to_expiry (expiring soon first)
+        policies.sort(key=lambda x: x.get('days_to_expiry') or 9999)
+
+        logger.info(f"Fetched {len(policies)} policies for client {codice_cliente}")
+        return policies
+
+    except Exception as e:
+        logger.error(f"Error fetching policies for {codice_cliente}: {e}")
+        return []
+

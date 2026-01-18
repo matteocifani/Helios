@@ -1,0 +1,41 @@
+{
+  "pannelli_solari": {
+    "presenti": false,
+    "quantita_stimata": null,
+    "copertura_tetto_percentuale": null,
+    "note": "Non sono visibili pannelli solari sul tetto."
+  },
+  "piscina": {
+    "presente": false,
+    "forma": null,
+    "dimensione": null,
+    "note": "Non è presente una piscina nella proprietà."
+  },
+  "vegetazione": {
+    "alberi_vicino_casa": false,
+    "alberi_ombra_tetto": false,
+    "giardino_curato": false,
+    "note": "Non ci sono alberi o vegetazione visibili nelle immediate vicinanze della proprietà."
+  },
+  "tetto": {
+    "tipo": "Sconosciuto",
+    "condizioni": "Sconosciuto",
+    "lucernari": false,
+    "antenne": false,
+    "camini": false,
+    "note": "Non è possibile determinare il tipo di tetto o le sue condizioni a causa della prospettiva e della risoluzione dell'immagine."
+  },
+  "proprieta": {
+    "dimensione_lotto": "Piccola",
+    "garage": false,
+    "edifici_annessi": false,
+    "recinzione": "Assente",
+    "note": "La proprietà sembra essere un edificio in un'area urbana densamente popolata. Non ci sono indicazioni di un garage o edifici annessi."
+  },
+  "altre_osservazioni": "La proprietà si trova in un'area urbana con strade strette e edifici adiacenti.",
+  "sintesi": "La proprietà è un edificio urbano senza pannelli solari, piscina o giardino visibile. Le caratteristiche del tetto non sono identificabili.",
+  "_metadata": {
+    "model": "google/gemini-2.0-flash-001",
+    "tokens_used": 2453
+  }
+}

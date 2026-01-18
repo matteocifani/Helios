@@ -1,0 +1,8 @@
+{
+  "source": "/Users/matteocifani/Documents/AI Challenge Generali/Streamlit App/vision_results/Via_Paolo_Vergani_22/satellite_view.png",
+  "total_area_pixels": 490000,
+  "solar_panel_instances": 0,
+  "solar_panel_area_pixels": 0,
+  "coverage_percentage": 0.0,
+  "detections": []
+}

@@ -1,0 +1,119 @@
+{
+  "address": "via paolo vergani 22, varese",
+  "timestamp": "2026-01-18T01:57:35.414867",
+  "output_dir": "/Users/matteocifani/Documents/AI Challenge Generali/Streamlit App/vision_results/via_paolo_vergani_22_varese",
+  "success": true,
+  "steps": {
+    "screenshot": {
+      "completed": true,
+      "path": "/Users/matteocifani/Documents/AI Challenge Generali/Streamlit App/vision_results/via_paolo_vergani_22_varese/satellite_view.png"
+    },
+    "solar_detection": {
+      "completed": true,
+      "data": {
+        "source": "/Users/matteocifani/Documents/AI Challenge Generali/Streamlit App/vision_results/via_paolo_vergani_22_varese/satellite_view.png",
+        "total_area_pixels": 490000,
+        "solar_panel_instances": 0,
+        "solar_panel_area_pixels": 0,
+        "coverage_percentage": 0.0,
+        "detections": [],
+        "annotated_image_path": "/Users/matteocifani/Documents/AI Challenge Generali/Streamlit App/vision_results/via_paolo_vergani_22_varese/solar_annotated.png"
+      }
+    },
+    "llm_analysis": {
+      "completed": true,
+      "data": {
+        "pannelli_solari": {
+          "presenti": false,
+          "quantita_stimata": null,
+          "copertura_tetto_percentuale": null,
+          "note": "Non sono visibili pannelli solari sul tetto."
+        },
+        "piscina": {
+          "presente": false,
+          "forma": null,
+          "dimensione": null,
+          "note": "Non è presente una piscina visibile nella proprietà."
+        },
+        "vegetazione": {
+          "alberi_vicino_casa": true,
+          "alberi_ombra_tetto": true,
+          "giardino_curato": true,
+          "note": "Ci sono alberi maturi vicino alla casa che potrebbero proiettare ombra sul tetto. Il giardino sembra ben curato."
+        },
+        "tetto": {
+          "tipo": "tegole",
+          "condizioni": "buono",
+          "lucernari": false,
+          "antenne": false,
+          "camini": true,
+          "note": "Il tetto è in tegole e sembra in buone condizioni. È presente un camino."
+        },
+        "proprieta": {
+          "dimensione_lotto": "di medie dimensioni",
+          "garage": false,
+          "edifici_annessi": false,
+          "recinzione": "Non visibile",
+          "note": "La dimensione del lotto sembra di medie dimensioni. Non è visibile un garage o edifici annessi."
+        },
+        "altre_osservazioni": "La proprietà sembra ben tenuta e situata in una zona residenziale con vegetazione matura.",
+        "sintesi": "La proprietà è una casa residenziale con tetto in tegole, giardino curato e alberi maturi. Non sono presenti pannelli solari o piscina.",
+        "_metadata": {
+          "model": "google/gemini-2.0-flash-001",
+          "tokens_used": 2453
+        }
+      }
+    }
+  },
+  "screenshot_path": "/Users/matteocifani/Documents/AI Challenge Generali/Streamlit App/vision_results/via_paolo_vergani_22_varese/satellite_view.png",
+  "solar_detection": {
+    "source": "/Users/matteocifani/Documents/AI Challenge Generali/Streamlit App/vision_results/via_paolo_vergani_22_varese/satellite_view.png",
+    "total_area_pixels": 490000,
+    "solar_panel_instances": 0,
+    "solar_panel_area_pixels": 0,
+    "coverage_percentage": 0.0,
+    "detections": [],
+    "annotated_image_path": "/Users/matteocifani/Documents/AI Challenge Generali/Streamlit App/vision_results/via_paolo_vergani_22_varese/solar_annotated.png"
+  },
+  "llm_analysis": {
+    "pannelli_solari": {
+      "presenti": false,
+      "quantita_stimata": null,
+      "copertura_tetto_percentuale": null,
+      "note": "Non sono visibili pannelli solari sul tetto."
+    },
+    "piscina": {
+      "presente": false,
+      "forma": null,
+      "dimensione": null,
+      "note": "Non è presente una piscina visibile nella proprietà."
+    },
+    "vegetazione": {
+      "alberi_vicino_casa": true,
+      "alberi_ombra_tetto": true,
+      "giardino_curato": true,
+      "note": "Ci sono alberi maturi vicino alla casa che potrebbero proiettare ombra sul tetto. Il giardino sembra ben curato."
+    },
+    "tetto": {
+      "tipo": "tegole",
+      "condizioni": "buono",
+      "lucernari": false,
+      "antenne": false,
+      "camini": true,
+      "note": "Il tetto è in tegole e sembra in buone condizioni. È presente un camino."
+    },
+    "proprieta": {
+      "dimensione_lotto": "di medie dimensioni",
+      "garage": false,
+      "edifici_annessi": false,
+      "recinzione": "Non visibile",
+      "note": "La dimensione del lotto sembra di medie dimensioni. Non è visibile un garage o edifici annessi."
+    },
+    "altre_osservazioni": "La proprietà sembra ben tenuta e situata in una zona residenziale con vegetazione matura.",
+    "sintesi": "La proprietà è una casa residenziale con tetto in tegole, giardino curato e alberi maturi. Non sono presenti pannelli solari o piscina.",
+    "_metadata": {
+      "model": "google/gemini-2.0-flash-001",
+      "tokens_used": 2453
+    }
+  }
+}

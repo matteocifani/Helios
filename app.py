@@ -22,13 +22,9 @@ import os
 load_dotenv()
 
 # Import from new src structure
-from src.ada.chat import render_ada_chat
 from src.config.constants import (
     DEFAULT_SEISMIC_ZONE,
-    SEISMIC_ZONE_COLORS,
     ABITAZIONI_COLUMNS,
-    POLICY_ICONS,
-    EMILIA_ROMAGNA_PROVINCES,
     BOLOGNA_COORDINATES,
 )
 from src.data.db_utils import (
@@ -37,7 +33,9 @@ from src.data.db_utils import (
     check_client_interactions,
     is_client_eligible_for_top20,
     check_all_clients_interactions_batch,
-    insert_phone_call_interaction
+    insert_phone_call_interaction,
+    fetch_client_risk_data,
+    fetch_client_active_policies
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -52,517 +50,23 @@ st.set_page_config(
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# CUSTOM CSS - Design System "Aurora Borealis meets Data Visualization"
+# CUSTOM CSS - Load from external file for better performance
 # ═══════════════════════════════════════════════════════════════════════════════
 
-st.markdown("""
-<style>
-    /* ═══════════════════════════════════════════════════════════════════════
-       GOOGLE FONTS IMPORT
-    ═══════════════════════════════════════════════════════════════════════ */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap');
+def load_css():
+    """Load CSS from external file for better caching and maintainability."""
+    css_path = os.path.join(os.path.dirname(__file__), 'src', 'styles', 'helios.css')
+    try:
+        with open(css_path, 'r', encoding='utf-8') as f:
+            return f.read()
+    except FileNotFoundError:
+        # Fallback to minimal inline CSS if file not found
+        return ""
 
-    /* Hide sidebar completely for new navigation */
-    [data-testid="stSidebar"] {
-        display: none !important;
-    }
-    [data-testid="stSidebarNav"] {
-        display: none !important;
-    }
-    .css-1d391kg {
-        display: none !important;
-    }
-
-    /* Fix for Streamlit sidebar toggle button showing text instead of icon */
-    [data-testid="collapsedControl"],
-    [data-testid="stSidebarCollapsedControl"],
-    [data-testid="stSidebarNavCollapseIcon"],
-    button[kind="headerNoPadding"] {
-        font-size: 0 !important;
-        color: transparent !important;
-        text-indent: -9999px !important;
-        overflow: hidden !important;
-    }
-    [data-testid="collapsedControl"] *,
-    [data-testid="stSidebarCollapsedControl"] *,
-    button[kind="headerNoPadding"] * {
-        font-size: 0 !important;
-        color: transparent !important;
-    }
-    [data-testid="collapsedControl"] svg,
-    [data-testid="stSidebarCollapsedControl"] svg,
-    button[kind="headerNoPadding"] svg {
-        width: 24px !important;
-        height: 24px !important;
-        visibility: visible !important;
-        display: block !important;
-        fill: #64748B !important;
-        color: #64748B !important;
-        font-size: 24px !important;
-    }
-    [data-testid="collapsedControl"]:hover svg,
-    [data-testid="stSidebarCollapsedControl"]:hover svg,
-    button[kind="headerNoPadding"]:hover svg {
-        fill: #00A0B0 !important;
-        color: #00A0B0 !important;
-    }
-
-    /* ═══════════════════════════════════════════════════════════════════════
-       CSS VARIABLES - Vita Sicura Light Theme
-    ═══════════════════════════════════════════════════════════════════════ */
-    :root {
-        /* Primary Colors (from logo) */
-        --vs-navy: #1B3A5F;
-        --vs-navy-light: #2C5282;
-        --vs-teal: #00A0B0;
-        --vs-cyan: #00C9D4;
-        --vs-aqua: #B8E6E8;
-
-        /* Backgrounds */
-        --vs-white: #FFFFFF;
-        --vs-off-white: #FAFBFC;
-        --vs-gray-light: #F3F4F6;
-        --vs-glass: rgba(255, 255, 255, 0.85);
-
-        /* Text */
-        --vs-text-primary: #1B3A5F;
-        --vs-text-secondary: #64748B;
-        --vs-text-muted: #94A3B8;
-
-        /* Borders */
-        --vs-border: #E2E8F0;
-        --vs-border-medium: #CBD5E1;
-        --vs-border-accent: rgba(0, 160, 176, 0.3);
-
-        /* Risk Colors - Light theme */
-        --risk-critical: #DC2626;
-        --risk-critical-bg: #FEE2E2;
-        --risk-high: #EA580C;
-        --risk-high-bg: #FFEDD5;
-        --risk-medium: #CA8A04;
-        --risk-medium-bg: #FEF9C3;
-        --risk-low: #16A34A;
-        --risk-low-bg: #DCFCE7;
-
-        /* Effects */
-        --shadow-sm: 0 1px 2px 0 rgba(27, 58, 95, 0.05);
-        --shadow-md: 0 4px 6px -1px rgba(27, 58, 95, 0.07), 0 2px 4px -1px rgba(27, 58, 95, 0.04);
-        --shadow-lg: 0 10px 15px -3px rgba(27, 58, 95, 0.08), 0 4px 6px -2px rgba(27, 58, 95, 0.04);
-        --shadow-xl: 0 20px 25px -5px rgba(27, 58, 95, 0.1), 0 10px 10px -5px rgba(27, 58, 95, 0.04);
-        --glow-teal: 0 0 20px rgba(0, 160, 176, 0.15);
-
-        /* Legacy aliases for compatibility */
-        --helios-sun: #00A0B0;
-        --helios-amber: #00C9D4;
-        --helios-coral: #38B2AC;
-        --aurora-cyan: #00A0B0;
-        --deep-space: #FFFFFF;
-        --space-gray: #F3F4F6;
-        --star-white: #1B3A5F;
-        --comet-gray: #64748B;
-        --glass-bg: rgba(255, 255, 255, 0.85);
-        --glass-border: #E2E8F0;
-    }
-
-    /* ═══════════════════════════════════════════════════════════════════════
-       GLOBAL STYLES
-    ═══════════════════════════════════════════════════════════════════════ */
-    .stApp {
-        background: linear-gradient(180deg, var(--vs-white) 0%, var(--vs-gray-light) 100%);
-        background-attachment: fixed;
-    }
-
-    /* Subtle gradient overlay */
-    .stApp::before {
-        content: '';
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 400px;
-        background: linear-gradient(180deg, rgba(0, 160, 176, 0.03) 0%, transparent 100%);
-        pointer-events: none;
-        z-index: 0;
-    }
-
-    /* Typography */
-    h1, h2, h3, h4, h5, h6, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
-        color: var(--vs-navy) !important;
-        letter-spacing: -0.025em;
-    }
-
-    p, .stMarkdown p {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
-        color: var(--vs-text-secondary);
-    }
-
-    code, .stCode {
-        font-family: 'JetBrains Mono', monospace !important;
-    }
-
-    /* ═══════════════════════════════════════════════════════════════════════
-       SIDEBAR STYLING
-    ═══════════════════════════════════════════════════════════════════════ */
-    [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, var(--vs-white) 0%, var(--vs-gray-light) 100%) !important;
-        border-right: 1px solid var(--vs-border) !important;
-    }
-
-    [data-testid="stSidebar"]::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 200px;
-        background: linear-gradient(180deg, rgba(0, 160, 176, 0.05) 0%, transparent 100%);
-        pointer-events: none;
-    }
-
-    [data-testid="stSidebar"] .stMarkdown h1 {
-        background: linear-gradient(135deg, var(--vs-teal) 0%, var(--vs-cyan) 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        font-weight: 800;
-        font-size: 1.75rem;
-        text-align: center;
-        padding: 1rem 0;
-    }
-
-    [data-testid="stSidebar"] .stSelectbox > div > div {
-        background: var(--vs-white) !important;
-        border: 1px solid var(--vs-border) !important;
-        border-radius: 12px !important;
-        transition: all 0.2s ease;
-    }
-
-    [data-testid="stSidebar"] .stSelectbox > div > div:hover {
-        border-color: var(--vs-teal) !important;
-    }
-
-    [data-testid="stSidebar"] .stSelectbox > div > div:focus-within {
-        border-color: var(--vs-teal) !important;
-        box-shadow: 0 0 0 3px rgba(0, 160, 176, 0.15);
-    }
-
-    /* ═══════════════════════════════════════════════════════════════════════
-       METRIC CARDS
-    ═══════════════════════════════════════════════════════════════════════ */
-    [data-testid="stMetric"] {
-        background: var(--vs-glass) !important;
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border: 1px solid var(--vs-border);
-        border-radius: 20px;
-        padding: 1.5rem;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        position: relative;
-        overflow: hidden;
-        box-shadow: var(--shadow-md);
-    }
-
-    [data-testid="stMetric"]::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 4px;
-        background: linear-gradient(90deg, var(--vs-teal) 0%, var(--vs-cyan) 100%);
-        opacity: 0;
-        transition: opacity 0.3s ease;
-    }
-
-    [data-testid="stMetric"]:hover {
-        transform: translateY(-4px);
-        box-shadow: var(--shadow-xl), var(--glow-teal);
-        border-color: var(--vs-border-accent);
-    }
-
-    [data-testid="stMetric"]:hover::before {
-        opacity: 1;
-    }
-
-    [data-testid="stMetricLabel"] {
-        font-family: 'Inter', sans-serif !important;
-        font-weight: 600;
-        color: var(--vs-text-muted) !important;
-        text-transform: uppercase;
-        font-size: 0.7rem !important;
-        letter-spacing: 0.1em;
-    }
-
-    [data-testid="stMetricValue"] {
-        font-family: 'JetBrains Mono', monospace !important;
-        font-weight: 700;
-        color: var(--vs-navy) !important;
-        font-size: 2rem !important;
-        letter-spacing: -0.025em;
-    }
-
-    [data-testid="stMetricDelta"] {
-        font-family: 'Inter', sans-serif !important;
-        font-size: 0.8rem !important;
-        font-weight: 500;
-    }
-
-    /* ═══════════════════════════════════════════════════════════════════════
-       CUSTOM COMPONENTS
-    ═══════════════════════════════════════════════════════════════════════ */
-    .hero-header {
-        text-align: center;
-        padding: 1.5rem 0 2rem;
-        position: relative;
-    }
-
-    .hero-title {
-        font-family: 'Playfair Display', serif !important;
-        font-size: 2.75rem !important;
-        font-weight: 700 !important;
-        color: var(--vs-navy) !important;
-        -webkit-text-fill-color: var(--vs-navy);
-        margin-bottom: 0.5rem;
-        letter-spacing: -0.03em;
-    }
-
-    .hero-subtitle {
-        font-family: 'Inter', sans-serif !important;
-        font-size: 0.9rem !important;
-        color: var(--vs-text-secondary) !important;
-        font-weight: 500;
-        letter-spacing: 0.15em;
-        text-transform: uppercase;
-    }
-
-    .glass-card {
-        background: var(--vs-glass);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border: 1px solid var(--vs-border);
-        border-radius: 20px;
-        padding: 1.5rem;
-        margin: 1rem 0;
-        box-shadow: var(--shadow-md);
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-
-    .glass-card:hover {
-        box-shadow: var(--shadow-lg);
-        transform: translateY(-2px);
-    }
-
-    .risk-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-        padding: 0.5rem 1rem;
-        border-radius: 100px;
-        font-family: 'Inter', sans-serif;
-        font-size: 0.75rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        transition: all 0.2s ease;
-    }
-
-    .risk-critical {
-        background: var(--risk-critical-bg);
-        color: var(--risk-critical);
-        border: 1px solid rgba(220, 38, 38, 0.2);
-    }
-    .risk-high {
-        background: var(--risk-high-bg);
-        color: var(--risk-high);
-        border: 1px solid rgba(234, 88, 12, 0.2);
-    }
-    .risk-medium {
-        background: var(--risk-medium-bg);
-        color: var(--risk-medium);
-        border: 1px solid rgba(202, 138, 4, 0.2);
-    }
-    .risk-low {
-        background: var(--risk-low-bg);
-        color: var(--risk-low);
-        border: 1px solid rgba(22, 163, 74, 0.2);
-    }
-
-    .stat-highlight {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 2.5rem;
-        font-weight: 700;
-        background: linear-gradient(135deg, var(--vs-teal), var(--vs-cyan));
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        line-height: 1;
-    }
-
-    .section-divider {
-        height: 1px;
-        background: linear-gradient(90deg,
-            transparent 0%,
-            var(--vs-border) 20%,
-            var(--vs-teal) 50%,
-            var(--vs-border) 80%,
-            transparent 100%);
-        margin: 2rem 0;
-    }
-
-    /* ═══════════════════════════════════════════════════════════════════════
-       BUTTONS & INTERACTIONS
-    ═══════════════════════════════════════════════════════════════════════ */
-    .stButton > button {
-        font-family: 'Inter', sans-serif !important;
-        font-weight: 600;
-        font-size: 0.875rem;
-        background: linear-gradient(135deg, var(--vs-teal) 0%, var(--vs-cyan) 100%);
-        color: white;
-        border: none;
-        border-radius: 12px;
-        padding: 0.75rem 1.5rem;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        box-shadow: 0 4px 6px -1px rgba(0, 160, 176, 0.25);
-    }
-
-    .stButton > button:hover {
-        transform: translateY(-2px);
-        box-shadow: var(--shadow-lg), var(--glow-teal);
-    }
-
-    .stButton > button:active {
-        transform: translateY(0);
-    }
-
-    /* Select boxes */
-    .stSelectbox > div > div {
-        background: var(--vs-white) !important;
-        border: 1px solid var(--vs-border) !important;
-        border-radius: 12px !important;
-        color: var(--vs-navy) !important;
-        transition: all 0.2s ease;
-    }
-
-    .stSelectbox > div > div:hover {
-        border-color: var(--vs-border-medium) !important;
-    }
-
-    .stSelectbox > div > div:focus-within {
-        border-color: var(--vs-teal) !important;
-        box-shadow: 0 0 0 3px rgba(0, 160, 176, 0.15);
-    }
-
-    /* Tabs */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 0.25rem;
-        background: var(--vs-gray-light);
-        padding: 0.375rem;
-        border-radius: 16px;
-        border: 1px solid var(--vs-border);
-    }
-
-    .stTabs [data-baseweb="tab"] {
-        font-family: 'Inter', sans-serif !important;
-        font-weight: 500;
-        font-size: 0.875rem;
-        color: var(--vs-text-secondary);
-        background: transparent;
-        border-radius: 12px;
-        padding: 0.75rem 1.25rem;
-        transition: all 0.2s ease;
-    }
-
-    .stTabs [data-baseweb="tab"]:hover {
-        background: rgba(255, 255, 255, 0.7);
-        color: var(--vs-navy);
-    }
-
-    .stTabs [aria-selected="true"] {
-        background: var(--vs-white) !important;
-        color: var(--vs-navy) !important;
-        font-weight: 600;
-        box-shadow: var(--shadow-sm);
-    }
-
-    /* Text Input */
-    .stTextInput > div > div > input {
-        font-family: 'Inter', sans-serif;
-        background: var(--vs-white);
-        border: 1px solid var(--vs-border);
-        border-radius: 12px;
-        padding: 0.75rem 1rem;
-        color: var(--vs-navy);
-        transition: all 0.2s ease;
-    }
-
-    .stTextInput > div > div > input:focus {
-        border-color: var(--vs-teal);
-        box-shadow: 0 0 0 3px rgba(0, 160, 176, 0.15);
-        outline: none;
-    }
-
-    /* DataFrame styling */
-    .stDataFrame {
-        border-radius: 16px;
-        overflow: hidden;
-        border: 1px solid var(--vs-border);
-        box-shadow: var(--shadow-sm);
-    }
-
-    /* Progress bar */
-    .stProgress > div > div {
-        background: linear-gradient(90deg, var(--vs-teal), var(--vs-cyan));
-        border-radius: 100px;
-    }
-
-    /* Expander */
-    .streamlit-expanderHeader {
-        font-family: 'Inter', sans-serif !important;
-        font-weight: 600;
-        background: var(--vs-white);
-        border: 1px solid var(--vs-border);
-        border-radius: 12px;
-    }
-
-    /* ═══════════════════════════════════════════════════════════════════════
-       ANIMATIONS
-    ═══════════════════════════════════════════════════════════════════════ */
-    @keyframes fadeInUp {
-        from {
-            opacity: 0;
-            transform: translateY(20px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-
-    @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.7; }
-    }
-
-    @keyframes shimmer {
-        0% { background-position: -200% 0; }
-        100% { background-position: 200% 0; }
-    }
-
-    .animate-fade-in {
-        animation: fadeInUp 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-    }
-
-    /* ═══════════════════════════════════════════════════════════════════════
-       RESPONSIVE ADJUSTMENTS
-    ═══════════════════════════════════════════════════════════════════════ */
-    @media (max-width: 768px) {
-        .hero-title { font-size: 2rem !important; }
-        .stat-highlight { font-size: 1.75rem; }
-        [data-testid="stMetricValue"] { font-size: 1.5rem !important; }
-    }
-</style>
-""", unsafe_allow_html=True)
+# Load and inject CSS
+css_content = load_css()
+if css_content:
+    st.markdown(f"<style>{css_content}</style>", unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1138,34 +642,21 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# HEADER - Logo Vita Sicura | HELIOS | User Card
+# HEADER - Compact with prominent HELIOS branding
 # ═══════════════════════════════════════════════════════════════════════════════
 
 agent = st.session_state.agent_profile
 
-# Header using Streamlit columns for better compatibility
-header_left, header_center, header_right = st.columns([3, 4, 3])
+# Header using Streamlit columns - HELIOS prominent on left, user on right
+header_left, header_right = st.columns([4, 2])
 
 with header_left:
     st.markdown("""
     <div style="display: flex; align-items: center; gap: 0.75rem;">
-        <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #1B3A5F 0%, #2C5282 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
-            <span style="color: white; font-weight: 700; font-size: 0.9rem;">VS</span>
-        </div>
+        <span style="font-size: 2.25rem; line-height: 1;">☀️</span>
         <div>
-            <p style="margin: 0; font-size: 0.9rem; font-weight: 700; color: #1B3A5F;">Vita Sicura</p>
-            <p style="margin: 0; font-size: 0.65rem; color: #94A3B8;">Insurance Partner</p>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with header_center:
-    st.markdown("""
-    <div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
-        <span style="font-size: 1.5rem;">☀️</span>
-        <div>
-            <p style="margin: 0; font-size: 1.5rem; font-weight: 800; background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">HELIOS</p>
-            <p style="margin: 0; font-size: 0.6rem; color: #94A3B8; letter-spacing: 0.05em; text-align: center;">GEO-COGNITIVE INTELLIGENCE</p>
+            <p style="margin: 0; font-size: 2.25rem; font-weight: 800; background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; letter-spacing: -0.02em; line-height: 1;">HELIOS</p>
+            <p style="margin: 0; font-size: 0.65rem; color: #94A3B8; letter-spacing: 0.15em; text-transform: uppercase;">Geo-Cognitive Insurance Intelligence</p>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -1187,12 +678,55 @@ with header_right:
     </div>
     """, unsafe_allow_html=True)
 
-st.markdown("<hr style='margin: 0.5rem 0 1rem; border: none; border-top: 1px solid #E2E8F0;'>", unsafe_allow_html=True)
-
 # ═══════════════════════════════════════════════════════════════════════════════
-# MODE SELECTOR - Policy Advisor | Analytics
+# MODE SELECTOR - Modern glassmorphism pills
 # ═══════════════════════════════════════════════════════════════════════════════
 
+# Custom CSS for mode selector tabs
+st.markdown("""
+<style>
+    .mode-selector-wrapper {
+        display: flex;
+        justify-content: center;
+        margin: 0.75rem 0 1rem;
+    }
+    .mode-selector-pills {
+        display: inline-flex;
+        gap: 4px;
+        background: rgba(255, 255, 255, 0.7);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid rgba(0, 160, 176, 0.15);
+        border-radius: 50px;
+        padding: 4px;
+    }
+    .mode-pill {
+        padding: 10px 28px;
+        border-radius: 46px;
+        font-family: 'Inter', sans-serif;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        border: none;
+        background: transparent;
+        color: #64748B;
+        text-decoration: none;
+    }
+    .mode-pill:hover {
+        background: rgba(255, 255, 255, 0.8);
+        color: #1B3A5F;
+    }
+    .mode-pill.active {
+        background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%);
+        color: white;
+        font-weight: 600;
+        box-shadow: 0 4px 15px rgba(0, 160, 176, 0.3);
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# Render mode selector with visual feedback
 mode_col1, mode_col2, mode_col3 = st.columns([1, 2, 1])
 
 with mode_col2:
@@ -1218,8 +752,6 @@ with mode_col2:
             st.session_state.dashboard_mode = 'Helios View'
             st.rerun()
 
-st.markdown("<br>", unsafe_allow_html=True)
-
 # Set default filtered_df for analytics mode
 filtered_df = df
 
@@ -1232,48 +764,53 @@ if st.session_state.dashboard_mode == 'Helios View':
     # ANALYTICS MODE CONTENT (formerly Helios View)
     # ═══════════════════════════════════════════════════════════════════════════════
 
-    # Import regional constants
-    from src.config.constants import EMILIA_ROMAGNA_PROVINCES, BOLOGNA_COORDINATES
+    # Import coordinates for default map center
+    from src.config.constants import BOLOGNA_COORDINATES
 
     # ═══════════════════════════════════════════════════════════════════════════════
-    # INLINE FILTERS (replacing sidebar filters)
+    # UNIVERSAL FILTERS (no regional restrictions)
     # ═══════════════════════════════════════════════════════════════════════════════
 
     with st.expander("🔍 Filtri Analisi", expanded=False):
         filter_col1, filter_col2, filter_col3, filter_col4 = st.columns(4)
 
         with filter_col1:
-            # City filter - pre-filtered to Emilia Romagna
-            emilia_cities = df[df['citta'].str.contains('|'.join(EMILIA_ROMAGNA_PROVINCES), case=False, na=False)]['citta'].unique().tolist()
-            cities_list = ['Tutte le città (E.R.)'] + sorted(emilia_cities)
-            selected_city = st.selectbox("Città", cities_list, label_visibility="collapsed")
+            # Universal city filter - all cities available
+            all_cities = sorted(df['citta'].dropna().unique().tolist()) if 'citta' in df.columns else []
+            cities_list = ['Tutte le città'] + all_cities
+            selected_city = st.selectbox("🏙️ Città", cities_list, label_visibility="collapsed")
 
         with filter_col2:
             risk_options = ['Tutti i rischi', 'Critico', 'Alto', 'Medio', 'Basso']
-            selected_risk = st.selectbox("Categoria Rischio", risk_options, label_visibility="collapsed")
+            selected_risk = st.selectbox("⚠️ Categoria Rischio", risk_options, label_visibility="collapsed")
 
         with filter_col3:
             zone_options = ['Tutte le zone', 'Zona 1', 'Zona 2', 'Zona 3', 'Zona 4']
-            selected_zone = st.selectbox("Zona Sismica", zone_options, label_visibility="collapsed")
+            selected_zone = st.selectbox("🌍 Zona Sismica", zone_options, label_visibility="collapsed")
 
         with filter_col4:
+            # Show active filters summary
+            active_filters = []
+            if selected_city != 'Tutte le città':
+                active_filters.append(selected_city)
+            if selected_risk != 'Tutti i rischi':
+                active_filters.append(selected_risk)
+            if selected_zone != 'Tutte le zone':
+                active_filters.append(selected_zone)
+
+            filter_text = ", ".join(active_filters) if active_filters else "Nessun filtro"
             st.markdown(f"""
             <div style="background: linear-gradient(135deg, rgba(0, 160, 176, 0.08) 0%, rgba(0, 201, 212, 0.05) 100%); border-radius: 8px; padding: 0.5rem; text-align: center;">
-                <p style="margin: 0; color: #64748B; font-size: 0.7rem;">Focus Regionale</p>
-                <p style="margin: 0; color: #00A0B0; font-weight: 600;">Emilia Romagna</p>
+                <p style="margin: 0; color: #64748B; font-size: 0.7rem;">Filtri Attivi</p>
+                <p style="margin: 0; color: #00A0B0; font-weight: 600; font-size: 0.8rem;">{filter_text}</p>
             </div>
             """, unsafe_allow_html=True)
 
-    # Apply regional filter first (Emilia Romagna only)
-    if 'citta' in df.columns:
-        emilia_mask = df['citta'].str.contains('|'.join(EMILIA_ROMAGNA_PROVINCES), case=False, na=False)
-    else:
-        emilia_mask = pd.Series([True] * len(df))
+    # Start with all data (no regional restrictions)
+    filtered_df = df.copy()
 
-    filtered_df = df[emilia_mask].copy()
-
-    # Apply additional filters
-    if selected_city != 'Tutte le città (E.R.)':
+    # Apply filters
+    if selected_city != 'Tutte le città':
         filtered_df = filtered_df[filtered_df['citta'] == selected_city]
     if selected_risk != 'Tutti i rischi':
         filtered_df = filtered_df[filtered_df['risk_category'] == selected_risk]
@@ -1283,7 +820,7 @@ if st.session_state.dashboard_mode == 'Helios View':
 
     # Warning if no results match filters
     if len(filtered_df) == 0:
-        st.warning("⚠️ Nessuna abitazione corrisponde ai filtri selezionati in Emilia Romagna.")
+        st.warning("⚠️ Nessuna abitazione corrisponde ai filtri selezionati.")
 
     # Get stats
     stats = get_risk_stats(filtered_df)
@@ -1346,442 +883,272 @@ if st.session_state.dashboard_mode == 'Helios View':
             delta="lifetime value"
         )
     
-    st.markdown("<br>", unsafe_allow_html=True)
-    
     # ═══════════════════════════════════════════════════════════════════════════════
-    # MAIN TABS
+    # UNIFIED ANALYTICS VIEW - Map + Charts side by side
     # ═══════════════════════════════════════════════════════════════════════════════
-    
-    tab1, tab2, tab3, tab4 = st.tabs([
-        "🗺️ Mappa Geo-Rischio", 
-        "📊 Analytics", 
-        "🔍 Dettaglio Clienti",
-        "🤖 A.D.A. Chat"
+
+    tab1, tab2 = st.tabs([
+        "📊 Analytics & Mappa",
+        "🔍 Dettaglio Clienti"
     ])
-    
-    # ═══════════════════════════════════════════════════════════════════════════════
-    # TAB 1: GEO-RISK MAP
-    # ═══════════════════════════════════════════════════════════════════════════════
-    
+
     with tab1:
-        st.markdown("### 🌍 Mappa del Rischio Territoriale")
-        st.markdown(
-            "<p style='color: #64748B; font-size: 0.9rem;'>"
-            "Visualizzazione avanzata Heatmap & Scatterplot. "
-            "La densità del colore indica il rischio cumulativo dell'area."
-            "</p>",
-            unsafe_allow_html=True
-        )
-        
         # Prepare map data
         map_df = filtered_df[
-            filtered_df['latitudine'].notna() & 
+            filtered_df['latitudine'].notna() &
             filtered_df['longitudine'].notna()
         ].copy()
 
         # Check for Mapbox Token
         mapbox_key = os.getenv("MAPBOX_TOKEN")
-        if not mapbox_key:
-            st.warning("⚠️ MAPBOX_TOKEN mancante nel file .env. La mappa potrebbe non mostrare lo sfondo.")
-        
-        if len(map_df) == 0:
-            st.warning("⚠️ Nessuna abitazione con coordinate geografiche disponibile.")
-        else:
-            # 1. Prepare Colors for PyDeck
-            # Format: [R, G, B, A] - Using dict lookup for performance
-            RISK_COLOR_MAP = {
-                'Critico': [220, 38, 38, 200],   # Red
-                'Alto':    [234, 88, 12, 200],   # Orange
-                'Medio':   [202, 138, 4, 180],   # Yellow
-                'Basso':   [22, 163, 74, 180]    # Green
-            }
-            DEFAULT_COLOR = [22, 163, 74, 180]
 
-            map_df['color'] = map_df['risk_category'].apply(lambda x: RISK_COLOR_MAP.get(x, DEFAULT_COLOR))
-            
-            # 2. PyDeck Layers
+        # Two-column layout: Map (60%) | Charts (40%)
+        map_col, charts_col = st.columns([3, 2])
 
-            # View State (centered on Bologna for Emilia Romagna focus)
-            view_state = pdk.ViewState(
-                latitude=BOLOGNA_COORDINATES['lat'],  # 44.4949
-                longitude=BOLOGNA_COORDINATES['lon'],  # 11.3426
-                zoom=8,  # Regional view for Emilia Romagna
-                pitch=0,
-            )
+        with map_col:
+            st.markdown("#### 🗺️ Mappa Geo-Rischio")
 
-            # Layer 1: Heatmap (Density/Intensity)
-            heatmap_layer = pdk.Layer(
-                "HeatmapLayer",
-                data=map_df,
-                get_position=['longitudine', 'latitudine'],
-                get_weight="risk_score",
-                opacity=0.4,
-                radius_pixels=40,
-                intensity=1,
-                threshold=0.2
-            )
+            if not mapbox_key:
+                st.warning("⚠️ MAPBOX_TOKEN mancante nel file .env.")
 
-            # Layer 2: Scatterplot (Individual Points)
-            scatter_layer = pdk.Layer(
-                "ScatterplotLayer",
-                data=map_df,
-                get_position=['longitudine', 'latitudine'],
-                get_fill_color='color',
-                get_radius=5000,  # Meters
-                pickable=True,
-                radius_min_pixels=4,
-                radius_max_pixels=15,
-                line_width_min_pixels=1,
-                stroked=True,
-                get_line_color=[255, 255, 255, 100]
-            )
-
-            # Render Chart
-            st.pydeck_chart(pdk.Deck(
-                map_style='mapbox://styles/mapbox/light-v10',
-                api_keys={'mapbox': mapbox_key},
-                initial_view_state=view_state,
-                layers=[heatmap_layer, scatter_layer],
-                tooltip={
-                    "html": "<b>Città:</b> {citta}<br/>"
-                            "<b>Rischio:</b> {risk_score}<br/>"
-                            "<b>Categoria:</b> {risk_category}<br/>"
-                            "<b>Cliente:</b> {codice_cliente}",
-                    "style": {"backgroundColor": "steelblue", "color": "white"}
-                }
-            ))
-
-            # 3. Critical Highlights Section (Replacing the big table)
-            st.markdown("### 🚨 Focus Criticità")
-            
-            # Get top critical items
-            critical_df = map_df[map_df['risk_category'].isin(['Critico', 'Alto'])].sort_values('risk_score', ascending=False).head(4)
-            
-            if not critical_df.empty:
-                cols = st.columns(len(critical_df))
-                for idx, row in enumerate(critical_df.itertuples()):
-                    with cols[idx]:
-                        # Card Styling
-                        risk_color = "#DC2626" if row.risk_category == 'Critico' else "#EA580C"
-                        st.markdown(f"""
-                        <div style="
-                            background: white;
-                            border: 1px solid {risk_color};
-                            border-left: 5px solid {risk_color};
-                            border-radius: 8px;
-                            padding: 1rem;
-                            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
-                        ">
-                            <h4 style="margin:0; font-size: 0.9rem; color: #64748B;">{row.citta}</h4>
-                            <p style="font-size: 1.8rem; font-weight: 800; color: #1B3A5F; margin: 0;">{row.risk_score}</p>
-                            <p style="font-size: 0.75rem; color: {risk_color}; font-weight: bold; margin:0;">
-                                {row.risk_category.upper()}
-                            </p>
-                            <p style="font-size: 0.7rem; color: #94A3B8; margin-top:0.5rem;">
-                                ID: {row.id}<br>Filtra mappa per zoom
-                            </p>
-                        </div>
-                        """, unsafe_allow_html=True)
+            if len(map_df) == 0:
+                st.warning("⚠️ Nessuna abitazione con coordinate geografiche disponibile.")
             else:
-                st.info("✅ Nessuna criticità elevata rilevata nei filtri correnti.")
+                # Prepare Colors for PyDeck
+                RISK_COLOR_MAP = {
+                    'Critico': [220, 38, 38, 200],
+                    'Alto':    [234, 88, 12, 200],
+                    'Medio':   [202, 138, 4, 180],
+                    'Basso':   [22, 163, 74, 180]
+                }
+                DEFAULT_COLOR = [22, 163, 74, 180]
+                map_df['color'] = map_df['risk_category'].apply(lambda x: RISK_COLOR_MAP.get(x, DEFAULT_COLOR))
 
-            st.markdown("<br>", unsafe_allow_html=True)
+                # Calculate center based on data if available
+                if len(map_df) > 0:
+                    center_lat = map_df['latitudine'].mean()
+                    center_lon = map_df['longitudine'].mean()
+                else:
+                    center_lat = BOLOGNA_COORDINATES['lat']
+                    center_lon = BOLOGNA_COORDINATES['lon']
 
-            # 4. Collapsible full data table
-            with st.expander("📋 Visualizza Elenco Completo Abitazioni", expanded=False):
-                # Display table with key columns
-                display_cols = ['id', 'citta', 'risk_score', 'risk_category', 'zona_sismica', 'codice_cliente']
-                display_df = map_df[[c for c in display_cols if c in map_df.columns]].copy()
-                display_df['risk_score'] = display_df['risk_score'].fillna(0).round(1)
-                
-                st.dataframe(
-                    display_df,
-                    use_container_width=True,
-                    height=400,
-                    column_config={
-                        'id': st.column_config.TextColumn('ID'),
-                        'citta': st.column_config.TextColumn('Città'),
-                        'risk_score': st.column_config.ProgressColumn('Risk Score', min_value=0, max_value=100, format="%.1f"),
-                        'risk_category': st.column_config.TextColumn('Categoria'),
-                        'zona_sismica': st.column_config.NumberColumn('Zona Sism.'),
-                        'codice_cliente': st.column_config.TextColumn('Cliente'),
-                    }
+                view_state = pdk.ViewState(
+                    latitude=center_lat,
+                    longitude=center_lon,
+                    zoom=6,  # Wider view to show all Italy
+                    pitch=0,
                 )
-        
-        # Legend (Horizontal)
-        st.markdown("""
-        <div style="display: flex; gap: 2rem; justify-content: center; margin-top: 2rem; flex-wrap: wrap; opacity: 0.8;">
-            <div style="display:flex; align-items:center; gap:0.5rem;"><span style="width:12px; height:12px; background:#DC2626; border-radius:50%;"></span> <span style="font-size:0.8rem;">Critico</span></div>
-            <div style="display:flex; align-items:center; gap:0.5rem;"><span style="width:12px; height:12px; background:#EA580C; border-radius:50%;"></span> <span style="font-size:0.8rem;">Alto</span></div>
-            <div style="display:flex; align-items:center; gap:0.5rem;"><span style="width:12px; height:12px; background:#CA8A04; border-radius:50%;"></span> <span style="font-size:0.8rem;">Medio</span></div>
-            <div style="display:flex; align-items:center; gap:0.5rem;"><span style="width:12px; height:12px; background:#16A34A; border-radius:50%;"></span> <span style="font-size:0.8rem;">Basso</span></div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    
-    # ═══════════════════════════════════════════════════════════════════════════════
-    # TAB 2: ANALYTICS
-    # ═══════════════════════════════════════════════════════════════════════════════
-    
-    with tab2:
-        st.markdown("### 📈 Analytics Dashboard")
-    
-        analytics_col1, analytics_col2 = st.columns(2)
-    
-        with analytics_col1:
-            # Risk Distribution Donut - Light Theme
+
+                heatmap_layer = pdk.Layer(
+                    "HeatmapLayer",
+                    data=map_df,
+                    get_position=['longitudine', 'latitudine'],
+                    get_weight="risk_score",
+                    opacity=0.4,
+                    radius_pixels=40,
+                    intensity=1,
+                    threshold=0.2
+                )
+
+                scatter_layer = pdk.Layer(
+                    "ScatterplotLayer",
+                    data=map_df,
+                    get_position=['longitudine', 'latitudine'],
+                    get_fill_color='color',
+                    get_radius=5000,
+                    pickable=True,
+                    radius_min_pixels=4,
+                    radius_max_pixels=15,
+                    stroked=True,
+                    get_line_color=[255, 255, 255, 100]
+                )
+
+                st.pydeck_chart(pdk.Deck(
+                    map_style='mapbox://styles/mapbox/light-v10',
+                    api_keys={'mapbox': mapbox_key},
+                    initial_view_state=view_state,
+                    layers=[heatmap_layer, scatter_layer],
+                    tooltip={
+                        "html": "<b>Città:</b> {citta}<br/><b>Rischio:</b> {risk_score}<br/><b>Categoria:</b> {risk_category}",
+                        "style": {"backgroundColor": "steelblue", "color": "white"}
+                    }
+                ), height=450)
+
+                # Compact legend
+                st.markdown("""
+                <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; opacity: 0.8; margin-top: 0.5rem;">
+                    <div style="display:flex; align-items:center; gap:0.25rem;"><span style="width:10px; height:10px; background:#DC2626; border-radius:50%;"></span> <span style="font-size:0.7rem;">Critico</span></div>
+                    <div style="display:flex; align-items:center; gap:0.25rem;"><span style="width:10px; height:10px; background:#EA580C; border-radius:50%;"></span> <span style="font-size:0.7rem;">Alto</span></div>
+                    <div style="display:flex; align-items:center; gap:0.25rem;"><span style="width:10px; height:10px; background:#CA8A04; border-radius:50%;"></span> <span style="font-size:0.7rem;">Medio</span></div>
+                    <div style="display:flex; align-items:center; gap:0.25rem;"><span style="width:10px; height:10px; background:#16A34A; border-radius:50%;"></span> <span style="font-size:0.7rem;">Basso</span></div>
+                </div>
+                """, unsafe_allow_html=True)
+
+        with charts_col:
+            st.markdown("#### 📈 Quick Analytics")
+
+            # Risk Distribution Donut - Compact
             risk_counts = filtered_df['risk_category'].value_counts()
-    
+
             fig_donut = go.Figure(data=[go.Pie(
                 labels=risk_counts.index,
                 values=risk_counts.values,
                 hole=0.65,
                 marker_colors=['#DC2626', '#EA580C', '#CA8A04', '#16A34A'],
-                textinfo='percent+label',
-                textfont=dict(family='Inter', size=12, color='#1B3A5F'),
-                hovertemplate="<b>%{label}</b><br>%{value:,} abitazioni<br>%{percent}<extra></extra>"
+                textinfo='percent',
+                textfont=dict(family='Inter', size=10, color='#1B3A5F'),
+                hovertemplate="<b>%{label}</b><br>%{value:,} abitazioni<extra></extra>"
             )])
-    
+
             fig_donut.update_layout(
-                title=dict(
-                    text="Distribuzione Rischio",
-                    font=dict(family='Inter', size=18, color='#1B3A5F', weight=600),
-                    x=0.5
-                ),
+                title=dict(text="Distribuzione Rischio", font=dict(family='Inter', size=14, color='#1B3A5F'), x=0.5),
                 paper_bgcolor='rgba(255,255,255,0)',
                 plot_bgcolor='rgba(255,255,255,0)',
-                font=dict(color='#64748B', family='Inter'),
-                showlegend=True,
-                legend=dict(
-                    orientation="h",
-                    yanchor="bottom",
-                    y=-0.2,
-                    xanchor="center",
-                    x=0.5,
-                    font=dict(family='Inter', size=11, color='#64748B')
-                ),
-                annotations=[dict(
-                    text=f"<b>{len(filtered_df):,}</b><br>Totale",
-                    x=0.5, y=0.5,
-                    font=dict(family='JetBrains Mono', size=20, color='#1B3A5F'),
-                    showarrow=False
-                )],
-                height=400,
-                margin=dict(t=60, b=60, l=20, r=20)
+                showlegend=False,
+                annotations=[dict(text=f"<b>{len(filtered_df):,}</b>", x=0.5, y=0.5, font=dict(family='JetBrains Mono', size=16, color='#1B3A5F'), showarrow=False)],
+                height=200,
+                margin=dict(t=40, b=20, l=10, r=10)
             )
-    
             st.plotly_chart(fig_donut, use_container_width=True)
-    
-        with analytics_col2:
-            # Seismic Zone Bar Chart - Light Theme
+
+            # Seismic Zone Bar Chart - Compact
             zone_counts = filtered_df['zona_sismica'].value_counts().sort_index()
-    
+
             fig_bar = go.Figure(data=[go.Bar(
-                x=[f"Zona {z}" for z in zone_counts.index],
+                x=[f"Z{z}" for z in zone_counts.index],
                 y=zone_counts.values,
-                marker=dict(
-                    color=['#DC2626', '#EA580C', '#CA8A04', '#16A34A'][:len(zone_counts)],
-                    line=dict(color='rgba(255,255,255,0.8)', width=1)
-                ),
+                marker=dict(color=['#DC2626', '#EA580C', '#CA8A04', '#16A34A'][:len(zone_counts)]),
                 text=zone_counts.values,
                 textposition='outside',
-                textfont=dict(family='JetBrains Mono', size=12, color='#1B3A5F'),
-                hovertemplate="<b>%{x}</b><br>%{y:,} abitazioni<extra></extra>"
+                textfont=dict(family='JetBrains Mono', size=10, color='#1B3A5F'),
             )])
-    
+
             fig_bar.update_layout(
-                title=dict(
-                    text="Distribuzione Zone Sismiche",
-                    font=dict(family='Inter', size=18, color='#1B3A5F', weight=600),
-                    x=0.5
-                ),
+                title=dict(text="Zone Sismiche", font=dict(family='Inter', size=14, color='#1B3A5F'), x=0.5),
                 paper_bgcolor='rgba(255,255,255,0)',
                 plot_bgcolor='rgba(255,255,255,0)',
-                font=dict(color='#64748B', family='Inter'),
-                xaxis=dict(
-                    showgrid=False,
-                    tickfont=dict(family='Inter', size=12, color='#64748B'),
-                    linecolor='#E2E8F0'
-                ),
-                yaxis=dict(
-                    showgrid=True,
-                    gridcolor='rgba(226, 232, 240, 0.5)',
-                    tickfont=dict(family='JetBrains Mono', size=11, color='#64748B'),
-                    linecolor='#E2E8F0'
-                ),
-                height=400,
-                margin=dict(t=60, b=40, l=40, r=40)
+                xaxis=dict(showgrid=False, tickfont=dict(size=10, color='#64748B')),
+                yaxis=dict(showgrid=True, gridcolor='rgba(226, 232, 240, 0.5)', tickfont=dict(size=9, color='#64748B')),
+                height=200,
+                margin=dict(t=40, b=30, l=30, r=10)
             )
-    
             st.plotly_chart(fig_bar, use_container_width=True)
-        
+
+        # Critical Highlights below the main row
+        st.markdown("#### 🚨 Focus Criticità")
+        critical_df = map_df[map_df['risk_category'].isin(['Critico', 'Alto'])].sort_values('risk_score', ascending=False).head(4) if len(map_df) > 0 else pd.DataFrame()
+
+        if not critical_df.empty:
+            crit_cols = st.columns(len(critical_df))
+            for idx, row in enumerate(critical_df.itertuples()):
+                with crit_cols[idx]:
+                    risk_color = "#DC2626" if row.risk_category == 'Critico' else "#EA580C"
+                    st.markdown(f"""
+                    <div style="background: white; border: 1px solid {risk_color}; border-left: 4px solid {risk_color}; border-radius: 8px; padding: 0.75rem;">
+                        <p style="margin:0; font-size: 0.8rem; color: #64748B;">{row.citta}</p>
+                        <p style="font-size: 1.5rem; font-weight: 700; color: #1B3A5F; margin: 0;">{row.risk_score}</p>
+                        <span style="font-size: 0.65rem; color: {risk_color}; font-weight: 600;">{row.risk_category.upper()}</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+        else:
+            st.info("✅ Nessuna criticità elevata rilevata.")
+
         st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
-        
-        # Second row of charts
-        analytics_col3, analytics_col4 = st.columns(2)
-    
-        with analytics_col3:
-            # CLV vs Risk Score Scatter - Light Theme
+
+        # Full-width analytics row
+        st.markdown("#### 📊 Analisi Dettagliata")
+        analytics_col1, analytics_col2 = st.columns(2)
+
+        with analytics_col1:
+            # CLV vs Risk Score Scatter
             fig_scatter = px.scatter(
                 filtered_df,
                 x='risk_score',
                 y='clv',
                 color='risk_category',
-                color_discrete_map={
-                    'Critico': '#DC2626',
-                    'Alto': '#EA580C',
-                    'Medio': '#CA8A04',
-                    'Basso': '#16A34A'
-                },
+                color_discrete_map={'Critico': '#DC2626', 'Alto': '#EA580C', 'Medio': '#CA8A04', 'Basso': '#16A34A'},
                 size='churn_probability',
-                hover_data=['citta', 'zona_sismica'],
-                labels={
-                    'risk_score': 'Risk Score',
-                    'clv': 'Customer Lifetime Value (€)',
-                    'risk_category': 'Categoria'
-                }
+                hover_data=['citta'],
+                labels={'risk_score': 'Risk Score', 'clv': 'CLV (€)', 'risk_category': 'Categoria'}
             )
-    
+
             fig_scatter.update_layout(
-                title=dict(
-                    text="CLV vs Risk Score",
-                    font=dict(family='Inter', size=18, color='#1B3A5F', weight=600),
-                    x=0.5
-                ),
+                title=dict(text="CLV vs Risk Score", font=dict(family='Inter', size=16, color='#1B3A5F'), x=0.5),
                 paper_bgcolor='rgba(255,255,255,0)',
                 plot_bgcolor='rgba(255,255,255,0)',
-                font=dict(color='#64748B', family='Inter'),
-                xaxis=dict(
-                    showgrid=True,
-                    gridcolor='rgba(226, 232, 240, 0.5)',
-                    title_font=dict(size=12, color='#64748B'),
-                    linecolor='#E2E8F0',
-                    tickfont=dict(color='#64748B')
-                ),
-                yaxis=dict(
-                    showgrid=True,
-                    gridcolor='rgba(226, 232, 240, 0.5)',
-                    title_font=dict(size=12, color='#64748B'),
-                    linecolor='#E2E8F0',
-                    tickfont=dict(color='#64748B')
-                ),
-                legend=dict(
-                    orientation="h",
-                    yanchor="bottom",
-                    y=-0.3,
-                    xanchor="center",
-                    x=0.5,
-                    font=dict(color='#64748B')
+                xaxis=dict(showgrid=True, gridcolor='rgba(226, 232, 240, 0.5)', linecolor='#E2E8F0'),
+                yaxis=dict(showgrid=True, gridcolor='rgba(226, 232, 240, 0.5)', linecolor='#E2E8F0'),
+                legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5, font=dict(size=10, color='#64748B')
                 ),
                 height=400,
                 margin=dict(t=60, b=80, l=60, r=40)
             )
     
             st.plotly_chart(fig_scatter, use_container_width=True)
-    
-        with analytics_col4:
-            # Churn Probability Distribution - Light Theme
+
+        with analytics_col2:
+            # Churn Probability Distribution - Compact
             churn_bins = pd.cut(filtered_df['churn_probability'], bins=[0, 0.2, 0.4, 0.6, 0.8, 1.0],
                                labels=['Molto Basso', 'Basso', 'Medio', 'Alto', 'Molto Alto'])
             churn_counts = churn_bins.value_counts().sort_index()
-    
+
             fig_churn = go.Figure(data=[go.Bar(
                 y=churn_counts.index.astype(str),
                 x=churn_counts.values,
                 orientation='h',
-                marker=dict(
-                    color=['#16A34A', '#00A0B0', '#CA8A04', '#EA580C', '#DC2626'][:len(churn_counts)],
-                    line=dict(color='rgba(255,255,255,0.8)', width=1)
-                ),
+                marker=dict(color=['#16A34A', '#00A0B0', '#CA8A04', '#EA580C', '#DC2626'][:len(churn_counts)]),
                 text=churn_counts.values,
                 textposition='outside',
-                textfont=dict(family='JetBrains Mono', size=11, color='#1B3A5F'),
-                hovertemplate="<b>%{y}</b><br>%{x:,} clienti<extra></extra>"
+                textfont=dict(family='JetBrains Mono', size=10, color='#1B3A5F'),
             )])
-    
+
             fig_churn.update_layout(
-                title=dict(
-                    text="Distribuzione Churn Probability",
-                    font=dict(family='Inter', size=18, color='#1B3A5F', weight=600),
-                    x=0.5
-                ),
+                title=dict(text="Churn Probability", font=dict(family='Inter', size=16, color='#1B3A5F'), x=0.5),
                 paper_bgcolor='rgba(255,255,255,0)',
                 plot_bgcolor='rgba(255,255,255,0)',
-                font=dict(color='#64748B', family='Inter'),
-                xaxis=dict(
-                    showgrid=True,
-                    gridcolor='rgba(226, 232, 240, 0.5)',
-                    tickfont=dict(family='JetBrains Mono', size=11, color='#64748B'),
-                    linecolor='#E2E8F0'
-                ),
-                yaxis=dict(
-                    showgrid=False,
-                    tickfont=dict(family='Inter', size=12, color='#64748B')
-                ),
-                height=400,
-                margin=dict(t=60, b=40, l=120, r=60)
+                xaxis=dict(showgrid=True, gridcolor='rgba(226, 232, 240, 0.5)', tickfont=dict(size=10, color='#64748B')),
+                yaxis=dict(showgrid=False, tickfont=dict(size=10, color='#64748B')),
+                height=350,
+                margin=dict(t=50, b=30, l=90, r=40)
             )
-    
             st.plotly_chart(fig_churn, use_container_width=True)
-        
-        st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
-        
-        # City breakdown - Light Theme
-        st.markdown("### 🏙️ Top 10 Città per Concentrazione Rischio")
-    
+
+        # City breakdown - Compact
+        st.markdown("#### 🏙️ Top 10 Città per Rischio")
+
         city_risk = filtered_df.groupby('citta').agg({
             'risk_score': 'mean',
             'id': 'count',
             'clv': 'sum'
         }).rename(columns={'id': 'n_abitazioni', 'clv': 'clv_totale'}).reset_index()
         city_risk = city_risk.sort_values('risk_score', ascending=False).head(10)
-    
+
         fig_city = go.Figure(data=[go.Bar(
             x=city_risk['citta'],
             y=city_risk['risk_score'],
-            marker=dict(
-                color=city_risk['risk_score'],
-                colorscale=[[0, '#16A34A'], [0.5, '#CA8A04'], [1, '#DC2626']],
-                line=dict(color='rgba(255,255,255,0.8)', width=1)
-            ),
+            marker=dict(color=city_risk['risk_score'], colorscale=[[0, '#16A34A'], [0.5, '#CA8A04'], [1, '#DC2626']]),
             text=[f"{x:.0f}" for x in city_risk['risk_score']],
             textposition='outside',
-            textfont=dict(family='JetBrains Mono', size=11, color='#1B3A5F'),
-            hovertemplate="<b>%{x}</b><br>Risk Score: %{y:.1f}<br>Abitazioni: %{customdata[0]:,}<br>CLV Totale: €%{customdata[1]:,.0f}<extra></extra>",
-            customdata=city_risk[['n_abitazioni', 'clv_totale']].values
+            textfont=dict(family='JetBrains Mono', size=10, color='#1B3A5F'),
+            hovertemplate="<b>%{x}</b><br>Risk: %{y:.1f}<extra></extra>"
         )])
-    
+
         fig_city.update_layout(
             paper_bgcolor='rgba(255,255,255,0)',
             plot_bgcolor='rgba(255,255,255,0)',
-            font=dict(color='#64748B', family='Inter'),
-            xaxis=dict(
-                showgrid=False,
-                tickfont=dict(size=11, color='#64748B'),
-                tickangle=-45,
-                linecolor='#E2E8F0'
-            ),
-            yaxis=dict(
-                showgrid=True,
-                gridcolor='rgba(226, 232, 240, 0.5)',
-                title="Risk Score Medio",
-                title_font=dict(size=12, color='#64748B'),
-                range=[0, 100],
-                linecolor='#E2E8F0',
-                tickfont=dict(color='#64748B')
-            ),
-            height=350,
-            margin=dict(t=20, b=80, l=60, r=40)
+            xaxis=dict(showgrid=False, tickfont=dict(size=9, color='#64748B'), tickangle=-45),
+            yaxis=dict(showgrid=True, gridcolor='rgba(226, 232, 240, 0.5)', range=[0, 100], tickfont=dict(size=9, color='#64748B')),
+            height=300,
+            margin=dict(t=20, b=70, l=40, r=20)
         )
-    
         st.plotly_chart(fig_city, use_container_width=True)
-    
-    
+
+
     # ═══════════════════════════════════════════════════════════════════════════════
-    # TAB 3: CLIENT DETAIL
+    # TAB 2: CLIENT DETAIL (was tab3)
     # ═══════════════════════════════════════════════════════════════════════════════
-    
-    with tab3:
+
+    with tab2:
         st.markdown("### 🔍 Ricerca Clienti")
         
         search_col1, search_col2 = st.columns([3, 1])
@@ -1857,13 +1224,6 @@ if st.session_state.dashboard_mode == 'Helios View':
             st.info(f"📄 Mostrati i primi 20 risultati di {len(display_df):,}. Usa i filtri per restringere la ricerca.")
     
     
-    # ═══════════════════════════════════════════════════════════════════════════════
-    # TAB 4: A.D.A. CHAT
-    # ═══════════════════════════════════════════════════════════════════════════════
-    
-    with tab4:
-        render_ada_chat()
-
 else:
     # ═══════════════════════════════════════════════════════════════════════════════
     # NBO DASHBOARD CONTENT
@@ -2121,6 +1481,147 @@ Le email devono essere personalizzate per ogni cliente, non identiche."""
                 </div>
             </div>
             """, unsafe_allow_html=True)
+
+            # ═══════════════════════════════════════════════════════════════════
+            # RISK CARDS SECTION
+            # ═══════════════════════════════════════════════════════════════════
+            st.markdown("### 🌍 Profilo di Rischio")
+            
+            # Fetch risk data for this client
+            risk_data = fetch_client_risk_data(client_data['codice_cliente'])
+            
+            # Define risk colors
+            def get_risk_color(level):
+                colors = {
+                    'Critico': ('#DC2626', '#FEE2E2'),
+                    'Alto': ('#EA580C', '#FFEDD5'),
+                    'Medio': ('#CA8A04', '#FEF9C3'),
+                    'Basso': ('#16A34A', '#DCFCE7'),
+                }
+                return colors.get(level, ('#64748B', '#F1F5F9'))
+            
+            def get_seismic_level(zona):
+                levels = {1: 'Critico', 2: 'Alto', 3: 'Medio', 4: 'Basso'}
+                return levels.get(zona, 'Basso')
+            
+            def get_hydro_level(pct):
+                if pct >= 10: return 'Critico'
+                if pct >= 5: return 'Alto'
+                if pct >= 2: return 'Medio'
+                return 'Basso'
+            
+            # Create 3 columns for risk cards
+            risk_col1, risk_col2, risk_col3 = st.columns(3)
+            
+            with risk_col1:
+                seismic_level = get_seismic_level(risk_data['zona_sismica'])
+                seismic_color, seismic_bg = get_risk_color(seismic_level)
+                st.markdown(f"""
+                <div style="background: {seismic_bg}; border-left: 4px solid {seismic_color}; border-radius: 12px; padding: 1rem; height: 100%;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                        <span style="font-size: 1.5rem;">🏔️</span>
+                        <span style="color: #1B3A5F; font-weight: 600; font-size: 0.9rem;">Rischio Sismico</span>
+                    </div>
+                    <p style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 1.75rem; font-weight: 700; color: {seismic_color};">
+                        Zona {risk_data['zona_sismica']}
+                    </p>
+                    <span style="background: {seismic_color}; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600;">
+                        {seismic_level}
+                    </span>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with risk_col2:
+                hydro_level = get_hydro_level(risk_data['hydro_risk_p3'])
+                hydro_color, hydro_bg = get_risk_color(hydro_level)
+                st.markdown(f"""
+                <div style="background: {hydro_bg}; border-left: 4px solid {hydro_color}; border-radius: 12px; padding: 1rem; height: 100%;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                        <span style="font-size: 1.5rem;">🌊</span>
+                        <span style="color: #1B3A5F; font-weight: 600; font-size: 0.9rem;">Rischio Idrogeologico</span>
+                    </div>
+                    <p style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 1.75rem; font-weight: 700; color: {hydro_color};">
+                        {risk_data['hydro_risk_p3']}%
+                    </p>
+                    <span style="background: {hydro_color}; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600;">
+                        P3 - {hydro_level}
+                    </span>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with risk_col3:
+                flood_level = get_hydro_level(risk_data['flood_risk_p4'])
+                flood_color, flood_bg = get_risk_color(flood_level)
+                st.markdown(f"""
+                <div style="background: {flood_bg}; border-left: 4px solid {flood_color}; border-radius: 12px; padding: 1rem; height: 100%;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                        <span style="font-size: 1.5rem;">🌧️</span>
+                        <span style="color: #1B3A5F; font-weight: 600; font-size: 0.9rem;">Rischio Alluvione</span>
+                    </div>
+                    <p style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 1.75rem; font-weight: 700; color: {flood_color};">
+                        {risk_data['flood_risk_p4']}%
+                    </p>
+                    <span style="background: {flood_color}; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600;">
+                        P4 - {flood_level}
+                    </span>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            # ═══════════════════════════════════════════════════════════════════
+            # ACTIVE POLICIES SECTION
+            # ═══════════════════════════════════════════════════════════════════
+            st.markdown("### 📋 Polizze Attive")
+            
+            # Fetch active policies
+            active_policies = fetch_client_active_policies(client_data['codice_cliente'])
+            
+            if active_policies:
+                policy_cols = st.columns(min(len(active_policies), 3))
+                for idx, policy in enumerate(active_policies[:3]):
+                    with policy_cols[idx]:
+                        # Determine expiry status
+                        days = policy.get('days_to_expiry')
+                        if days is not None and days <= 30:
+                            expiry_color = '#DC2626'
+                            expiry_bg = '#FEE2E2'
+                            expiry_icon = '⚠️'
+                        elif days is not None and days <= 90:
+                            expiry_color = '#CA8A04'
+                            expiry_bg = '#FEF9C3'
+                            expiry_icon = '📅'
+                        else:
+                            expiry_color = '#16A34A'
+                            expiry_bg = '#DCFCE7'
+                            expiry_icon = '✅'
+                        
+                        premio = policy.get('premio_annuo', 0) or 0
+                        st.markdown(f"""
+                        <div class="glass-card" style="border-left: 4px solid #00A0B0;">
+                            <p style="margin: 0 0 0.5rem 0; color: #1B3A5F; font-weight: 600; font-size: 0.9rem;">
+                                {policy['nome_prodotto'][:40]}{'...' if len(policy['nome_prodotto']) > 40 else ''}
+                            </p>
+                            <p style="margin: 0; color: #00A0B0; font-family: 'JetBrains Mono', monospace; font-size: 1.25rem; font-weight: 700;">
+                                €{premio:,.0f}/anno
+                            </p>
+                            <div style="margin-top: 0.5rem; background: {expiry_bg}; padding: 0.25rem 0.5rem; border-radius: 4px; display: inline-block;">
+                                <span style="color: {expiry_color}; font-size: 0.75rem; font-weight: 600;">
+                                    {expiry_icon} {f'{days} giorni alla scadenza' if days is not None else 'Scadenza N/D'}
+                                </span>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+            else:
+                st.markdown("""
+                <div class="glass-card" style="text-align: center; padding: 2rem;">
+                    <p style="color: #94A3B8; font-style: italic; margin: 0;">
+                        📭 Nessuna polizza attiva
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            st.markdown("<br>", unsafe_allow_html=True)
 
             # Client info columns
             col1, col2 = st.columns(2)
