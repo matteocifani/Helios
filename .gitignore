@@ -51,3 +51,7 @@ test_output/
 # System
 .DS_Store
 Thumbs.db
+
+# Local-only run scripts/helpers
+run_via_gran_sasso.sh
+Python/ensure_model.py
