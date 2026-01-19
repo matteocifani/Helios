@@ -3370,13 +3370,14 @@ Mantieni formato **Oggetto:** e corpo email. GENERA ORA senza tool."""
 </div>"""
             chip_html += "</div>"
 
-            # Build rec html
+            # Build rec html (tag spostato nel titolo della card)
             rec_html = "<em>Nessuna raccomandazione</em>"
+            rec_tag = ""
             if recommendation:
                 comp = recommendation['componenti']
+                rec_tag = "<span style='background:linear-gradient(135deg,#00A0B0,#00C9D4);color:white;padding:4px 10px;border-radius:6px;font-size:0.65rem;font-weight:700;margin-left:0.75rem;vertical-align:middle;'>RACCOMANDAZIONE AI</span>"
                 rec_html = f"""<div>
-    <span style='background:linear-gradient(135deg,#00A0B0,#00C9D4);color:white;padding:4px 12px;border-radius:6px;font-size:0.7rem;font-weight:700;'>RACCOMANDAZIONE AI</span>
-    <p style='margin:0.5rem 0; font-weight:700;'>{recommendation['prodotto']}</p>
+    <p style='margin:0 0 0.25rem 0; font-weight:700; font-size:1rem;'>{recommendation['prodotto']}</p>
     <p style='margin:0 0 1rem 0; font-size:0.85rem; color:#64748B;'>📌 {recommendation['area_bisogno']}</p>
     <div style='display:grid; grid-template-columns: 1fr 1fr; gap:0.5rem;'>
         <div><small>🔄 RETENTION</small><div style='height:6px;width:100%;background:#F3F4F6;border-radius:10px;'><div style='height:100%;width:{min(comp['retention_gain'], 100)}%;background:#00A0B0;border-radius:10px;'></div></div><small><strong>{comp['retention_gain']:.1f}%</strong></small></div>
@@ -3419,7 +3420,7 @@ Mantieni formato **Oggetto:** e corpo email. GENERA ORA senza tool."""
                     <div style="flex: 1;">{polizze_html}</div>
                 </div>
                 <div class="standard-card">
-                    <h5 style="margin-bottom: 1rem;">🎯 Prodotto Consigliato</h5>
+                    <h5 style="margin-bottom: 1rem;">🎯 Prodotto Consigliato{rec_tag}</h5>
                     <div style="flex: 1;">{rec_html}</div>
                 </div>
                 """, unsafe_allow_html=True)
