@@ -39,6 +39,7 @@ from src.data.db_utils import (
     get_client_detail,
     get_client_satellite
 )
+from src.utils.ui import helio_spinner
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CONFIGURAZIONE PAGINA
@@ -1408,8 +1409,9 @@ def load_data():
     from db_utils import fetch_abitazioni, fetch_clienti
 
     # Fetch data
-    df_abitazioni = fetch_abitazioni()
-    df_clienti = fetch_clienti()
+    # Fetch data - OPTIMIZED WITH LITE PARAMETER
+    df_abitazioni = fetch_abitazioni(lite=True)
+    df_clienti = fetch_clienti(lite=True)
 
     if df_abitazioni.empty:
         # If no data is found, return empty dataframe with expected columns to avoid crashes
@@ -1423,7 +1425,8 @@ def load_data():
         df_clienti = df_clienti.rename(columns={'clv_stimato': 'clv'})
 
         # Select only necessary columns from client to avoid duplicates/conflicts
-        client_cols = ['codice_cliente', 'clv', 'churn_probability']
+        # IMPORTANT: We need name/surname here since we removed them from the abitazioni join
+        client_cols = ['codice_cliente', 'clv', 'churn_probability', 'nome', 'cognome']
         # Filter only existing columns
         client_cols = [c for c in client_cols if c in df_clienti.columns]
 
@@ -1640,7 +1643,7 @@ if 'user_phone' not in st.session_state:
 
 # Dashboard mode (renamed: Helios View -> Analytics, Helios NBO -> Policy Advisor)
 if 'dashboard_mode' not in st.session_state:
-    st.session_state.dashboard_mode = 'Analytics'
+    st.session_state.dashboard_mode = 'Policy Advisor'
 
 # Initialize Analytics Sub-navigation
 if 'analytics_page' not in st.session_state:
@@ -1653,9 +1656,9 @@ if 'nbo_page' not in st.session_state:
     st.session_state.nbo_page = 'dashboard'
 if 'nbo_weights' not in st.session_state:
     st.session_state.nbo_weights = {
-        'retention': 0.60,
-        'redditivita': 0.20,
-        'propensione': 0.20
+        'retention': 0.33,
+        'redditivita': 0.33,
+        'propensione': 0.34
     }
 if 'nbo_selected_client' not in st.session_state:
     st.session_state.nbo_selected_client = None
@@ -1663,9 +1666,11 @@ if 'nbo_selected_recommendation' not in st.session_state:
     st.session_state.nbo_selected_recommendation = None
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# LOAD DATA (needed before sidebar)
 # ═══════════════════════════════════════════════════════════════════════════════
-df = load_data()
+# LOAD DATA (DEFERRED)
+# ═══════════════════════════════════════════════════════════════════════════════
+# Data loading is moved inside the Analytics block to speed up initial load
+# df = load_data()
 
 # Initialize filter state if not exists (for Analytics mode)
 if 'selected_city' not in st.session_state:
@@ -1754,26 +1759,11 @@ with st.sidebar:
     render_iris_chat()
 
     # Elegant footer
-    st.markdown("""
-    <div style="text-align: center; padding: 1rem 0; margin-top: 1rem; border-top: 1px solid #E2E8F0;">
-        <p style="font-family: 'Inter', sans-serif; font-size: 0.65rem; color: #94A3B8; margin: 0;">
-            Powered by <strong style="color: #1B3A5F;">Vita Sicura</strong>
-        </p>
-        <p style="font-family: 'Inter', sans-serif; font-size: 0.6rem; color: #CBD5E1; margin-top: 0.15rem;">
-            Helios v2.0 • Generali AI Challenge
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+    # Footer removed to prevent interference with fixed chat input
+    # st.markdown(...) 
 
-# Set default for filtered_df based on stored filter state
-filtered_df = df.copy()
-if st.session_state.selected_city != 'Tutte le città':
-    filtered_df = filtered_df[filtered_df['citta'] == st.session_state.selected_city]
-if st.session_state.selected_risk != 'Tutti i rischi':
-    filtered_df = filtered_df[filtered_df['risk_category'] == st.session_state.selected_risk]
-if st.session_state.selected_zone != 'Tutte le zone':
-    zone_num = int(st.session_state.selected_zone.split()[-1])
-    filtered_df = filtered_df[filtered_df['zona_sismica'] == zone_num]
+
+# Filter logic moved to Analytics block
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1988,6 +1978,22 @@ st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 if st.session_state.dashboard_mode == 'Analytics':
+    # ═══════════════════════════════════════════════════════════════════════════════
+    # DATA LOADING & FILTERING (Lazy Load)
+    # ═══════════════════════════════════════════════════════════════════════════════
+    with helio_spinner("Caricamento Ecosistema Helios..."):
+        df = load_data()
+    
+    # Set default for filtered_df based on stored filter state
+    filtered_df = df.copy()
+    if st.session_state.selected_city != 'Tutte le città':
+        filtered_df = filtered_df[filtered_df['citta'] == st.session_state.selected_city]
+    if st.session_state.selected_risk != 'Tutti i rischi':
+        filtered_df = filtered_df[filtered_df['risk_category'] == st.session_state.selected_risk]
+    if st.session_state.selected_zone != 'Tutte le zone':
+        zone_num = int(st.session_state.selected_zone.split()[-1])
+        filtered_df = filtered_df[filtered_df['zona_sismica'] == zone_num]
+
     # ═══════════════════════════════════════════════════════════════════════════════
     # ANALYTICS DETAIL VIEW
     # ═══════════════════════════════════════════════════════════════════════════════
@@ -2789,7 +2795,8 @@ else:
     # ═══════════════════════════════════════════════════════════════════════════════
 
     # Load NBO data
-    nbo_data = load_nbo_data()
+    with helio_spinner("Caricamento Policy Advisor..."):
+        nbo_data = load_nbo_data()
 
     if not nbo_data:
         st.error("Impossibile caricare i dati NBO. Verifica che il file Data/nbo_master.json esista.")
@@ -3373,7 +3380,8 @@ Mantieni formato **Oggetto:** e corpo email. GENERA ORA senza tool."""
             # ═══════════════════════════════════════════════════════════════════════════════
 
             # Get all recommendations with current weights
-            all_recs = get_all_recommendations(nbo_data, st.session_state.nbo_weights, filter_top20=True)
+            with helio_spinner("Caricamento Policy Advisor..."):
+                all_recs = get_all_recommendations(nbo_data, st.session_state.nbo_weights, filter_top20=True)
 
             # ═══════════════════════════════════════════════════════════════════════════════
             # STRATEGIA ATTIVA (Always Visible)
@@ -3387,7 +3395,7 @@ Mantieni formato **Oggetto:** e corpo email. GENERA ORA senza tool."""
             <div class="active-strategy-card" style="margin-bottom: 0;">
                 <div class="strategy-info">
                     <div class="strategy-label">STRATEGIA ATTIVA</div>
-                    <div class="strategy-title">Q1 2026</div>
+                    <div class="strategy-title">Q1 2026 - Focus Retention</div>
                 </div>
                 <div class="strategy-metrics" style="gap: 3rem;">
                     <div class="metric-item">

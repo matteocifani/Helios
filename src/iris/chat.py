@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 # Import production Iris engine
 print("📦 Importing iris_engine (production version)...")
 from src.iris.engine import IrisEngine
+from src.utils.ui import helio_spinner
 
 load_dotenv()
 
@@ -72,16 +73,27 @@ def render_iris_chat() -> None:
             border: 1px solid rgba(0, 160, 176, 0.12) !important;
         }
 
-        /* Chat input in sidebar */
+        /* FORCE CHAT INPUT TO BOTTOM - STICKY MODE */
         [data-testid="stSidebar"] [data-testid="stChatInput"] {
-            border-radius: 12px !important;
+            position: sticky !important;
+            bottom: 0 !important;
+            z-index: 1000 !important;
+            padding-bottom: 1rem !important;
+            padding-top: 1rem !important;
+            background: linear-gradient(180deg, rgba(255,255,255,0) 0%, #FFFFFF 20%) !important; /* Fade effect */
         }
-
+        
+        /* Adjust the inner container of the input */
         [data-testid="stSidebar"] [data-testid="stChatInput"] > div {
             background: #FFFFFF !important;
             border: 1px solid #E2E8F0 !important;
             border-radius: 12px !important;
-            box-shadow: 0 1px 4px rgba(27, 58, 95, 0.06) !important;
+            box-shadow: 0 -4px 6px -1px rgba(27, 58, 95, 0.05) !important;
+        }
+        
+        /* Ensure there's space at bottom of sidebar content so input doesn't cover last message */
+        [data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
+            padding-bottom: 20px !important;
         }
 
         [data-testid="stSidebar"] [data-testid="stChatInput"] input {
@@ -208,7 +220,7 @@ def render_iris_chat() -> None:
         
         # Get response
         with st.chat_message("assistant", avatar="☀️"):
-            with st.spinner("Iris sta elaborando..."):
+            with helio_spinner("Iris sta elaborando..."):
                 result = get_iris_response(prompt)
                 
                 response = result.get("response", "Errore di elaborazione.")

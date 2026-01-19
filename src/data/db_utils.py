@@ -112,12 +112,13 @@ def _retry_query(func, *args, **kwargs):
 
 
 @st.cache_data(ttl=CACHE_TTL_SHORT)
-def fetch_abitazioni() -> pd.DataFrame:
+def fetch_abitazioni(lite: bool = True) -> pd.DataFrame:
     """
-    Fetch all abitazioni with risk scores from Supabase using PARALLEL pagination.
-
-    Returns:
-        DataFrame with abitazioni data or empty DataFrame with expected columns
+    Fetch abitazioni from Supabase.
+    
+    Args:
+        lite (bool): If True, fetch ONLY columns needed for Map/KPIs (faster, no joins).
+                     If False, fetch everything (legacy behavior).
     """
     client = get_supabase_client()
     if not client:
@@ -125,6 +126,17 @@ def fetch_abitazioni() -> pd.DataFrame:
         return pd.DataFrame(columns=ABITAZIONI_COLUMNS)
 
     try:
+        # Columns to fetch
+        if lite:
+            # OPTIMIZED: No join with clienti, fewer columns
+            cols = "id,codice_cliente,citta,latitudine,longitudine,zona_sismica,risk_score,risk_category,hydro_risk_p3,flood_risk_p3"
+        else:
+            # LEGACY: Full fetch with join (SLOW)
+            # We strip non-essential columns that might be missing to ensure benchmark runs
+            cols = "id,codice_cliente,citta,latitudine,longitudine,zona_sismica,risk_score,risk_category,clienti(nome,cognome)"
+
+        logger.info(f"Fetching abitazioni (lite={lite})...")
+
         # 1. Get total count first to calculate chunks
         count_response = _retry_query(
             lambda: client.table("abitazioni").select("id", count="exact").limit(1).execute()
@@ -146,11 +158,7 @@ def fetch_abitazioni() -> pd.DataFrame:
             end = start + DB_CHUNK_SIZE - 1
             try:
                 response = _retry_query(
-                    lambda: client.table("abitazioni").select(
-                        "id, codice_cliente, citta, latitudine, longitudine, "
-                        "zona_sismica, hydro_risk_p3, hydro_risk_p2, flood_risk_p4, flood_risk_p3, "
-                        "risk_score, risk_category, solar_potential_kwh, updated_at, clienti(nome, cognome)"
-                    ).range(start, end).execute()
+                    lambda: client.table("abitazioni").select(cols).range(start, end).execute()
                 )
                 return response.data
             except Exception as e:
@@ -181,12 +189,12 @@ def fetch_abitazioni() -> pd.DataFrame:
 
 
 @st.cache_data(ttl=CACHE_TTL_SHORT)
-def fetch_clienti() -> pd.DataFrame:
+def fetch_clienti(lite: bool = True) -> pd.DataFrame:
     """
-    Fetch client data with CLV and churn probability using PARALLEL pagination.
-
-    Returns:
-        DataFrame with client data or empty DataFrame with expected columns
+    Fetch client data from Supabase.
+    
+    Args:
+        lite (bool): If True, fetch ONLY columns needed for Charts/List (faster).
     """
     client = get_supabase_client()
     if not client:
@@ -194,6 +202,15 @@ def fetch_clienti() -> pd.DataFrame:
         return pd.DataFrame(columns=CLIENTI_COLUMNS)
 
     try:
+        if lite:
+            # OPTIMIZED: Only visual/stats columns
+            cols = "codice_cliente,nome,cognome,churn_probability,clv_stimato,num_polizze,latitudine,longitudine,citta"
+        else:
+            # LEGACY: Full fetch
+            cols = "codice_cliente,nome,cognome,eta,professione,reddito,churn_probability,clv_stimato,latitudine,longitudine,num_polizze"
+
+        logger.info(f"Fetching clienti (lite={lite})...")
+
         # 1. Get total count first to calculate chunks
         count_response = _retry_query(
             lambda: client.table("clienti").select("codice_cliente", count="exact").limit(1).execute()
