@@ -35,7 +35,9 @@ from src.data.db_utils import (
     is_client_eligible_for_top20,
     check_all_clients_interactions_batch,
     insert_phone_call_interaction,
-    get_client_detail
+    insert_phone_call_interaction,
+    get_client_detail,
+    get_client_satellite
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1651,9 +1653,9 @@ if 'nbo_page' not in st.session_state:
     st.session_state.nbo_page = 'dashboard'
 if 'nbo_weights' not in st.session_state:
     st.session_state.nbo_weights = {
-        'retention': 0.33,
-        'redditivita': 0.33,
-        'propensione': 0.34
+        'retention': 0.60,
+        'redditivita': 0.20,
+        'propensione': 0.20
     }
 if 'nbo_selected_client' not in st.session_state:
     st.session_state.nbo_selected_client = None
@@ -2326,63 +2328,6 @@ if st.session_state.dashboard_mode == 'Analytics':
                         "style": {"backgroundColor": "steelblue", "color": "white"}
                     }
                 ))
-    
-                # 3. Critical Highlights Section (Replacing the big table)
-                st.markdown("### 🚨 Focus Criticità")
-                
-                # Get top critical items
-                critical_df = map_df[map_df['risk_category'].isin(['Critico', 'Alto'])].sort_values('risk_score', ascending=False).head(4)
-                
-                if not critical_df.empty:
-                    cols = st.columns(len(critical_df))
-                    for idx, row in enumerate(critical_df.itertuples()):
-                        with cols[idx]:
-                            # Card Styling
-                            risk_color = "#DC2626" if row.risk_category == 'Critico' else "#EA580C"
-                            st.markdown(f"""
-                            <div style="
-                                background: white;
-                                border: 1px solid {risk_color};
-                                border-left: 5px solid {risk_color};
-                                border-radius: 8px;
-                                padding: 1rem;
-                                box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
-                            ">
-                                <h4 style="margin:0; font-size: 0.9rem; color: #64748B;">{row.citta}</h4>
-                                <p style="font-size: 1.8rem; font-weight: 800; color: #1B3A5F; margin: 0;">{row.risk_score}</p>
-                                <p style="font-size: 0.75rem; color: {risk_color}; font-weight: bold; margin:0;">
-                                    {row.risk_category.upper()}
-                                </p>
-                                <p style="font-size: 0.7rem; color: #94A3B8; margin-top:0.5rem;">
-                                    ID: {row.id}<br>Filtra mappa per zoom
-                                </p>
-                            </div>
-                            """, unsafe_allow_html=True)
-                else:
-                    st.info("✅ Nessuna criticità elevata rilevata nei filtri correnti.")
-    
-                st.markdown("<br>", unsafe_allow_html=True)
-    
-                # 4. Collapsible full data table
-                with st.expander("📋 Visualizza Elenco Completo Abitazioni", expanded=False):
-                    # Display table with key columns
-                    display_cols = ['id', 'citta', 'risk_score', 'risk_category', 'zona_sismica', 'codice_cliente']
-                    display_df = map_df[[c for c in display_cols if c in map_df.columns]].copy()
-                    display_df['risk_score'] = display_df['risk_score'].fillna(0).round(1)
-                    
-                    st.dataframe(
-                        display_df,
-                        use_container_width=True,
-                        height=400,
-                        column_config={
-                            'id': st.column_config.TextColumn('ID'),
-                            'citta': st.column_config.TextColumn('Città'),
-                            'risk_score': st.column_config.ProgressColumn('Risk Score', min_value=0, max_value=100, format="%.1f"),
-                            'risk_category': st.column_config.TextColumn('Categoria'),
-                            'zona_sismica': st.column_config.NumberColumn('Zona Sism.'),
-                            'codice_cliente': st.column_config.TextColumn('Cliente'),
-                        }
-                    )
             
             # Legend (Horizontal)
             st.markdown("""
@@ -2468,21 +2413,37 @@ if st.session_state.dashboard_mode == 'Analytics':
                     title = "Abitazioni per Zona Sismica"
                     
                 elif risk_chart_type == "Idrogeologico":
-                    # Hydro Risk Bar Chart (P3/P4 etc)
+                    # Hydro Risk Bar Chart (Binning numeric values)
                     if 'hydro_risk_p3' in filtered_df.columns:
-                        hydro_counts = filtered_df['hydro_risk_p3'].astype(str).value_counts().sort_index()
-                        x_vals = hydro_counts.index.tolist()
-                        y_vals = hydro_counts.values
-                        # Robust color mapping
-                        colors = []
-                        for x in x_vals:
-                            s = str(x).upper()
-                            if 'P4' in s or '4' in s: c = '#DC2626'
-                            elif 'P3' in s or '3' in s: c = '#EA580C'
-                            elif 'P2' in s or '2' in s: c = '#CA8A04'
-                            elif 'P1' in s or '1' in s: c = '#16A34A'
-                            else: c = '#94A3B8'
-                            colors.append(c)
+                        # Helper for binning
+                        def get_hydro_level(val):
+                            try:
+                                v = float(val)
+                                if v < 5.0: return "Basso"
+                                if v < 20.0: return "Medio"
+                                return "Alto"
+                            except:
+                                return "N/D"
+
+                        # Create a temporary series for counting
+                        risk_levels = filtered_df['hydro_risk_p3'].apply(get_hydro_level)
+                        # Filter out N/D if desired, or keep them. Let's keep valid levels.
+                        valid_levels = ["Basso", "Medio", "Alto"]
+                        
+                        # Count values
+                        counts = risk_levels.value_counts().reindex(valid_levels, fill_value=0)
+                        
+                        x_vals = counts.index.tolist()
+                        y_vals = counts.values
+                        
+                        # Color mapping: Basso=Green, Medio=Amber, Alto=Red
+                        color_map = {
+                            "Basso": "#16A34A",
+                            "Medio": "#CA8A04",
+                            "Alto": "#DC2626"
+                        }
+                        colors = [color_map.get(x, '#94A3B8') for x in x_vals]
+                        
                         title = "Abitazioni per Rischio Idrogeologico"
                     else:
                         x_vals, y_vals, colors = [], [], []
@@ -2490,18 +2451,31 @@ if st.session_state.dashboard_mode == 'Analytics':
     
                 else: # Alluvionale
                      if 'flood_risk_p3' in filtered_df.columns:
-                        flood_counts = filtered_df['flood_risk_p3'].astype(str).value_counts().sort_index()
-                        x_vals = flood_counts.index.tolist()
-                        y_vals = flood_counts.values
-                        colors = []
-                        for x in x_vals:
-                            s = str(x).upper()
-                            if 'P4' in s or '4' in s: c = '#DC2626'
-                            elif 'P3' in s or '3' in s: c = '#EA580C'
-                            elif 'P2' in s or '2' in s: c = '#CA8A04'
-                            elif 'P1' in s or '1' in s: c = '#16A34A'
-                            else: c = '#94A3B8'
-                            colors.append(c)
+                        # Helper for binning
+                        def get_flood_level(val):
+                            try:
+                                v = float(val)
+                                if v < 10.0: return "Basso"
+                                if v < 30.0: return "Medio"
+                                return "Alto"
+                            except:
+                                return "N/D"
+
+                        risk_levels = filtered_df['flood_risk_p3'].apply(get_flood_level)
+                        valid_levels = ["Basso", "Medio", "Alto"]
+                        
+                        counts = risk_levels.value_counts().reindex(valid_levels, fill_value=0)
+                        
+                        x_vals = counts.index.tolist()
+                        y_vals = counts.values
+                        
+                        color_map = {
+                            "Basso": "#16A34A",
+                            "Medio": "#CA8A04",
+                            "Alto": "#DC2626"
+                        }
+                        colors = [color_map.get(x, '#94A3B8') for x in x_vals]
+                        
                         title = "Abitazioni per Rischio Alluvione"
                      else:
                         x_vals, y_vals, colors = [], [], []
@@ -2924,6 +2898,14 @@ Le email devono essere personalizzate per ogni cliente, non identiche."""
             recommendation = st.session_state.nbo_selected_recommendation
             meta = client_data.get('metadata', {})
             ana = client_data.get('anagrafica', {})
+            
+            # Fetch Satellite Data
+            sat_data = get_client_satellite(client_data['codice_cliente'])
+            # DEBUG: Uncomment to see data
+            # st.write(f"DEBUG: Client {client_data['codice_cliente']} Sat Data:", sat_data)
+            
+            image_url = sat_data.get('image_url')
+            vlm_analysis = sat_data.get('vlm_analysis', {})
 
             # ═══════════════════════════════════════════════════════════════════
             # TOP NAVIGATION BAR (Redesigned - Clear hierarchy)
@@ -3302,15 +3284,14 @@ Mantieni formato **Oggetto:** e corpo email. GENERA ORA senza tool."""
             lat = ana.get('latitudine', 0)
             lon = ana.get('longitudine', 0)
             
-            # Mapbox static image or placeholder - Using Placeholder for now as requested
-            # Use pure HTML for container and image
+            # Parse VLM Data
+            # Expected VLM format: { "pannelli_solari": { "presenti": bool }, ... }
+            has_solar_panels = vlm_analysis.get('pannelli_solari', {}).get('presenti', False)
+            has_pool = vlm_analysis.get('piscina', {}).get('presente', False)
             
-            # Need to get CV data
-            import hashlib
-            client_hash = int(hashlib.md5(str(client_data.get('codice_cliente', '')).encode()).hexdigest(), 16)
-            has_solar_panels = (client_hash % 3) == 0
-            has_pool = (client_hash % 5) == 0
-            has_garden = (client_hash % 2) == 0
+            # Garden logic: check vegetation description or 'giardino_curato'
+            veg = vlm_analysis.get('vegetazione', {})
+            has_garden = veg.get('giardino_curato', False) or veg.get('alberi_vicino_casa', False)
 
             # Combined content for Abitazione
             # We can use st columns for layout but standard cards for content
@@ -3318,15 +3299,25 @@ Mantieni formato **Oggetto:** e corpo email. GENERA ORA senza tool."""
             
             with ac1:
                  # Satellite image card
-                 st.markdown(f"""
-                 <div class="standard-card" style="padding: 0; overflow: hidden; position: relative; height: 100%; min-height: 200px; display: flex; align-items: center; justify-content: center; background: #F3F4F6;">
-                    <div style="text-align: center; z-index: 2;">
-                        <span style="font-size: 3rem;">🛰️</span>
-                        <p style="margin:0; font-weight:600; color:#64748B;">Vista Satellitare</p>
-                        <small style="color:#94A3B8;">{lat:.4f}, {lon:.4f}</small>
-                    </div>
-                 </div>
-                 """, unsafe_allow_html=True)
+                 if image_url:
+                     st.markdown(f"""
+                     <div class="standard-card" style="padding: 0; overflow: hidden; position: relative; height: 100%; min-height: 200px; display: flex; align-items: center; justify-content: center; background: #000;">
+                        <img src="{image_url}" style="width: 100%; height: 100%; object-fit: cover;">
+                        <div style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.6); color: white; padding: 0.5rem; text-align: center; font-size: 0.75rem;">
+                            Lat: {lat:.4f} • Lon: {lon:.4f}
+                        </div>
+                     </div>
+                     """, unsafe_allow_html=True)
+                 else:
+                     st.markdown(f"""
+                     <div class="standard-card" style="padding: 0; overflow: hidden; position: relative; height: 100%; min-height: 200px; display: flex; align-items: center; justify-content: center; background: #F3F4F6;">
+                        <div style="text-align: center; z-index: 2;">
+                            <span style="font-size: 3rem;">🛰️</span>
+                            <p style="margin:0; font-weight:600; color:#64748B;">No Satellite View</p>
+                            <small style="color:#94A3B8;">{lat:.4f}, {lon:.4f}</small>
+                        </div>
+                     </div>
+                     """, unsafe_allow_html=True)
                  
             with ac2:
                 # Features card - HEIGHT 100% enforced
@@ -3396,7 +3387,7 @@ Mantieni formato **Oggetto:** e corpo email. GENERA ORA senza tool."""
             <div class="active-strategy-card" style="margin-bottom: 0;">
                 <div class="strategy-info">
                     <div class="strategy-label">STRATEGIA ATTIVA</div>
-                    <div class="strategy-title">Q1 2026 - Focus Retention</div>
+                    <div class="strategy-title">Q1 2026</div>
                 </div>
                 <div class="strategy-metrics" style="gap: 3rem;">
                     <div class="metric-item">
@@ -3449,7 +3440,7 @@ Mantieni formato **Oggetto:** e corpo email. GENERA ORA senza tool."""
                     st.markdown("<div style='margin-top: -16px;'></div>", unsafe_allow_html=True)
                     
                     # Single "Dettagli" Button - Attached
-                    if st.button("Dettagli", key=f"det_{i}", type="secondary", use_container_width=True):
+                    if st.button("Dettagli", key=f"det_{i}", type="primary", use_container_width=True):
                         st.session_state.nbo_page = 'detail'
                         st.session_state.nbo_selected_client = rec['client_data']
                         st.session_state.nbo_selected_recommendation = rec['recommendation']
@@ -3465,15 +3456,21 @@ Mantieni formato **Oggetto:** e corpo email. GENERA ORA senza tool."""
             top20_recs = all_recs[5:25]
             
             # LET'S REDO THE LOOP WITH COLUMNS FOR BETTER ALIGNMENT
-            st.markdown("""
-            <div style="display: grid; grid-template-columns: 0.5fr 2fr 2fr 1fr 1.5fr; gap: 1rem; padding: 1rem 1.5rem; background: #FFFFFF; border-radius: 12px; margin-bottom: 0.75rem; border: 1px solid #F1F5F9; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                <div style="color: #64748B; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Rank</div>
-                <div style="color: #64748B; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Cliente</div>
-                <div style="color: #64748B; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Prodotto</div>
-                <div style="color: #64748B; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Score</div>
-                <div style="color: #64748B; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; text-align: right;">Azioni</div>
-            </div>
-            """, unsafe_allow_html=True)
+            # LET'S REDO THE LOOP WITH COLUMNS FOR BETTER ALIGNMENT
+            # Header Row using Columns to match data rows perfectly
+            h1, h2, h3, h4, h5 = st.columns([0.5, 2, 2, 1, 1.5])
+            with h1:
+                st.markdown("<p style='color: #64748B; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin: 0;'>Rank</p>", unsafe_allow_html=True)
+            with h2:
+                st.markdown("<p style='color: #64748B; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin: 0;'>Cliente</p>", unsafe_allow_html=True)
+            with h3:
+                st.markdown("<p style='color: #64748B; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin: 0;'>Prodotto</p>", unsafe_allow_html=True)
+            with h4:
+                st.markdown("<p style='color: #64748B; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin: 0;'>Score</p>", unsafe_allow_html=True)
+            with h5:
+                st.markdown("<p style='color: #64748B; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin: 0; text-align: right;'>Azioni</p>", unsafe_allow_html=True)
+            
+            st.markdown("<div style='height: 1px; background: #E2E8F0; margin: 0.5rem 0 1rem 0;'></div>", unsafe_allow_html=True)
 
             for i, rec in enumerate(top20_recs):
                 rank = i + 6
@@ -3490,7 +3487,7 @@ Mantieni formato **Oggetto:** e corpo email. GENERA ORA senza tool."""
                     st.markdown(f"<p style='margin: 0.6rem 0; font-weight: 700; color: #00A0B0; font-family: \"JetBrains Mono\", monospace;'>{rec['score']:.1f}</p>", unsafe_allow_html=True)
                 with c5:
 
-                    if st.button("Dettagli", key=f"lb_det_{i}", type="secondary", use_container_width=True):
+                    if st.button("Dettagli", key=f"lb_det_{i}", type="primary", use_container_width=True):
                         st.session_state.nbo_page = 'detail'
                         st.session_state.nbo_selected_client = rec['client_data']
                         st.session_state.nbo_selected_recommendation = rec['recommendation']

@@ -428,6 +428,19 @@ def get_client_detail(codice_cliente: int) -> Dict:
             logger.error(f"Error fetching sinistri info: {e}")
             return ("sinistri", [])
 
+    def fetch_satellite_info():
+        """Fetch satellite analysis data."""
+        try:
+            # We expect 0 or 1 record per client
+            response = _retry_query(
+                lambda: client.table("client_satellite_images").select("*").eq("codice_cliente", codice_cliente).maybe_single().execute()
+            )
+            return ("satellite", response.data if response.data else {})
+        except Exception as e:
+             # Just log debug, as many clients won't have images yet
+            logger.debug(f"No satellite data for {codice_cliente} or error: {e}")
+            return ("satellite", {})
+
     # Execute all queries concurrently
     result = {}
     try:
@@ -436,7 +449,8 @@ def get_client_detail(codice_cliente: int) -> Dict:
                 executor.submit(fetch_client_info),
                 executor.submit(fetch_abitazioni_info),
                 executor.submit(fetch_polizze_info),
-                executor.submit(fetch_sinistri_info)
+                executor.submit(fetch_sinistri_info),
+                executor.submit(fetch_satellite_info)
             ]
 
             for future in as_completed(futures):
@@ -453,6 +467,23 @@ def get_client_detail(codice_cliente: int) -> Dict:
         logger.error(f"Error fetching client detail: {e}")
         st.error(f"Error fetching client detail: {e}")
         return {"error": str(e)}
+
+
+
+def get_client_satellite(codice_cliente: int) -> Dict:
+    """Fetch satellite image and analysis for a client."""
+    client = get_supabase_client()
+    if not client:
+        return {}
+    
+    try:
+        response = _retry_query(
+            lambda: client.table("client_satellite_images").select("*").eq("codice_cliente", codice_cliente).maybe_single().execute()
+        )
+        return response.data if response.data else {}
+    except Exception as e:
+        logger.error(f"Error fetching satellite info: {e}")
+        return {}
 
 
 @st.cache_data(ttl=60)
