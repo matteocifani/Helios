@@ -101,7 +101,7 @@ def render_iris_chat() -> None:
         [data-testid="stSidebar"] [data-testid="stChatMessage"] li {
             color: #1B3A5F !important;
             font-family: 'Inter', sans-serif !important;
-            font-size: 0.8rem !important;
+            font-size: 0.9rem !important;
             line-height: 1.4 !important;
         }
 

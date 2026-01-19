@@ -228,11 +228,12 @@ GUIDA SCELTA TOOLS:
 - "Profilo del cliente" → USA client_profile_lookup
 - "Rischio sismico/alluvionale" → USA risk_assessment
 - "Potenziale solare" → USA solar_potential_calc
-- "Storico interazioni" → USA doc_retriever_rag
+- "Storico interazioni", "Cosa è successo", "Problemi recenti", "Clima col cliente" → USA doc_retriever_rag
 - "Calcola premio" → USA premium_calculator
 
 IMPORTANTE:
 - Se chiedi info su POLIZZE/CONTRATTI/COPERTURE → policy_status_check
+- Se chiedi info su SENTIMENT, PROBLEMI, TELEFONATE, EMAIL o NOTE → doc_retriever_rag
 - Se chiedi info DEMOGRAFICHE (età, professione, reddito) → client_profile_lookup
 - Scegli il tool più specifico per la domanda
 

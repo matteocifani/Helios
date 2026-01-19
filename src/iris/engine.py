@@ -600,7 +600,8 @@ CONTESTO CLIENTE:
             return {"error": str(e)}
     
     def tool_rag_retriever(self, client_id: int, query: str) -> Dict:
-        """Tool: RAG document retrieval."""
+        """Tool: RAG document retrieval using semantic search."""
+        print(f"[DEBUG] Executing tool_rag_retriever for client {client_id} with query: '{query}'")
         try:
             # Generate query embedding
             emb_response = requests.post(
@@ -616,20 +617,59 @@ CONTESTO CLIENTE:
                 timeout=API_TIMEOUT_EMBEDDING
             )
             
+            emb_response.raise_for_status()
             embedding = emb_response.json()["data"][0]["embedding"]
             
-            # Vector search (requires pgvector extension)
-            # Note: This is simplified - actual implementation depends on Supabase setup
-            response = self.supabase.table("interactions").select(
-                "text_embedded, data_interazione, tipo_interazione, esito"
-            ).eq("codice_cliente", client_id).limit(5).execute()
-            
-            return {
-                "documents": response.data,
-                "count": len(response.data)
-            }
+            # Vector search using the RPC function we created
+            try:
+                response = self.supabase.rpc(
+                    "match_interactions",
+                    {
+                        "query_embedding": embedding,
+                        "match_threshold": 0.3,  # Adjusted based on test results (max sim ~0.35)
+                        "match_count": 5,        # Top 5 relevant interactions
+                        "filter_client_id": client_id
+                    }
+                ).execute()
+                
+                documents = response.data
+                print(f"[DEBUG] RAG found {len(documents)} relevant documents")
+                
+                # If no semantic matches, fallback to recent interactions
+                if not documents:
+                    print("[DEBUG] No semantic matches, falling back to recent interactions")
+                    fallback = self.supabase.table("interactions")\
+                        .select("data_interazione, tipo_interazione, esito, note")\
+                        .eq("codice_cliente", client_id)\
+                        .order("data_interazione", desc=True)\
+                        .limit(3)\
+                        .execute()
+                    documents = fallback.data
+
+                return {
+                    "documents": documents,
+                    "count": len(documents),
+                    "search_type": "vector" if response.data else "fallback_recent"
+                }
+
+            except Exception as rpc_error:
+                print(f"[ERROR] RAG RPC failed: {rpc_error}")
+                # Fallback in case RPC fails (e.g. function not created)
+                fallback = self.supabase.table("interactions")\
+                    .select("data_interazione, tipo_interazione, esito, note")\
+                    .eq("codice_cliente", client_id)\
+                    .order("data_interazione", desc=True)\
+                    .limit(5)\
+                    .execute()
+                    
+                return {
+                    "documents": fallback.data,
+                    "count": len(fallback.data),
+                    "error": f"Vector search failed: {rpc_error}"
+                }
             
         except Exception as e:
+            print(f"[ERROR] tool_rag_retriever complete failure: {e}")
             return {"error": str(e), "documents": []}
     
     def tool_premium_calculator(self, risk_score: float, product_type: str, coverage_amount: float = DEFAULT_COVERAGE_AMOUNT) -> Dict:

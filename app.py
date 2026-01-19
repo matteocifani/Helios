@@ -34,7 +34,8 @@ from src.data.db_utils import (
     check_client_interactions,
     is_client_eligible_for_top20,
     check_all_clients_interactions_batch,
-    insert_phone_call_interaction
+    insert_phone_call_interaction,
+    get_client_detail
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -801,6 +802,94 @@ st.markdown("""
         padding-top: 1.5rem;
         border-top: 1px solid var(--vs-border);
     }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       POLICY ADVISOR REDESIGN
+    ═══════════════════════════════════════════════════════════════════════ */
+
+    /* Top 5 Cards Grid */
+    .top5-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .top5-card {
+        background: linear-gradient(180deg, #FFFFFF 0%, #FAFAFA 100%);
+        border: 1px solid #E2E8F0;
+        border-radius: 16px;
+        padding: 1.25rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+        height: 100%;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    }
+
+    .top5-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        border-color: #00A0B0;
+    }
+
+    .top5-rank {
+        position: absolute;
+        top: 0;
+        right: 0;
+        background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%);
+        color: white;
+        padding: 0.25rem 0.75rem;
+        border-bottom-left-radius: 12px;
+        font-family: 'JetBrains Mono', monospace;
+        font-weight: 700;
+        font-size: 0.8rem;
+    }
+
+    .top5-header {
+        margin-bottom: 1rem;
+    }
+
+    .top5-name {
+        font-family: 'Inter', sans-serif;
+        font-weight: 700;
+        color: #1B3A5F;
+        font-size: 1rem;
+        line-height: 1.3;
+        margin-bottom: 0.25rem;
+        padding-right: 1.5rem; /* Space for rank */
+    }
+
+    .top5-client-code {
+        color: #64748B;
+        font-size: 0.75rem;
+        font-family: 'JetBrains Mono', monospace;
+    }
+
+    .top5-stat {
+        margin: 0.75rem 0;
+        padding: 0.5rem;
+        background: #F1F5F9;
+        border-radius: 8px;
+        text-align: center;
+    }
+    
+    .top5-stat-label {
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        color: #64748B;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+    }
+    
+    .top5-stat-value {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #1B3A5F;
+    }
     .client-stat-item {
         text-align: center;
     }
@@ -1422,9 +1511,9 @@ def _calculate_score_cached(
 ) -> float:
     """Calculate weighted score (cached version with primitive args)."""
     return (
-        retention_gain * w_retention / 100 +
-        redditivita * w_redditivita / 100 +
-        propensione * w_propensione / 100
+        retention_gain * w_retention +
+        redditivita * w_redditivita +
+        propensione * w_propensione
     )
 
 
@@ -1551,6 +1640,12 @@ if 'user_phone' not in st.session_state:
 if 'dashboard_mode' not in st.session_state:
     st.session_state.dashboard_mode = 'Analytics'
 
+# Initialize Analytics Sub-navigation
+if 'analytics_page' not in st.session_state:
+    st.session_state.analytics_page = 'dashboard'
+if 'analytics_client_id' not in st.session_state:
+    st.session_state.analytics_client_id = None
+
 # NBO state
 if 'nbo_page' not in st.session_state:
     st.session_state.nbo_page = 'dashboard'
@@ -1613,25 +1708,36 @@ with st.sidebar:
                     <line x1="32" y1="68" x2="22" y2="78"/>
                 </g>
             </svg>
-            <span style="font-family: 'Inter', sans-serif; font-size: 1.5rem; font-weight: 800; background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">HELIOS</span>
+            <span style="font-family: 'Inter', sans-serif; font-size: 1.75rem; font-weight: 800; background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">HELIOS</span>
         </div>
-        <p style="font-family: 'Inter', sans-serif; font-size: 0.65rem; color: #94A3B8; letter-spacing: 0.08em; margin-top: 0.15rem; text-transform: uppercase;">Vita Sicura Intelligence</p>
+        <p style="font-family: 'Inter', sans-serif; font-size: 0.75rem; color: #94A3B8; letter-spacing: 0.08em; margin-top: 0.15rem; text-transform: uppercase;">Vita Sicura Intelligence</p>
     </div>
     """, unsafe_allow_html=True)
 
     st.markdown("""<div style="height: 1px; background: linear-gradient(90deg, transparent 0%, #E2E8F0 50%, transparent 100%); margin: 0.5rem 0;"></div>""", unsafe_allow_html=True)
 
     # Iris Chat Header - elegant card
+    # Iris Chat Header - elegant card matching Client Detail aesthetic
     st.markdown("""
-    <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.85rem; background: linear-gradient(135deg, rgba(0, 160, 176, 0.1) 0%, rgba(0, 201, 212, 0.05) 100%); border: 1px solid rgba(0, 160, 176, 0.15); border-radius: 14px; margin-bottom: 0.75rem;">
-        <div style="width: 38px; height: 38px; background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.15rem; box-shadow: 0 2px 8px rgba(0, 160, 176, 0.3);">☀️</div>
-        <div>
-            <p style="margin: 0; font-family: 'Inter', sans-serif; font-size: 0.9rem; font-weight: 700; color: #1B3A5F;">Iris</p>
-            <p style="margin: 0; font-family: 'Inter', sans-serif; font-size: 0.65rem; color: #64748B;">Intelligent Advisor</p>
+    <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.85rem; background: #FFFFFF; border: 1px solid #00A0B0; border-radius: 16px; margin-bottom: 0.75rem; box-shadow: 0 4px 6px -1px rgba(27, 58, 95, 0.04);">
+        <div style="width: 38px; height: 38px; min-width: 38px; min-height: 38px; background: linear-gradient(135deg, rgba(0, 160, 176, 0.1) 0%, rgba(0, 201, 212, 0.05) 100%); border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+            <!-- Sparkles Icon to match Client Detail and avoid double sun -->
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00A0B0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" opacity="0" /> <!-- Hidden sun for spacing if needed, but using sparkles instead -->
+                <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
+                <path d="M20 3v4" />
+                <path d="M22 5h-4" />
+                <path d="M4 17v2" />
+                <path d="M5 18H3" />
+            </svg>
         </div>
-        <div style="margin-left: auto; display: flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.5rem; background: rgba(16, 185, 129, 0.1); border-radius: 100px;">
+        <div style="flex: 1; min-width: 0;">
+            <p style="margin: 0; font-family: 'Inter', sans-serif; font-size: 1.05rem; font-weight: 700; color: #1B3A5F; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Iris</p>
+            <p style="margin: 0; font-family: 'Inter', sans-serif; font-size: 0.85rem; color: #64748B; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Intelligent Advisor</p>
+        </div>
+        <div style="margin-left: auto; display: flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.6rem; background: rgba(16, 185, 129, 0.1); border-radius: 100px; flex-shrink: 0;">
             <span style="width: 6px; height: 6px; background: #10B981; border-radius: 50%; animation: pulse 2s infinite;"></span>
-            <span style="font-family: 'Inter', sans-serif; font-size: 0.6rem; color: #10B981; font-weight: 500;">Online</span>
+            <span style="font-family: 'Inter', sans-serif; font-size: 0.65rem; color: #10B981; font-weight: 600;">Online</span>
         </div>
     </div>
     <style>
@@ -1881,656 +1987,828 @@ st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
 
 if st.session_state.dashboard_mode == 'Analytics':
     # ═══════════════════════════════════════════════════════════════════════════════
-    # ANALYTICS CONTENT (formerly Helios View)
+    # ANALYTICS DETAIL VIEW
     # ═══════════════════════════════════════════════════════════════════════════════
+    if st.session_state.analytics_page == 'detail':
+        if st.button("← Torna alla Dashboard", key="back_to_analytics", type="secondary"):
+            st.session_state.analytics_page = 'dashboard'
+            st.session_state.analytics_client_id = None
+            st.rerun()
+            
+        if st.session_state.analytics_client_id:
+            with st.spinner("Caricamento scheda cliente..."):
+                detail_data = get_client_detail(st.session_state.analytics_client_id)
+            
+            if "error" in detail_data:
+                st.error(f"Errore nel caricamento: {detail_data['error']}")
+            else:
+                c_info = detail_data.get('cliente', {})
+                c_nome = f"{c_info.get('nome','')} {c_info.get('cognome','')}"
+                
+                st.markdown(f"""
+                <div style="margin-bottom: 2rem;">
+                    <h1 style="color: #1B3A5F; margin-bottom: 0.5rem;">{c_nome}</h1>
+                    <p style="color: #64748B;">📍 {c_info.get('citta', 'N/D')} · {c_info.get('codice_cliente', 'N/D')}</p>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                st.markdown("### 🌍 Profilo di Rischio")
+                
+                abitazioni = detail_data.get('abitazioni', [])
+                if abitazioni:
+                    for ab in abitazioni:
+                        r_col1, r_col2, r_col3 = st.columns(3)
+                        with r_col1:
+                            st.markdown(f"""
+                            <div class="glass-card" style="border-left: 4px solid #F59E0B; padding: 1.5rem;">
+                                <h4 style="margin:0 0 0.5rem 0; color:#64748B; font-size:0.9rem;">Rischio Sismico</h4>
+                                <p style="font-size:1.8rem; font-weight:700; color:#1B3A5F; margin:0;">Zona {ab.get('zona_sismica')}</p>
+                                <p style="font-size:0.8rem; color:#94A3B8; margin-top:0.5rem;">Dato ISTAT aggiornato</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        with r_col2:
+                            st.markdown(f"""
+                            <div class="glass-card" style="border-left: 4px solid #3B82F6; padding: 1.5rem;">
+                                <h4 style="margin:0 0 0.5rem 0; color:#64748B; font-size:0.9rem;">Idrogeologico</h4>
+                                <p style="font-size:1.8rem; font-weight:700; color:#1B3A5F; margin:0;">{ab.get('hydro_risk_p3', 'N/D')}</p>
+                                <p style="font-size:0.8rem; color:#94A3B8; margin-top:0.5rem;">Pericolosità P3 Frane</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        with r_col3:
+                            st.markdown(f"""
+                            <div class="glass-card" style="border-left: 4px solid #06B6D4; padding: 1.5rem;">
+                                <h4 style="margin:0 0 0.5rem 0; color:#64748B; font-size:0.9rem;">Alluvione</h4>
+                                <p style="font-size:1.8rem; font-weight:700; color:#1B3A5F; margin:0;">{ab.get('flood_risk_p3', 'N/D')}</p>
+                                <p style="font-size:0.8rem; color:#94A3B8; margin-top:0.5rem;">Pericolosità P3 Alluvioni</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        
+                        st.markdown("---")
+                else:
+                    st.info("Nessuna abitazione associata.")
+
+    # ═══════════════════════════════════════════════════════════════════════════════
+    # ANALYTICS DASHBOARD VIEW
+    # ═══════════════════════════════════════════════════════════════════════════════
+    elif st.session_state.analytics_page == 'dashboard':
+
 
     # Inline filters - modern pill style
-    st.markdown("""
-    <style>
-        .filter-container {
-            background: #FFFFFF;
-            border: 1px solid #E2E8F0;
-            border-radius: 16px;
-            padding: 1rem 1.5rem;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-        }
-        .filter-label {
-            font-family: 'Inter', sans-serif;
-            font-size: 0.65rem;
-            font-weight: 600;
-            color: #94A3B8;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 0.25rem;
-        }
-    </style>
-    """, unsafe_allow_html=True)
-
-    # Filter row
-    filter_col1, filter_col2, filter_col3, filter_col4 = st.columns([2, 2, 2, 1])
-
-    with filter_col1:
-        cities_list = ['Tutte le città'] + sorted(df['citta'].unique().tolist())
-        selected_city = st.selectbox(
-            "📍 Città",
-            cities_list,
-            index=cities_list.index(st.session_state.selected_city) if st.session_state.selected_city in cities_list else 0,
-            key="filter_city"
-        )
-        if selected_city != st.session_state.selected_city:
-            st.session_state.selected_city = selected_city
-            st.rerun()
-
-    with filter_col2:
-        risk_options = ['Tutti i rischi', 'Critico', 'Alto', 'Medio', 'Basso']
-        selected_risk = st.selectbox(
-            "⚠️ Categoria Rischio",
-            risk_options,
-            index=risk_options.index(st.session_state.selected_risk) if st.session_state.selected_risk in risk_options else 0,
-            key="filter_risk"
-        )
-        if selected_risk != st.session_state.selected_risk:
-            st.session_state.selected_risk = selected_risk
-            st.rerun()
-
-    with filter_col3:
-        zone_options = ['Tutte le zone', 'Zona 1', 'Zona 2', 'Zona 3', 'Zona 4']
-        selected_zone = st.selectbox(
-            "🌍 Zona Sismica",
-            zone_options,
-            index=zone_options.index(st.session_state.selected_zone) if st.session_state.selected_zone in zone_options else 0,
-            key="filter_zone"
-        )
-        if selected_zone != st.session_state.selected_zone:
-            st.session_state.selected_zone = selected_zone
-            st.rerun()
-
-    with filter_col4:
-        # Quick stats
-        st.markdown(f"""
-        <div style="text-align: center; padding: 0.5rem;">
-            <p style="font-family: 'JetBrains Mono', monospace; font-size: 1.5rem; font-weight: 700; background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin: 0; line-height: 1;">{len(filtered_df):,}</p>
-            <p style="font-family: 'Inter', sans-serif; font-size: 0.65rem; color: #94A3B8; margin: 0;">di {len(df):,}</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # Warning if no results match filters
-    if len(filtered_df) == 0:
-        st.warning("⚠️ Nessuna abitazione corrisponde ai filtri selezionati. Prova a modificare i criteri nella sidebar.")
-
-    # Get stats
-    stats = get_risk_stats(filtered_df)
-    
-    # ═══════════════════════════════════════════════════════════════════════════════
-    # KPI METRICS ROW
-    # ═══════════════════════════════════════════════════════════════════════════════
-    
-    col1, col2, col3, col4, col5 = st.columns(5)
-    
-    with col1:
-        st.metric(
-            label="🏠 Abitazioni Valutate",
-            value=f"{stats['total']:,}",
-            delta=f"{round(stats['total']/len(df)*100)}% copertura"
-        )
-    
-    with col2:
-        st.metric(
-            label="⚡ Risk Score Medio",
-            value=f"{stats['avg_score']}",
-            delta=f"su scala 0-100"
-        )
-    
-    with col3:
-        st.metric(
-            label="🔴 Alto Rischio",
-            value=f"{stats['critico'] + stats['alto']:,}",
-            delta=f"{stats['high_risk_pct']}% del totale",
-            delta_color="inverse"
-        )
-    
-    with col4:
-        solar_coverage = filtered_df['solar_potential_kwh'].notna().sum()
-        # Protect against division by zero when filtered_df is empty
-        if len(filtered_df) > 0:
-            coverage_pct = round(solar_coverage / len(filtered_df) * 100)
-        else:
-            coverage_pct = 0
-    
-        st.metric(
-            label="☀️ Potenziale Solare",
-            value=f"{solar_coverage:,}",
-            delta=f"{coverage_pct}% analizzati"
-        )
-    
-    with col5:
-        # Protect against NaN when filtered_df is empty
-        if len(filtered_df) > 0:
-            avg_clv = filtered_df['clv'].mean()
-            # Handle NaN case (if all CLV values are missing)
-            if pd.isna(avg_clv):
-                avg_clv = 0
-        else:
-            avg_clv = 0
-    
-        st.metric(
-            label="💎 CLV Medio",
-            value=f"€{avg_clv:,.0f}",
-            delta="lifetime value"
-        )
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    # ═══════════════════════════════════════════════════════════════════════════════
-    # MAIN TABS
-    # ═══════════════════════════════════════════════════════════════════════════════
-
-    tab1, tab2, tab3 = st.tabs([
-        "🗺️ Mappa Geo-Rischio",
-        "📈 Grafici",
-        "🔍 Dettaglio Clienti"
-    ])
-    
-    # ═══════════════════════════════════════════════════════════════════════════════
-    # TAB 1: GEO-RISK MAP
-    # ═══════════════════════════════════════════════════════════════════════════════
-    
-    with tab1:
-        st.markdown("### 🌍 Mappa del Rischio Territoriale")
-        st.markdown(
-            "<p style='color: #64748B; font-size: 0.9rem;'>"
-            "Visualizzazione avanzata Heatmap & Scatterplot. "
-            "La densità del colore indica il rischio cumulativo dell'area."
-            "</p>",
-            unsafe_allow_html=True
-        )
-        
-        # Prepare map data
-        map_df = filtered_df[
-            filtered_df['latitudine'].notna() & 
-            filtered_df['longitudine'].notna()
-        ].copy()
-
-        # Check for Mapbox Token
-        mapbox_key = os.getenv("MAPBOX_TOKEN")
-        if not mapbox_key:
-            st.warning("⚠️ MAPBOX_TOKEN mancante nel file .env. La mappa potrebbe non mostrare lo sfondo.")
-        
-        if len(map_df) == 0:
-            st.warning("⚠️ Nessuna abitazione con coordinate geografiche disponibile.")
-        else:
-            # 1. Prepare Colors for PyDeck
-            # Format: [R, G, B, A] - Using dict lookup for performance
-            RISK_COLOR_MAP = {
-                'Critico': [220, 38, 38, 200],   # Red
-                'Alto':    [234, 88, 12, 200],   # Orange
-                'Medio':   [202, 138, 4, 180],   # Yellow
-                'Basso':   [22, 163, 74, 180]    # Green
-            }
-            DEFAULT_COLOR = [22, 163, 74, 180]
-
-            map_df['color'] = map_df['risk_category'].apply(lambda x: RISK_COLOR_MAP.get(x, DEFAULT_COLOR))
-            
-            # 2. PyDeck Layers
-            
-            # View State (Initialize centered on data or Italy)
-            view_state = pdk.ViewState(
-                latitude=map_df['latitudine'].mean() if len(map_df) > 0 else 41.8719,
-                longitude=map_df['longitudine'].mean() if len(map_df) > 0 else 12.5674,
-                zoom=5.5,
-                pitch=0,
-            )
-
-            # Layer 1: Heatmap (Density/Intensity)
-            heatmap_layer = pdk.Layer(
-                "HeatmapLayer",
-                data=map_df,
-                get_position=['longitudine', 'latitudine'],
-                get_weight="risk_score",
-                opacity=0.4,
-                radius_pixels=40,
-                intensity=1,
-                threshold=0.2
-            )
-
-            # Layer 2: Scatterplot (Individual Points)
-            scatter_layer = pdk.Layer(
-                "ScatterplotLayer",
-                data=map_df,
-                get_position=['longitudine', 'latitudine'],
-                get_fill_color='color',
-                get_radius=5000,  # Meters
-                pickable=True,
-                radius_min_pixels=4,
-                radius_max_pixels=15,
-                line_width_min_pixels=1,
-                stroked=True,
-                get_line_color=[255, 255, 255, 100]
-            )
-
-            # Render Chart
-            st.pydeck_chart(pdk.Deck(
-                map_style='mapbox://styles/mapbox/light-v10',
-                api_keys={'mapbox': mapbox_key},
-                initial_view_state=view_state,
-                layers=[heatmap_layer, scatter_layer],
-                tooltip={
-                    "html": "<b>Città:</b> {citta}<br/>"
-                            "<b>Rischio:</b> {risk_score}<br/>"
-                            "<b>Categoria:</b> {risk_category}<br/>"
-                            "<b>Cliente:</b> {codice_cliente}",
-                    "style": {"backgroundColor": "steelblue", "color": "white"}
-                }
-            ))
-
-            # 3. Critical Highlights Section (Replacing the big table)
-            st.markdown("### 🚨 Focus Criticità")
-            
-            # Get top critical items
-            critical_df = map_df[map_df['risk_category'].isin(['Critico', 'Alto'])].sort_values('risk_score', ascending=False).head(4)
-            
-            if not critical_df.empty:
-                cols = st.columns(len(critical_df))
-                for idx, row in enumerate(critical_df.itertuples()):
-                    with cols[idx]:
-                        # Card Styling
-                        risk_color = "#DC2626" if row.risk_category == 'Critico' else "#EA580C"
-                        st.markdown(f"""
-                        <div style="
-                            background: white;
-                            border: 1px solid {risk_color};
-                            border-left: 5px solid {risk_color};
-                            border-radius: 8px;
-                            padding: 1rem;
-                            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
-                        ">
-                            <h4 style="margin:0; font-size: 0.9rem; color: #64748B;">{row.citta}</h4>
-                            <p style="font-size: 1.8rem; font-weight: 800; color: #1B3A5F; margin: 0;">{row.risk_score}</p>
-                            <p style="font-size: 0.75rem; color: {risk_color}; font-weight: bold; margin:0;">
-                                {row.risk_category.upper()}
-                            </p>
-                            <p style="font-size: 0.7rem; color: #94A3B8; margin-top:0.5rem;">
-                                ID: {row.id}<br>Filtra mappa per zoom
-                            </p>
-                        </div>
-                        """, unsafe_allow_html=True)
-            else:
-                st.info("✅ Nessuna criticità elevata rilevata nei filtri correnti.")
-
-            st.markdown("<br>", unsafe_allow_html=True)
-
-            # 4. Collapsible full data table
-            with st.expander("📋 Visualizza Elenco Completo Abitazioni", expanded=False):
-                # Display table with key columns
-                display_cols = ['id', 'citta', 'risk_score', 'risk_category', 'zona_sismica', 'codice_cliente']
-                display_df = map_df[[c for c in display_cols if c in map_df.columns]].copy()
-                display_df['risk_score'] = display_df['risk_score'].fillna(0).round(1)
-                
-                st.dataframe(
-                    display_df,
-                    use_container_width=True,
-                    height=400,
-                    column_config={
-                        'id': st.column_config.TextColumn('ID'),
-                        'citta': st.column_config.TextColumn('Città'),
-                        'risk_score': st.column_config.ProgressColumn('Risk Score', min_value=0, max_value=100, format="%.1f"),
-                        'risk_category': st.column_config.TextColumn('Categoria'),
-                        'zona_sismica': st.column_config.NumberColumn('Zona Sism.'),
-                        'codice_cliente': st.column_config.TextColumn('Cliente'),
-                    }
-                )
-        
-        # Legend (Horizontal)
         st.markdown("""
-        <div style="display: flex; gap: 2rem; justify-content: center; margin-top: 2rem; flex-wrap: wrap; opacity: 0.8;">
-            <div style="display:flex; align-items:center; gap:0.5rem;"><span style="width:12px; height:12px; background:#DC2626; border-radius:50%;"></span> <span style="font-size:0.8rem;">Critico</span></div>
-            <div style="display:flex; align-items:center; gap:0.5rem;"><span style="width:12px; height:12px; background:#EA580C; border-radius:50%;"></span> <span style="font-size:0.8rem;">Alto</span></div>
-            <div style="display:flex; align-items:center; gap:0.5rem;"><span style="width:12px; height:12px; background:#CA8A04; border-radius:50%;"></span> <span style="font-size:0.8rem;">Medio</span></div>
-            <div style="display:flex; align-items:center; gap:0.5rem;"><span style="width:12px; height:12px; background:#16A34A; border-radius:50%;"></span> <span style="font-size:0.8rem;">Basso</span></div>
-        </div>
+        <style>
+            .filter-container {
+                background: #FFFFFF;
+                border: 1px solid #E2E8F0;
+                border-radius: 16px;
+                padding: 1rem 1.5rem;
+                margin-bottom: 1.5rem;
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            }
+            .filter-label {
+                font-family: 'Inter', sans-serif;
+                font-size: 0.65rem;
+                font-weight: 600;
+                color: #94A3B8;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                margin-bottom: 0.25rem;
+            }
+        </style>
         """, unsafe_allow_html=True)
     
+        # Filter row
+        filter_col1, filter_col2, filter_col3, filter_col4 = st.columns([2, 2, 2, 1])
     
-    # ═══════════════════════════════════════════════════════════════════════════════
-    # TAB 2: ANALYTICS
-    # ═══════════════════════════════════════════════════════════════════════════════
-    
-    with tab2:
-        st.markdown("### 📈 Analytics Dashboard")
-    
-        analytics_col1, analytics_col2 = st.columns(2)
-    
-        with analytics_col1:
-            # Risk Distribution Donut - Light Theme
-            risk_counts = filtered_df['risk_category'].value_counts()
-    
-            fig_donut = go.Figure(data=[go.Pie(
-                labels=risk_counts.index,
-                values=risk_counts.values,
-                hole=0.65,
-                marker_colors=['#DC2626', '#EA580C', '#CA8A04', '#16A34A'],
-                textinfo='percent+label',
-                textfont=dict(family='Inter', size=12, color='#1B3A5F'),
-                hovertemplate="<b>%{label}</b><br>%{value:,} abitazioni<br>%{percent}<extra></extra>"
-            )])
-    
-            fig_donut.update_layout(
-                title=dict(
-                    text="Distribuzione Rischio",
-                    font=dict(family='Inter', size=18, color='#1B3A5F', weight=600),
-                    x=0.5
-                ),
-                paper_bgcolor='rgba(255,255,255,0)',
-                plot_bgcolor='rgba(255,255,255,0)',
-                font=dict(color='#64748B', family='Inter'),
-                showlegend=True,
-                legend=dict(
-                    orientation="h",
-                    yanchor="bottom",
-                    y=-0.2,
-                    xanchor="center",
-                    x=0.5,
-                    font=dict(family='Inter', size=11, color='#64748B')
-                ),
-                annotations=[dict(
-                    text=f"<b>{len(filtered_df):,}</b><br>Totale",
-                    x=0.5, y=0.5,
-                    font=dict(family='JetBrains Mono', size=20, color='#1B3A5F'),
-                    showarrow=False
-                )],
-                height=400,
-                margin=dict(t=60, b=60, l=20, r=20)
+        with filter_col1:
+            cities_list = ['Tutte le città'] + sorted(df['citta'].unique().tolist())
+            selected_city = st.selectbox(
+                "📍 Città",
+                cities_list,
+                index=cities_list.index(st.session_state.selected_city) if st.session_state.selected_city in cities_list else 0,
+                key="filter_city"
             )
+            if selected_city != st.session_state.selected_city:
+                st.session_state.selected_city = selected_city
+                st.rerun()
     
-            st.plotly_chart(fig_donut, use_container_width=True)
-    
-        with analytics_col2:
-            # Seismic Zone Bar Chart - Light Theme
-            zone_counts = filtered_df['zona_sismica'].value_counts().sort_index()
-    
-            fig_bar = go.Figure(data=[go.Bar(
-                x=[f"Zona {z}" for z in zone_counts.index],
-                y=zone_counts.values,
-                marker=dict(
-                    color=['#DC2626', '#EA580C', '#CA8A04', '#16A34A'][:len(zone_counts)],
-                    line=dict(color='rgba(255,255,255,0.8)', width=1)
-                ),
-                text=zone_counts.values,
-                textposition='outside',
-                textfont=dict(family='JetBrains Mono', size=12, color='#1B3A5F'),
-                hovertemplate="<b>%{x}</b><br>%{y:,} abitazioni<extra></extra>"
-            )])
-    
-            fig_bar.update_layout(
-                title=dict(
-                    text="Distribuzione Zone Sismiche",
-                    font=dict(family='Inter', size=18, color='#1B3A5F', weight=600),
-                    x=0.5
-                ),
-                paper_bgcolor='rgba(255,255,255,0)',
-                plot_bgcolor='rgba(255,255,255,0)',
-                font=dict(color='#64748B', family='Inter'),
-                xaxis=dict(
-                    showgrid=False,
-                    tickfont=dict(family='Inter', size=12, color='#64748B'),
-                    linecolor='#E2E8F0'
-                ),
-                yaxis=dict(
-                    showgrid=True,
-                    gridcolor='rgba(226, 232, 240, 0.5)',
-                    tickfont=dict(family='JetBrains Mono', size=11, color='#64748B'),
-                    linecolor='#E2E8F0'
-                ),
-                height=400,
-                margin=dict(t=60, b=40, l=40, r=40)
+        with filter_col2:
+            risk_options = ['Tutti i rischi', 'Critico', 'Alto', 'Medio', 'Basso']
+            selected_risk = st.selectbox(
+                "⚠️ Categoria Rischio",
+                risk_options,
+                index=risk_options.index(st.session_state.selected_risk) if st.session_state.selected_risk in risk_options else 0,
+                key="filter_risk"
             )
+            if selected_risk != st.session_state.selected_risk:
+                st.session_state.selected_risk = selected_risk
+                st.rerun()
     
-            st.plotly_chart(fig_bar, use_container_width=True)
-        
-        st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
-        
-        # Second row of charts
-        analytics_col3, analytics_col4 = st.columns(2)
-    
-        with analytics_col3:
-            # CLV vs Risk Score Scatter - Light Theme
-            fig_scatter = px.scatter(
-                filtered_df,
-                x='risk_score',
-                y='clv',
-                color='risk_category',
-                color_discrete_map={
-                    'Critico': '#DC2626',
-                    'Alto': '#EA580C',
-                    'Medio': '#CA8A04',
-                    'Basso': '#16A34A'
-                },
-                size='churn_probability',
-                hover_data=['citta', 'zona_sismica'],
-                labels={
-                    'risk_score': 'Risk Score',
-                    'clv': 'Customer Lifetime Value (€)',
-                    'risk_category': 'Categoria'
-                }
+        with filter_col3:
+            zone_options = ['Tutte le zone', 'Zona 1', 'Zona 2', 'Zona 3', 'Zona 4']
+            selected_zone = st.selectbox(
+                "🌍 Zona Sismica",
+                zone_options,
+                index=zone_options.index(st.session_state.selected_zone) if st.session_state.selected_zone in zone_options else 0,
+                key="filter_zone"
             )
+            if selected_zone != st.session_state.selected_zone:
+                st.session_state.selected_zone = selected_zone
+                st.rerun()
     
-            fig_scatter.update_layout(
-                title=dict(
-                    text="CLV vs Risk Score",
-                    font=dict(family='Inter', size=18, color='#1B3A5F', weight=600),
-                    x=0.5
-                ),
-                paper_bgcolor='rgba(255,255,255,0)',
-                plot_bgcolor='rgba(255,255,255,0)',
-                font=dict(color='#64748B', family='Inter'),
-                xaxis=dict(
-                    showgrid=True,
-                    gridcolor='rgba(226, 232, 240, 0.5)',
-                    title_font=dict(size=12, color='#64748B'),
-                    linecolor='#E2E8F0',
-                    tickfont=dict(color='#64748B')
-                ),
-                yaxis=dict(
-                    showgrid=True,
-                    gridcolor='rgba(226, 232, 240, 0.5)',
-                    title_font=dict(size=12, color='#64748B'),
-                    linecolor='#E2E8F0',
-                    tickfont=dict(color='#64748B')
-                ),
-                legend=dict(
-                    orientation="h",
-                    yanchor="bottom",
-                    y=-0.3,
-                    xanchor="center",
-                    x=0.5,
-                    font=dict(color='#64748B')
-                ),
-                height=400,
-                margin=dict(t=60, b=80, l=60, r=40)
-            )
-    
-            st.plotly_chart(fig_scatter, use_container_width=True)
-    
-        with analytics_col4:
-            # Churn Probability Distribution - Light Theme
-            churn_bins = pd.cut(filtered_df['churn_probability'], bins=[0, 0.2, 0.4, 0.6, 0.8, 1.0],
-                               labels=['Molto Basso', 'Basso', 'Medio', 'Alto', 'Molto Alto'])
-            churn_counts = churn_bins.value_counts().sort_index()
-    
-            fig_churn = go.Figure(data=[go.Bar(
-                y=churn_counts.index.astype(str),
-                x=churn_counts.values,
-                orientation='h',
-                marker=dict(
-                    color=['#16A34A', '#00A0B0', '#CA8A04', '#EA580C', '#DC2626'][:len(churn_counts)],
-                    line=dict(color='rgba(255,255,255,0.8)', width=1)
-                ),
-                text=churn_counts.values,
-                textposition='outside',
-                textfont=dict(family='JetBrains Mono', size=11, color='#1B3A5F'),
-                hovertemplate="<b>%{y}</b><br>%{x:,} clienti<extra></extra>"
-            )])
-    
-            fig_churn.update_layout(
-                title=dict(
-                    text="Distribuzione Churn Probability",
-                    font=dict(family='Inter', size=18, color='#1B3A5F', weight=600),
-                    x=0.5
-                ),
-                paper_bgcolor='rgba(255,255,255,0)',
-                plot_bgcolor='rgba(255,255,255,0)',
-                font=dict(color='#64748B', family='Inter'),
-                xaxis=dict(
-                    showgrid=True,
-                    gridcolor='rgba(226, 232, 240, 0.5)',
-                    tickfont=dict(family='JetBrains Mono', size=11, color='#64748B'),
-                    linecolor='#E2E8F0'
-                ),
-                yaxis=dict(
-                    showgrid=False,
-                    tickfont=dict(family='Inter', size=12, color='#64748B')
-                ),
-                height=400,
-                margin=dict(t=60, b=40, l=120, r=60)
-            )
-    
-            st.plotly_chart(fig_churn, use_container_width=True)
-        
-        st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
-        
-        # City breakdown - Light Theme
-        st.markdown("### 🏙️ Top 10 Città per Concentrazione Rischio")
-    
-        city_risk = filtered_df.groupby('citta').agg({
-            'risk_score': 'mean',
-            'id': 'count',
-            'clv': 'sum'
-        }).rename(columns={'id': 'n_abitazioni', 'clv': 'clv_totale'}).reset_index()
-        city_risk = city_risk.sort_values('risk_score', ascending=False).head(10)
-    
-        fig_city = go.Figure(data=[go.Bar(
-            x=city_risk['citta'],
-            y=city_risk['risk_score'],
-            marker=dict(
-                color=city_risk['risk_score'],
-                colorscale=[[0, '#16A34A'], [0.5, '#CA8A04'], [1, '#DC2626']],
-                line=dict(color='rgba(255,255,255,0.8)', width=1)
-            ),
-            text=[f"{x:.0f}" for x in city_risk['risk_score']],
-            textposition='outside',
-            textfont=dict(family='JetBrains Mono', size=11, color='#1B3A5F'),
-            hovertemplate="<b>%{x}</b><br>Risk Score: %{y:.1f}<br>Abitazioni: %{customdata[0]:,}<br>CLV Totale: €%{customdata[1]:,.0f}<extra></extra>",
-            customdata=city_risk[['n_abitazioni', 'clv_totale']].values
-        )])
-    
-        fig_city.update_layout(
-            paper_bgcolor='rgba(255,255,255,0)',
-            plot_bgcolor='rgba(255,255,255,0)',
-            font=dict(color='#64748B', family='Inter'),
-            xaxis=dict(
-                showgrid=False,
-                tickfont=dict(size=11, color='#64748B'),
-                tickangle=-45,
-                linecolor='#E2E8F0'
-            ),
-            yaxis=dict(
-                showgrid=True,
-                gridcolor='rgba(226, 232, 240, 0.5)',
-                title="Risk Score Medio",
-                title_font=dict(size=12, color='#64748B'),
-                range=[0, 100],
-                linecolor='#E2E8F0',
-                tickfont=dict(color='#64748B')
-            ),
-            height=350,
-            margin=dict(t=20, b=80, l=60, r=40)
-        )
-    
-        st.plotly_chart(fig_city, use_container_width=True)
-    
-    
-    # ═══════════════════════════════════════════════════════════════════════════════
-    # TAB 3: CLIENT DETAIL
-    # ═══════════════════════════════════════════════════════════════════════════════
-    
-    with tab3:
-        st.markdown("### 🔍 Ricerca Clienti")
-        
-        search_col1, search_col2 = st.columns([3, 1])
-        
-        with search_col1:
-            search_term = st.text_input(
-                "🔎 Cerca per ID, città o codice cliente",
-                placeholder="Es: HAB00001, Milano, CLI1234..."
-            )
-        
-        with search_col2:
-            sort_by = st.selectbox(
-                "Ordina per",
-                ["Risk Score ↓", "Risk Score ↑", "CLV ↓", "CLV ↑", "Churn ↓"]
-            )
-        
-        # Filter and sort
-        display_df = filtered_df.copy()
-        
-        if search_term:
-            mask = (
-                display_df['id'].str.contains(search_term, case=False, na=False) |
-                display_df['citta'].str.contains(search_term, case=False, na=False) |
-                display_df['codice_cliente'].str.contains(search_term, case=False, na=False)
-            )
-            display_df = display_df[mask]
-        
-        # Sort
-        sort_mapping = {
-            "Risk Score ↓": ('risk_score', False),
-            "Risk Score ↑": ('risk_score', True),
-            "CLV ↓": ('clv', False),
-            "CLV ↑": ('clv', True),
-            "Churn ↓": ('churn_probability', False)
-        }
-        sort_col, ascending = sort_mapping[sort_by]
-        display_df = display_df.sort_values(sort_col, ascending=ascending)
-        
-        st.markdown(f"**{len(display_df):,}** risultati trovati")
-
-        # Display as cards - Light Theme (using itertuples for performance)
-        for row in display_df.head(20).itertuples():
-            risk_class = row.risk_category.lower()
-            solar_info = f"☀️ {row.solar_potential_kwh:,} kWh/anno" if pd.notna(row.solar_potential_kwh) else "☀️ Non calcolato"
-
+        with filter_col4:
+            # Quick stats
             st.markdown(f"""
-            <div class="glass-card" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
-                <div style="flex: 1; min-width: 200px;">
-                    <h4 style="margin: 0; color: #1B3A5F; font-size: 1.1rem; font-weight: 600;">{row.id}</h4>
-                    <p style="margin: 0.25rem 0; color: #64748B; font-size: 0.85rem;">
-                        📍 {row.citta} · {row.codice_cliente}
-                    </p>
-                </div>
-                <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: center;">
-                    <div style="text-align: center;">
-                        <p style="margin: 0; color: #94A3B8; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">Risk Score</p>
-                        <p style="margin: 0; color: #1B3A5F; font-size: 1.5rem; font-weight: 700; font-family: 'JetBrains Mono', monospace;">{row.risk_score}</p>
-                    </div>
-                    <div style="text-align: center;">
-                        <p style="margin: 0; color: #94A3B8; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">Zona</p>
-                        <p style="margin: 0; color: #1B3A5F; font-size: 1.5rem; font-weight: 700; font-family: 'JetBrains Mono', monospace;">{row.zona_sismica}</p>
-                    </div>
-                    <div style="text-align: center;">
-                        <p style="margin: 0; color: #94A3B8; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">CLV</p>
-                        <p style="margin: 0; color: #00A0B0; font-size: 1.5rem; font-weight: 700; font-family: 'JetBrains Mono', monospace;">€{row.clv:,}</p>
-                    </div>
-                    <span class="risk-badge risk-{risk_class}">{row.risk_category}</span>
-                </div>
+            <div style="text-align: center; padding: 0.5rem;">
+                <p style="font-family: 'JetBrains Mono', monospace; font-size: 1.5rem; font-weight: 700; background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin: 0; line-height: 1;">{len(filtered_df):,}</p>
+                <p style="font-family: 'Inter', sans-serif; font-size: 0.65rem; color: #94A3B8; margin: 0;">di {len(df):,}</p>
+            </div>
+            """, unsafe_allow_html=True)
+    
+        st.markdown("<br>", unsafe_allow_html=True)
+    
+        # Warning if no results match filters
+        if len(filtered_df) == 0:
+            st.warning("⚠️ Nessuna abitazione corrisponde ai filtri selezionati. Prova a modificare i criteri nella sidebar.")
+    
+        # Get stats
+        stats = get_risk_stats(filtered_df)
+        
+        # ═══════════════════════════════════════════════════════════════════════════════
+        # KPI METRICS ROW
+        # ═══════════════════════════════════════════════════════════════════════════════
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric(
+                label="🏠 Abitazioni Valutate",
+                value=f"{stats['total']:,}",
+                delta=f"{round(stats['total']/len(df)*100)}% copertura"
+            )
+        
+        with col2:
+            st.metric(
+                label="⚡ Risk Score Medio",
+                value=f"{stats['avg_score']}",
+                delta=f"su scala 0-100"
+            )
+        
+        with col3:
+            st.metric(
+                label="🔴 Alto Rischio",
+                value=f"{stats['critico'] + stats['alto']:,}",
+                delta=f"{stats['high_risk_pct']}% del totale",
+                delta_color="inverse"
+            )
+        
+        with col4:
+            # Protect against NaN when filtered_df is empty
+            if len(filtered_df) > 0:
+                avg_clv = filtered_df['clv'].mean()
+                # Handle NaN case (if all CLV values are missing)
+                if pd.isna(avg_clv):
+                    avg_clv = 0
+            else:
+                avg_clv = 0
+        
+            st.metric(
+                label="💎 CLV Medio",
+                value=f"€{avg_clv:,.0f}",
+                delta="lifetime value"
+            )
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # ═══════════════════════════════════════════════════════════════════════════════
+        # MAIN TABS
+        # ═══════════════════════════════════════════════════════════════════════════════
+    
+        tab1, tab2, tab3 = st.tabs([
+            "🗺️ Mappa Geo-Rischio",
+            "📈 Grafici",
+            "🔍 Dettaglio Clienti"
+        ])
+        
+        # ═══════════════════════════════════════════════════════════════════════════════
+        # TAB 1: GEO-RISK MAP
+        # ═══════════════════════════════════════════════════════════════════════════════
+        
+        with tab1:
+            st.markdown("### 🌍 Mappa del Rischio Territoriale")
+            
+            # Map Mode Selector
+            map_mode = st.radio(
+                "Visualizza per",
+                ["Rischio Composito", "Rischio Sismico", "Rischio Idrogeologico", "Rischio Alluvione"],
+                horizontal=True,
+                label_visibility="collapsed"
+            )
+            
+            # Legend based on mode
+            if map_mode == "Rischio Composito":
+                st.caption("Visualizzazione basata sul Risk Score complessivo.")
+            elif map_mode == "Rischio Sismico":
+                st.caption("Visualizzazione basata su Zona Sismica (1=Alto, 4=Basso).")
+            else:
+                st.caption("Visualizzazione basata su livelli di pericolosità (P3/P4).")
+    
+            # Prepare map data
+            map_df = filtered_df[
+                filtered_df['latitudine'].notna() & 
+                filtered_df['longitudine'].notna()
+            ].copy()
+    
+            # Check for Mapbox Token
+            mapbox_key = os.getenv("MAPBOX_TOKEN")
+            if not mapbox_key:
+                st.warning("⚠️ MAPBOX_TOKEN mancante nel file .env. La mappa potrebbe non mostrare lo sfondo.")
+            
+            if len(map_df) == 0:
+                st.warning("⚠️ Nessuna abitazione con coordinate geografiche disponibile.")
+            else:
+                # 1. Prepare Colors based on Mode
+                
+                if map_mode == "Rischio Composito":
+                    RISK_COLOR_MAP = {
+                        'Critico': [220, 38, 38, 200],   # Red
+                        'Alto':    [234, 88, 12, 200],   # Orange
+                        'Medio':   [202, 138, 4, 180],   # Yellow
+                        'Basso':   [22, 163, 74, 180]    # Green
+                    }
+                    DEFAULT_COLOR = [22, 163, 74, 180]
+                    map_df['color'] = map_df['risk_category'].apply(lambda x: RISK_COLOR_MAP.get(x, DEFAULT_COLOR))
+                    weight_col = "risk_score"
+                    
+                elif map_mode == "Rischio Sismico":
+                    # Zone 1 (Red) -> Zone 4 (Green)
+                    SEISMIC_COLORS = {
+                        1: [220, 38, 38, 200],
+                        2: [234, 88, 12, 200],
+                        3: [202, 138, 4, 180],
+                        4: [22, 163, 74, 180]
+                    }
+                    map_df['color'] = map_df['zona_sismica'].apply(lambda x: SEISMIC_COLORS.get(int(x) if pd.notna(x) else 4, [200, 200, 200, 100]))
+                    weight_col = "zona_sismica" # Not perfect for heatmap but ok
+                    
+                elif map_mode == "Rischio Idrogeologico":
+                    # P4/P3 = High, P2 = Med, P1 = Low
+                    HYDRO_COLORS = {
+                        'P4': [220, 38, 38, 200],
+                        'P3': [234, 88, 12, 200],
+                        'P2': [202, 138, 4, 180],
+                        'P1': [22, 163, 74, 180]
+                    }
+                    # Check column name, usually hydro_risk_p3 contains the class string? Or float?
+                    # DB scheme likely has string 'P3', 'P2' etc or just the value. Assuming string or mapped.
+                    # If content is like "Molto Elevata (P4)", we might need parsing. 
+                    # For now assume direct mapping or simple fallback.
+                    map_df['color'] = map_df['hydro_risk_p3'].apply(lambda x: HYDRO_COLORS.get(str(x)[:2], [200, 200, 200, 100])) 
+                    weight_col = "risk_score"
+                
+                else: # Flood
+                    FLOOD_COLORS = {
+                        'P3': [220, 38, 38, 200],
+                        'P2': [234, 88, 12, 200],
+                        'P1': [22, 163, 74, 180]
+                    }
+                    map_df['color'] = map_df['flood_risk_p3'].apply(lambda x: FLOOD_COLORS.get(str(x)[:2], [200, 200, 200, 100]))
+                    weight_col = "risk_score"
+    
+                
+                # 2. PyDeck Layers
+                
+                # View State (Initialize centered on data or Italy)
+                view_state = pdk.ViewState(
+                    latitude=map_df['latitudine'].mean() if len(map_df) > 0 else 41.8719,
+                    longitude=map_df['longitudine'].mean() if len(map_df) > 0 else 12.5674,
+                    zoom=5.5,
+                    pitch=0,
+                )
+    
+                # Layer 1: Heatmap (Density/Intensity)
+                heatmap_layer = pdk.Layer(
+                    "HeatmapLayer",
+                    data=map_df,
+                    get_position=['longitudine', 'latitudine'],
+                    get_weight=weight_col,
+                    opacity=0.4,
+                    radius_pixels=40,
+                    intensity=1,
+                    threshold=0.2
+                )
+    
+                # Layer 2: Scatterplot (Individual Points)
+                scatter_layer = pdk.Layer(
+                    "ScatterplotLayer",
+                    data=map_df,
+                    get_position=['longitudine', 'latitudine'],
+                    get_fill_color='color',
+                    get_radius=5000,  # Meters
+                    pickable=True,
+                    radius_min_pixels=4,
+                    radius_max_pixels=15,
+                    line_width_min_pixels=1,
+                    stroked=True,
+                    get_line_color=[255, 255, 255, 100]
+                )
+    
+                # Render Chart
+                st.pydeck_chart(pdk.Deck(
+                    map_style='mapbox://styles/mapbox/light-v10',
+                    api_keys={'mapbox': mapbox_key},
+                    initial_view_state=view_state,
+                    layers=[heatmap_layer, scatter_layer],
+                    tooltip={
+                        "html": "<b>Città:</b> {citta}<br/>"
+                                "<b>Rischio:</b> {risk_score}<br/>"
+                                "<b>Categoria:</b> {risk_category}<br/>"
+                                "<b>Cliente:</b> {codice_cliente}",
+                        "style": {"backgroundColor": "steelblue", "color": "white"}
+                    }
+                ))
+    
+                # 3. Critical Highlights Section (Replacing the big table)
+                st.markdown("### 🚨 Focus Criticità")
+                
+                # Get top critical items
+                critical_df = map_df[map_df['risk_category'].isin(['Critico', 'Alto'])].sort_values('risk_score', ascending=False).head(4)
+                
+                if not critical_df.empty:
+                    cols = st.columns(len(critical_df))
+                    for idx, row in enumerate(critical_df.itertuples()):
+                        with cols[idx]:
+                            # Card Styling
+                            risk_color = "#DC2626" if row.risk_category == 'Critico' else "#EA580C"
+                            st.markdown(f"""
+                            <div style="
+                                background: white;
+                                border: 1px solid {risk_color};
+                                border-left: 5px solid {risk_color};
+                                border-radius: 8px;
+                                padding: 1rem;
+                                box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+                            ">
+                                <h4 style="margin:0; font-size: 0.9rem; color: #64748B;">{row.citta}</h4>
+                                <p style="font-size: 1.8rem; font-weight: 800; color: #1B3A5F; margin: 0;">{row.risk_score}</p>
+                                <p style="font-size: 0.75rem; color: {risk_color}; font-weight: bold; margin:0;">
+                                    {row.risk_category.upper()}
+                                </p>
+                                <p style="font-size: 0.7rem; color: #94A3B8; margin-top:0.5rem;">
+                                    ID: {row.id}<br>Filtra mappa per zoom
+                                </p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                else:
+                    st.info("✅ Nessuna criticità elevata rilevata nei filtri correnti.")
+    
+                st.markdown("<br>", unsafe_allow_html=True)
+    
+                # 4. Collapsible full data table
+                with st.expander("📋 Visualizza Elenco Completo Abitazioni", expanded=False):
+                    # Display table with key columns
+                    display_cols = ['id', 'citta', 'risk_score', 'risk_category', 'zona_sismica', 'codice_cliente']
+                    display_df = map_df[[c for c in display_cols if c in map_df.columns]].copy()
+                    display_df['risk_score'] = display_df['risk_score'].fillna(0).round(1)
+                    
+                    st.dataframe(
+                        display_df,
+                        use_container_width=True,
+                        height=400,
+                        column_config={
+                            'id': st.column_config.TextColumn('ID'),
+                            'citta': st.column_config.TextColumn('Città'),
+                            'risk_score': st.column_config.ProgressColumn('Risk Score', min_value=0, max_value=100, format="%.1f"),
+                            'risk_category': st.column_config.TextColumn('Categoria'),
+                            'zona_sismica': st.column_config.NumberColumn('Zona Sism.'),
+                            'codice_cliente': st.column_config.TextColumn('Cliente'),
+                        }
+                    )
+            
+            # Legend (Horizontal)
+            st.markdown("""
+            <div style="display: flex; gap: 2rem; justify-content: center; margin-top: 2rem; flex-wrap: wrap; opacity: 0.8;">
+                <div style="display:flex; align-items:center; gap:0.5rem;"><span style="width:12px; height:12px; background:#DC2626; border-radius:50%;"></span> <span style="font-size:0.8rem;">Critico</span></div>
+                <div style="display:flex; align-items:center; gap:0.5rem;"><span style="width:12px; height:12px; background:#EA580C; border-radius:50%;"></span> <span style="font-size:0.8rem;">Alto</span></div>
+                <div style="display:flex; align-items:center; gap:0.5rem;"><span style="width:12px; height:12px; background:#CA8A04; border-radius:50%;"></span> <span style="font-size:0.8rem;">Medio</span></div>
+                <div style="display:flex; align-items:center; gap:0.5rem;"><span style="width:12px; height:12px; background:#16A34A; border-radius:50%;"></span> <span style="font-size:0.8rem;">Basso</span></div>
             </div>
             """, unsafe_allow_html=True)
         
-        if len(display_df) > 20:
-            st.info(f"📄 Mostrati i primi 20 risultati di {len(display_df):,}. Usa i filtri per restringere la ricerca.")
+        
+        # ═══════════════════════════════════════════════════════════════════════════════
+        # TAB 2: ANALYTICS
+        # ═══════════════════════════════════════════════════════════════════════════════
+        
+        with tab2:
+            st.markdown("### 📈 Analytics Dashboard")
+        
+            analytics_col1, analytics_col2 = st.columns(2)
+        
+            with analytics_col1:
+                # Risk Distribution Donut - Light Theme
+                risk_counts = filtered_df['risk_category'].value_counts()
+        
+                fig_donut = go.Figure(data=[go.Pie(
+                    labels=risk_counts.index,
+                    values=risk_counts.values,
+                    hole=0.65,
+                    marker_colors=['#DC2626', '#EA580C', '#CA8A04', '#16A34A'],
+                    textinfo='percent+label',
+                    textfont=dict(family='Inter', size=12, color='#1B3A5F'),
+                    hovertemplate="<b>%{label}</b><br>%{value:,} abitazioni<br>%{percent}<extra></extra>"
+                )])
+        
+                fig_donut.update_layout(
+                    title=dict(
+                        text="Distribuzione Rischio",
+                        font=dict(family='Inter', size=18, color='#1B3A5F', weight=600),
+                        x=0.5
+                    ),
+                    paper_bgcolor='rgba(255,255,255,0)',
+                    plot_bgcolor='rgba(255,255,255,0)',
+                    font=dict(color='#64748B', family='Inter'),
+                    showlegend=True,
+                    legend=dict(
+                        orientation="h",
+                        yanchor="bottom",
+                        y=-0.2,
+                        xanchor="center",
+                        x=0.5,
+                        font=dict(family='Inter', size=11, color='#64748B')
+                    ),
+                    annotations=[dict(
+                        text=f"<b>{len(filtered_df):,}</b><br>Totale",
+                        x=0.5, y=0.5,
+                        font=dict(family='JetBrains Mono', size=20, color='#1B3A5F'),
+                        showarrow=False
+                    )],
+                    height=400,
+                    margin=dict(t=60, b=60, l=20, r=20)
+                )
+        
+                st.plotly_chart(fig_donut, use_container_width=True)
+        
+            with analytics_col2:
+                # Risk Type Breakdown
+                st.markdown("#### 🌍 Dettaglio Geo-Rischi")
+                risk_chart_type = st.radio(
+                    "Tipologia", 
+                    ["Sismico", "Idrogeologico", "Alluvionale"], 
+                    horizontal=True,
+                    label_visibility="collapsed",
+                    key="risk_chart_selector"
+                )
     
+                if risk_chart_type == "Sismico":
+                    # Seismic Zone Bar Chart
+                    zone_counts = filtered_df['zona_sismica'].value_counts().sort_index()
+                    x_vals = [f"Zona {z}" for z in zone_counts.index]
+                    y_vals = zone_counts.values
+                    colors = ['#DC2626', '#EA580C', '#CA8A04', '#16A34A'][:len(zone_counts)]
+                    title = "Abitazioni per Zona Sismica"
+                    
+                elif risk_chart_type == "Idrogeologico":
+                    # Hydro Risk Bar Chart (P3/P4 etc)
+                    if 'hydro_risk_p3' in filtered_df.columns:
+                        hydro_counts = filtered_df['hydro_risk_p3'].astype(str).value_counts().sort_index()
+                        x_vals = hydro_counts.index.tolist()
+                        y_vals = hydro_counts.values
+                        # Robust color mapping
+                        colors = []
+                        for x in x_vals:
+                            s = str(x).upper()
+                            if 'P4' in s or '4' in s: c = '#DC2626'
+                            elif 'P3' in s or '3' in s: c = '#EA580C'
+                            elif 'P2' in s or '2' in s: c = '#CA8A04'
+                            elif 'P1' in s or '1' in s: c = '#16A34A'
+                            else: c = '#94A3B8'
+                            colors.append(c)
+                        title = "Abitazioni per Rischio Idrogeologico"
+                    else:
+                        x_vals, y_vals, colors = [], [], []
+                        title = "Dati Idrogeologici non disponibili"
+    
+                else: # Alluvionale
+                     if 'flood_risk_p3' in filtered_df.columns:
+                        flood_counts = filtered_df['flood_risk_p3'].astype(str).value_counts().sort_index()
+                        x_vals = flood_counts.index.tolist()
+                        y_vals = flood_counts.values
+                        colors = []
+                        for x in x_vals:
+                            s = str(x).upper()
+                            if 'P4' in s or '4' in s: c = '#DC2626'
+                            elif 'P3' in s or '3' in s: c = '#EA580C'
+                            elif 'P2' in s or '2' in s: c = '#CA8A04'
+                            elif 'P1' in s or '1' in s: c = '#16A34A'
+                            else: c = '#94A3B8'
+                            colors.append(c)
+                        title = "Abitazioni per Rischio Alluvione"
+                     else:
+                        x_vals, y_vals, colors = [], [], []
+                        title = "Dati Alluvionali non disponibili"
+    
+                fig_bar = go.Figure(data=[go.Bar(
+                    x=x_vals,
+                    y=y_vals,
+                    marker=dict(
+                        color=colors,
+                        line=dict(color='rgba(255,255,255,0.8)', width=1)
+                    ),
+                    text=y_vals,
+                    textposition='outside',
+                    textfont=dict(family='JetBrains Mono', size=12, color='#1B3A5F'),
+                    hovertemplate="<b>%{x}</b><br>%{y:,} abitazioni<extra></extra>"
+                )])
+        
+                fig_bar.update_layout(
+                    title=dict(
+                        text=title,
+                        font=dict(family='Inter', size=16, color='#1B3A5F', weight=600),
+                        x=0.5
+                    ),
+                    paper_bgcolor='rgba(255,255,255,0)',
+                    plot_bgcolor='rgba(255,255,255,0)',
+                    font=dict(color='#64748B', family='Inter'),
+                    xaxis=dict(
+                        showgrid=False,
+                        tickfont=dict(family='Inter', size=12, color='#64748B'),
+                        linecolor='#E2E8F0'
+                    ),
+                    yaxis=dict(
+                        showgrid=True,
+                        gridcolor='rgba(226, 232, 240, 0.5)',
+                        tickfont=dict(family='JetBrains Mono', size=11, color='#64748B'),
+                        linecolor='#E2E8F0'
+                    ),
+                    height=400,
+                    margin=dict(t=60, b=40, l=40, r=40)
+                )
+        
+                st.plotly_chart(fig_bar, use_container_width=True)
+            
+            st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+            
+            # Second row of charts
+            analytics_col3, analytics_col4 = st.columns(2)
+        
+            with analytics_col3:
+                # CLV vs Risk Score Scatter - Light Theme
+                fig_scatter = px.scatter(
+                    filtered_df,
+                    x='risk_score',
+                    y='clv',
+                    color='risk_category',
+                    color_discrete_map={
+                        'Critico': '#DC2626',
+                        'Alto': '#EA580C',
+                        'Medio': '#CA8A04',
+                        'Basso': '#16A34A'
+                    },
+                    size='churn_probability',
+                    hover_data=['citta', 'zona_sismica'],
+                    labels={
+                        'risk_score': 'Risk Score',
+                        'clv': 'Customer Lifetime Value (€)',
+                        'risk_category': 'Categoria'
+                    }
+                )
+        
+                fig_scatter.update_layout(
+                    title=dict(
+                        text="CLV vs Risk Score",
+                        font=dict(family='Inter', size=18, color='#1B3A5F', weight=600),
+                        x=0.5
+                    ),
+                    paper_bgcolor='rgba(255,255,255,0)',
+                    plot_bgcolor='rgba(255,255,255,0)',
+                    font=dict(color='#64748B', family='Inter'),
+                    xaxis=dict(
+                        showgrid=True,
+                        gridcolor='rgba(226, 232, 240, 0.5)',
+                        title_font=dict(size=12, color='#64748B'),
+                        linecolor='#E2E8F0',
+                        tickfont=dict(color='#64748B')
+                    ),
+                    yaxis=dict(
+                        showgrid=True,
+                        gridcolor='rgba(226, 232, 240, 0.5)',
+                        title_font=dict(size=12, color='#64748B'),
+                        linecolor='#E2E8F0',
+                        tickfont=dict(color='#64748B')
+                    ),
+                    legend=dict(
+                        orientation="h",
+                        yanchor="bottom",
+                        y=-0.3,
+                        xanchor="center",
+                        x=0.5,
+                        font=dict(color='#64748B')
+                    ),
+                    height=400,
+                    margin=dict(t=60, b=80, l=60, r=40)
+                )
+        
+                st.plotly_chart(fig_scatter, use_container_width=True)
+        
+            with analytics_col4:
+                # Churn Probability Distribution - Light Theme
+                churn_bins = pd.cut(filtered_df['churn_probability'], bins=[0, 0.2, 0.4, 0.6, 0.8, 1.0],
+                                   labels=['Molto Basso', 'Basso', 'Medio', 'Alto', 'Molto Alto'])
+                churn_counts = churn_bins.value_counts().sort_index()
+        
+                fig_churn = go.Figure(data=[go.Bar(
+                    y=churn_counts.index.astype(str),
+                    x=churn_counts.values,
+                    orientation='h',
+                    marker=dict(
+                        color=['#16A34A', '#00A0B0', '#CA8A04', '#EA580C', '#DC2626'][:len(churn_counts)],
+                        line=dict(color='rgba(255,255,255,0.8)', width=1)
+                    ),
+                    text=churn_counts.values,
+                    textposition='outside',
+                    textfont=dict(family='JetBrains Mono', size=11, color='#1B3A5F'),
+                    hovertemplate="<b>%{y}</b><br>%{x:,} clienti<extra></extra>"
+                )])
+        
+                fig_churn.update_layout(
+                    title=dict(
+                        text="Distribuzione Churn Probability",
+                        font=dict(family='Inter', size=18, color='#1B3A5F', weight=600),
+                        x=0.5
+                    ),
+                    paper_bgcolor='rgba(255,255,255,0)',
+                    plot_bgcolor='rgba(255,255,255,0)',
+                    font=dict(color='#64748B', family='Inter'),
+                    xaxis=dict(
+                        showgrid=True,
+                        gridcolor='rgba(226, 232, 240, 0.5)',
+                        tickfont=dict(family='JetBrains Mono', size=11, color='#64748B'),
+                        linecolor='#E2E8F0'
+                    ),
+                    yaxis=dict(
+                        showgrid=False,
+                        tickfont=dict(family='Inter', size=12, color='#64748B')
+                    ),
+                    height=400,
+                    margin=dict(t=60, b=40, l=120, r=60)
+                )
+        
+                st.plotly_chart(fig_churn, use_container_width=True)
+            
+            st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+            
+            # City breakdown - Light Theme
+            st.markdown("### 🏙️ Top 10 Città per Concentrazione Rischio")
+        
+            city_risk = filtered_df.groupby('citta').agg({
+                'risk_score': 'mean',
+                'id': 'count',
+                'clv': 'sum'
+            }).rename(columns={'id': 'n_abitazioni', 'clv': 'clv_totale'}).reset_index()
+            city_risk = city_risk.sort_values('risk_score', ascending=False).head(10)
+        
+            fig_city = go.Figure(data=[go.Bar(
+                x=city_risk['citta'],
+                y=city_risk['risk_score'],
+                marker=dict(
+                    color=city_risk['risk_score'],
+                    colorscale=[[0, '#16A34A'], [0.5, '#CA8A04'], [1, '#DC2626']],
+                    line=dict(color='rgba(255,255,255,0.8)', width=1)
+                ),
+                text=[f"{x:.0f}" for x in city_risk['risk_score']],
+                textposition='outside',
+                textfont=dict(family='JetBrains Mono', size=11, color='#1B3A5F'),
+                hovertemplate="<b>%{x}</b><br>Risk Score: %{y:.1f}<br>Abitazioni: %{customdata[0]:,}<br>CLV Totale: €%{customdata[1]:,.0f}<extra></extra>",
+                customdata=city_risk[['n_abitazioni', 'clv_totale']].values
+            )])
+        
+            fig_city.update_layout(
+                paper_bgcolor='rgba(255,255,255,0)',
+                plot_bgcolor='rgba(255,255,255,0)',
+                font=dict(color='#64748B', family='Inter'),
+                xaxis=dict(
+                    showgrid=False,
+                    tickfont=dict(size=11, color='#64748B'),
+                    tickangle=-45,
+                    linecolor='#E2E8F0'
+                ),
+                yaxis=dict(
+                    showgrid=True,
+                    gridcolor='rgba(226, 232, 240, 0.5)',
+                    title="Risk Score Medio",
+                    title_font=dict(size=12, color='#64748B'),
+                    range=[0, 100],
+                    linecolor='#E2E8F0',
+                    tickfont=dict(color='#64748B')
+                ),
+                height=350,
+                margin=dict(t=20, b=80, l=60, r=40)
+            )
+        
+            st.plotly_chart(fig_city, use_container_width=True)
+        
+        
+        # ═══════════════════════════════════════════════════════════════════════════════
+        # TAB 3: CLIENT DETAIL
+        # ═══════════════════════════════════════════════════════════════════════════════
+        
+        with tab3:
+            st.markdown("### 🔍 Ricerca Clienti")
+            
+            search_col1, search_col2 = st.columns([3, 1])
+            
+            with search_col1:
+                search_term = st.text_input(
+                    "🔎 Cerca per ID, città o codice cliente",
+                    placeholder="Es: HAB00001, Milano, CLI1234..."
+                )
+            
+            with search_col2:
+                sort_by = st.selectbox(
+                    "Ordina per",
+                    ["Risk Score ↓", "Risk Score ↑", "CLV ↓", "CLV ↑", "Churn ↓"]
+                )
+            
+            # Filter and sort
+            display_df = filtered_df.copy()
+            
+            if search_term:
+                mask = (
+                    display_df['id'].str.contains(search_term, case=False, na=False) |
+                    display_df['citta'].str.contains(search_term, case=False, na=False) |
+                    display_df['codice_cliente'].str.contains(search_term, case=False, na=False)
+                )
+                display_df = display_df[mask]
+            
+            # Sort
+            sort_mapping = {
+                "Risk Score ↓": ('risk_score', False),
+                "Risk Score ↑": ('risk_score', True),
+                "CLV ↓": ('clv', False),
+                "CLV ↑": ('clv', True),
+                "Churn ↓": ('churn_probability', False)
+            }
+            sort_col, ascending = sort_mapping[sort_by]
+            display_df = display_df.sort_values(sort_col, ascending=ascending)
+            
+            st.markdown(f"**{len(display_df):,}** risultati trovati")
+    
+            # Header for the list
+            h_col1, h_col2, h_col3, h_col4 = st.columns([2, 1, 1, 0.5])
+            with h_col1: st.markdown("**Cliente / Abitazione**")
+            with h_col2: st.markdown("**Rischio**")
+            with h_col3: st.markdown("**Valore**")
+            
+            st.divider()
+    
+            # Display as List with Button
+            for i, row in enumerate(display_df.head(20).itertuples()):
+                risk_class = row.risk_category.lower()
+                
+                # Extract client name if available
+                client_name = "Cliente"
+                if hasattr(row, 'clienti') and isinstance(row.clienti, dict):
+                    client_name = f"{row.clienti.get('nome', '')} {row.clienti.get('cognome', '')}".strip()
+                
+                row_col1, row_col2, row_col3, row_col4 = st.columns([2, 1, 1, 0.5])
+                
+                with row_col1:
+                    st.markdown(f"""
+                    <div>
+                        <h4 style="margin: 0; color: #1B3A5F; font-size: 0.95rem; font-weight: 600;">{client_name}</h4>
+                        <p style="margin: 0; color: #64748B; font-size: 0.8rem;">📍 {row.citta}</p>
+                        <p style="margin: 0; color: #94A3B8; font-size: 0.7rem;">ID: {row.codice_cliente}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                with row_col2:
+                     st.markdown(f"""
+                     <div>
+                        <span class="risk-badge risk-{risk_class}" style="font-size:0.75rem;">{row.risk_category}</span>
+                        <p style="margin: 0.2rem 0 0 0; color: #64748B; font-size: 0.75rem;">Score: <b>{row.risk_score}</b></p>
+                     </div>
+                     """, unsafe_allow_html=True)
+    
+                with row_col3:
+                     st.markdown(f"""
+                        <div>
+                            <span style="font-size:1rem; font-weight:700; color:#00A0B0;">€{row.clv:,}</span>
+                            <p style="margin: 0; color: #94A3B8; font-size: 0.7rem;">CLV Stimato</p>
+                        </div>
+                     """, unsafe_allow_html=True)
+    
+                with row_col4:
+                    if st.button("👁️", key=f"det_{row.id}_{i}", help="Visualizza Dettagli"):
+                        st.session_state.analytics_client_id = row.codice_cliente
+                        st.session_state.analytics_page = 'detail'
+                        st.rerun()
+                
+                st.divider()
+    
+            
+            if len(display_df) > 20:
+                st.info(f"📄 Mostrati i primi 20 risultati di {len(display_df):,}. Usa i filtri per restringere la ricerca.")
+        
 else:
     # ═══════════════════════════════════════════════════════════════════════════════
     # NBO DASHBOARD CONTENT
@@ -3104,394 +3382,173 @@ Mantieni formato **Oggetto:** e corpo email. GENERA ORA senza tool."""
             # ═══════════════════════════════════════════════════════════════════════════════
 
             # Get all recommendations with current weights
-            all_recs = get_all_recommendations(nbo_data, st.session_state.nbo_weights)
-
-            # KPI Metrics
-            total_clients = len(nbo_data)
-            total_recs = len(all_recs)
-            avg_score = sum(r['score'] for r in all_recs) / len(all_recs) if all_recs else 0
-
-            # Count by area
-            area_counts = {}
-            for rec in all_recs:
-                area = rec['area_bisogno']
-                area_counts[area] = area_counts.get(area, 0) + 1
-
-            col1, col2, col3, col4 = st.columns(4)
-
-            with col1:
-                st.metric(
-                    label="👥 Clienti Analizzati",
-                    value=f"{total_clients:,}",
-                    delta="con raccomandazioni"
-                )
-
-            with col2:
-                st.metric(
-                    label="📋 Raccomandazioni Totali",
-                    value=f"{total_recs:,}",
-                    delta=f"{total_recs/total_clients:.1f} per cliente" if total_clients > 0 else "0"
-                )
-
-            with col3:
-                st.metric(
-                    label="📈 Score Medio",
-                    value=f"{avg_score:.2f}",
-                    delta="ponderato"
-                )
-
-            with col4:
-                top_area = max(area_counts, key=area_counts.get) if area_counts else "N/A"
-                st.metric(
-                    label="🎯 Top Area Bisogno",
-                    value=top_area.split()[0] if top_area != "N/A" else "N/A",
-                    delta=f"{area_counts.get(top_area, 0)} recs" if top_area != "N/A" else ""
-                )
-
-            st.markdown("<br>", unsafe_allow_html=True)
+            all_recs = get_all_recommendations(nbo_data, st.session_state.nbo_weights, filter_top20=True)
 
             # ═══════════════════════════════════════════════════════════════════════════════
-            # NBO WEIGHTS EXPLANATION CARD
+            # STRATEGIA ATTIVA (Always Visible)
             # ═══════════════════════════════════════════════════════════════════════════════
-
-            # Get current weights
+            
             w_ret = st.session_state.nbo_weights['retention']
             w_red = st.session_state.nbo_weights['redditivita']
             w_pro = st.session_state.nbo_weights['propensione']
-            total_weight = w_ret + w_red + w_pro
-            weight_valid = abs(total_weight - 1.0) < 0.01
 
-            with st.expander("Visualizza Dettagli Strategia Attiva (Q1 2026)", expanded=False):
-                # Custom Strategy Card
-                st.markdown(f"""
-                <div class="active-strategy-card">
-                    <div class="strategy-info">
-                        <div class="strategy-label">STRATEGIA ATTIVA</div>
-                        <div class="strategy-title">Q1 2026 - Focus Retention</div>
+            st.markdown(f"""
+            <div class="active-strategy-card" style="margin-bottom: 0;">
+                <div class="strategy-info">
+                    <div class="strategy-label">STRATEGIA ATTIVA</div>
+                    <div class="strategy-title">Q1 2026 - Focus Retention</div>
+                </div>
+                <div class="strategy-metrics" style="gap: 3rem;">
+                    <div class="metric-item">
+                        <div class="metric-label">key driver</div>
+                        <div class="metric-value" style="color: #00A0B0;">RETENTION</div>
                     </div>
-                    <div class="strategy-metrics">
-                        <div class="metric-item">
-                            <div class="metric-label">RETENTION</div>
-                            <div class="metric-value" style="color: #00A0B0;">{w_ret:.0%}</div>
-                        </div>
-                        <div class="metric-divider"></div>
-                        <div class="metric-item">
-                            <div class="metric-label">REDDITIVITA</div>
-                            <div class="metric-value" style="color: #F59E0B;">{w_red:.0%}</div>
-                        </div>
-                        <div class="metric-divider"></div>
-                        <div class="metric-item">
-                            <div class="metric-label">PROPENSIONE</div>
-                            <div class="metric-value" style="color: #8B5CF6;">{w_pro:.0%}</div>
-                        </div>
+                    <div class="metric-divider"></div>
+                     <div class="metric-item">
+                        <div class="metric-label">Retention</div>
+                        <div class="metric-value">{w_ret:.0%}</div>
+                    </div>
+                    <div class="metric-divider"></div>
+                    <div class="metric-item">
+                        <div class="metric-label">Redditività</div>
+                        <div class="metric-value">{w_red:.0%}</div>
+                    </div>
+                    <div class="metric-divider"></div>
+                    <div class="metric-item">
+                        <div class="metric-label">Propensione</div>
+                        <div class="metric-value">{w_pro:.0%}</div>
                     </div>
                 </div>
-                """, unsafe_allow_html=True)
-                
-                # Explanation text
-                st.markdown(f"""
-                <div style="background: linear-gradient(135deg, rgba(0, 160, 176, 0.06) 0%, rgba(0, 201, 212, 0.03) 100%); border-radius: 16px; padding: 1.5rem; margin-bottom: 1rem;">
-                  <h4 style="margin: 0 0 1rem 0; font-family: 'Inter', sans-serif; font-size: 1rem; font-weight: 700; color: #1B3A5F;">
-                    Come viene calcolato lo Score delle raccomandazioni
-                  </h4>
-                  <p style="color: #64748B; font-size: 0.9rem; line-height: 1.7; margin-bottom: 1.25rem;">
-                    Lo <strong>score di priorità</strong> determina quali clienti contattare per primo.
-                    È calcolato combinando tre fattori chiave, ciascuno con un peso specifico definito
-                    trimestralmente dalla direzione commerciale.
-                  </p>
-
-                  <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem;">
-                    <div style="background: white; border-radius: 12px; padding: 1rem; border: 1px solid #E2E8F0; text-align: center;">
-                      <p style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 1.75rem; font-weight: 700; color: #00A0B0;">{w_ret:.0%}</p>
-                      <p style="margin: 0.25rem 0 0 0; font-family: 'Inter', sans-serif; font-size: 0.7rem; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em;">Retention</p>
-                    </div>
-                    <div style="background: white; border-radius: 12px; padding: 1rem; border: 1px solid #E2E8F0; text-align: center;">
-                      <p style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 1.75rem; font-weight: 700; color: #00A0B0;">{w_red:.0%}</p>
-                      <p style="margin: 0.25rem 0 0 0; font-family: 'Inter', sans-serif; font-size: 0.7rem; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em;">Redditivita</p>
-                    </div>
-                    <div style="background: white; border-radius: 12px; padding: 1rem; border: 1px solid #E2E8F0; text-align: center;">
-                      <p style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 1.75rem; font-weight: 700; color: #00A0B0;">{w_pro:.0%}</p>
-                      <p style="margin: 0.25rem 0 0 0; font-family: 'Inter', sans-serif; font-size: 0.7rem; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em;">Propensione</p>
-                    </div>
-                  </div>
-
-                  <div style="background: white; border-radius: 12px; padding: 1.25rem; border: 1px solid #E2E8F0;">
-                    <div style="margin-bottom: 1rem;">
-                      <p style="margin: 0; font-family: 'Inter', sans-serif; font-size: 0.8rem; font-weight: 600; color: #1B3A5F;">🔄 Retention Gain</p>
-                      <p style="margin: 0.25rem 0 0 0; color: #64748B; font-size: 0.8rem; line-height: 1.5;">
-                        Misura quanto l'acquisto del prodotto ridurrebbe la probabilità di abbandono (churn) del cliente.
-                        Un valore alto indica che il prodotto è particolarmente efficace nel fidelizzare quel cliente.
-                      </p>
-                    </div>
-                    <div style="margin-bottom: 1rem;">
-                      <p style="margin: 0; font-family: 'Inter', sans-serif; font-size: 0.8rem; font-weight: 600; color: #1B3A5F;">💰 Redditività</p>
-                      <p style="margin: 0.25rem 0 0 0; color: #64748B; font-size: 0.8rem; line-height: 1.5;">
-                        Stima il valore economico atteso dalla vendita del prodotto, considerando premio, marginalità
-                        e probabilità di rinnovo negli anni successivi.
-                      </p>
-                    </div>
-                    <div>
-                      <p style="margin: 0; font-family: 'Inter', sans-serif; font-size: 0.8rem; font-weight: 600; color: #1B3A5F;">🎯 Propensione</p>
-                      <p style="margin: 0.25rem 0 0 0; color: #64748B; font-size: 0.8rem; line-height: 1.5;">
-                        Indica la probabilità che il cliente accetti l'offerta, basata sul suo profilo comportamentale,
-                        storico di risposta alle campagne e cluster di appartenenza.
-                      </p>
-                    </div>
-                  </div>
-
-                  <p style="color: #94A3B8; font-size: 0.75rem; margin-top: 1rem; font-style: italic; text-align: center;">
-                    I pesi vengono aggiornati ogni trimestre dalla Direzione Commerciale • Ultimo aggiornamento: Q1 2026
-                  </p>
-                </div>
-                """, unsafe_allow_html=True)
-
-            st.markdown("<br>", unsafe_allow_html=True)
-
-            # Main Top 20 Content
-            st.markdown("### 🏆 Top 20 Raccomandazioni per Score")
-            st.markdown("""
-            <p style="color: #64748B; font-size: 0.9rem; margin-bottom: 0.5rem;">
-                Le migliori opportunita di cross-selling/up-selling ordinate per score ponderato.
-                Clicca su un cliente per vedere i dettagli.
-            </p>
-            """, unsafe_allow_html=True)
-
-            # Info box about filtering criteria
-            st.markdown("""
-            <div style="background: #EFF6FF; border-left: 4px solid #3B82F6; padding: 0.75rem; margin-bottom: 1rem; border-radius: 4px;">
-                <p style="margin: 0; color: #1E40AF; font-size: 0.85rem;">
-                    ℹ️ <strong>Filtro automatico attivo:</strong> Vengono esclusi clienti con email (ultimi 5 gg lavorativi),
-                    telefonate (ultimi 10 gg), nuove polizze (ultimi 30 gg), reclami aperti o sinistri (ultimi 60 gg).
-                </p>
             </div>
             """, unsafe_allow_html=True)
 
-            # Top 5 button
-            if st.button("🎯 Vai al Top 5 Azioni Prioritarie", type="primary", use_container_width=True):
-                st.session_state.nbo_page = 'top5'
-                st.rerun()
 
             st.markdown("<br>", unsafe_allow_html=True)
 
-            # Top 20 list
-            for i, rec in enumerate(all_recs[:20]):
-                score_color = "#10B981" if rec['score'] >= 70 else "#F59E0B" if rec['score'] >= 50 else "#EF4444"
+            st.markdown("<br>", unsafe_allow_html=True)
 
-                col_card, col_btn = st.columns([5, 1])
-
-                with col_card:
-                    st.markdown(f"""
-                    <div class="glass-card" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
-                        <div style="flex: 1; min-width: 200px;">
-                            <div style="display: flex; align-items: center; gap: 0.75rem;">
-                                <span style="background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); color: white; padding: 0.25rem 0.75rem; border-radius: 100px; font-size: 0.75rem; font-weight: 600;">#{i+1}</span>
-                                <h4 style="margin: 0; color: #1B3A5F; font-size: 1rem; font-weight: 600;">{rec['nome']} {rec['cognome']}</h4>
-                            </div>
-                            <p style="margin: 0.25rem 0 0 2.5rem; color: #64748B; font-size: 0.85rem;">
-                                {rec['codice_cliente']} · {rec['prodotto']}
-                            </p>
-                        </div>
-                        <div style="display: flex; gap: 1.5rem; align-items: center;">
-                            <div style="text-align: center;">
-                                <p style="margin: 0; color: #94A3B8; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em;">Area</p>
-                                <p style="margin: 0; color: #1B3A5F; font-size: 0.85rem; font-weight: 500;">{rec['area_bisogno'].split()[0]}</p>
-                            </div>
-                            <div style="text-align: center;">
-                                <p style="margin: 0; color: #94A3B8; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em;">Score</p>
-                                <p style="margin: 0; color: {score_color}; font-size: 1.25rem; font-weight: 700; font-family: 'JetBrains Mono', monospace;">{rec['score']:.1f}</p>
-                            </div>
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-                with col_btn:
-                    if st.button("Dettagli", key=f"detail_{i}", use_container_width=True):
+            # ═══════════════════════════════════════════════════════════════════════════════
+            # TOP 5 CLIENTS GRID
+            # ═══════════════════════════════════════════════════════════════════════════════
+            st.markdown("### 🌟 Top 5 Clienti ad Alto Potenziale")
+            
+            top5_recs = all_recs[:5]
+            
+            # Create 5 columns for the cards
+            cols = st.columns(5)
+            
+            for i, rec in enumerate(top5_recs):
+                with cols[i]:
+                    # Standardize color to dashboard Teal for consistency
+                    score_color = "#00A0B0" 
+                    
+                    # HTML Card Visuals - FLATTENED STRING without indentation to prevent code block rendering
+                    st.markdown(f"""<div class="top5-card" style="box-shadow: 0 4px 20px rgba(0,0,0,0.05); border: 1px solid #E2E8F0; border-radius: 16px; overflow: hidden; height: 100%; display: flex; flex-direction: column; justify-content: space-between;"><div style="background: linear-gradient(135deg, {score_color}15 0%, #FFFFFF 100%); padding: 1.25rem; border-bottom: 1px solid #F1F5F9; position: relative;"><div style="position: absolute; top: 0; right: 0; background: {score_color}; color: white; padding: 0.25rem 0.6rem; border-bottom-left-radius: 12px; font-weight: 700; font-size: 0.8rem;">#{i+1}</div><h4 style="margin: 0; color: #1B3A5F; font-size: 1.1rem; font-weight: 700; line-height: 1.2;">{rec['nome']}<br>{rec['cognome']}</h4><p style="margin: 0.25rem 0 0 0; color: #64748B; font-size: 0.75rem; font-family: 'JetBrains Mono', monospace;">{rec['codice_cliente']}</p></div><div style="padding: 1.25rem; flex: 1;"><div style="margin-bottom: 1rem;"><p style="margin: 0; font-size: 0.65rem; text-transform: uppercase; color: #94A3B8; letter-spacing: 0.05em; font-weight: 600;">Prodotto Consigliato</p><p style="margin: 0.25rem 0 0 0; font-size: 0.9rem; color: #334155; line-height: 1.4; font-weight: 500;">{rec['prodotto']}</p></div><div style="display: flex; align-items: flex-end; justify-content: space-between;"><div><p style="margin: 0; font-size: 0.65rem; text-transform: uppercase; color: #94A3B8; letter-spacing: 0.05em; font-weight: 600;">Score</p><p style="margin: 0; font-size: 1.5rem; font-weight: 700; color: {score_color}; line-height: 1;">{rec['score']:.1f}</p></div><div style="width: 40px; height: 40px; border-radius: 50%; background: {score_color}15; display: flex; align-items: center; justify-content: center;"><span style="font-size: 1.2rem;">⚡</span></div></div></div></div>""", unsafe_allow_html=True)
+                    
+                    # Attached Button Style
+                    st.markdown("<div style='margin-top: -16px;'></div>", unsafe_allow_html=True)
+                    
+                    # Single "Dettagli" Button - Attached
+                    if st.button("Dettagli", key=f"det_{i}", type="secondary", use_container_width=True):
                         st.session_state.nbo_page = 'detail'
                         st.session_state.nbo_selected_client = rec['client_data']
                         st.session_state.nbo_selected_recommendation = rec['recommendation']
                         st.rerun()
 
-            # Separator
-            st.markdown("<br><br>", unsafe_allow_html=True)
-            st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+            st.markdown("<br><hr><br>", unsafe_allow_html=True)
 
-            # Analytics Expander at bottom
-            with st.expander("📊 Analytics NBO", expanded=False):
-                st.markdown("### Analisi Statistiche delle Raccomandazioni")
+            # ═══════════════════════════════════════════════════════════════════════════════
+            # LEADERBOARD (NEXT 20)
+            # ═══════════════════════════════════════════════════════════════════════════════
+            st.markdown("### 📋 Leaderboard Opportunità (Top 6-25)")
+            
+            top20_recs = all_recs[5:25]
+            
+            # LET'S REDO THE LOOP WITH COLUMNS FOR BETTER ALIGNMENT
+            st.markdown("""
+            <div style="display: grid; grid-template-columns: 0.5fr 2fr 2fr 1fr 1.5fr; gap: 1rem; padding: 1rem 1.5rem; background: #FFFFFF; border-radius: 12px; margin-bottom: 0.75rem; border: 1px solid #F1F5F9; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                <div style="color: #64748B; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Rank</div>
+                <div style="color: #64748B; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Cliente</div>
+                <div style="color: #64748B; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Prodotto</div>
+                <div style="color: #64748B; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Score</div>
+                <div style="color: #64748B; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; text-align: right;">Azioni</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            for i, rec in enumerate(top20_recs):
+                rank = i + 6
+                # Row Container using Columns
+                c1, c2, c3, c4, c5 = st.columns([0.5, 2, 2, 1, 1.5])
                 
-                analytics_col1, analytics_col2 = st.columns(2)
+                with c1:
+                    st.markdown(f"<p style='margin: 0.6rem 0; font-weight: 700; color: #94A3B8;'>#{rank}</p>", unsafe_allow_html=True)
+                with c2:
+                    st.markdown(f"<p style='margin: 0.6rem 0; font-weight: 600; color: #1B3A5F;'>{rec['nome']} {rec['cognome']}</p>", unsafe_allow_html=True)
+                with c3:
+                    st.markdown(f"<p style='margin: 0.6rem 0; color: #64748B; font-size: 0.9rem;'>{rec['prodotto']}</p>", unsafe_allow_html=True)
+                with c4:
+                    st.markdown(f"<p style='margin: 0.6rem 0; font-weight: 700; color: #00A0B0; font-family: \"JetBrains Mono\", monospace;'>{rec['score']:.1f}</p>", unsafe_allow_html=True)
+                with c5:
 
-                with analytics_col1:
-                    # Area distribution pie chart
-                    fig_area = go.Figure(data=[go.Pie(
-                        labels=list(area_counts.keys()),
-                        values=list(area_counts.values()),
-                        hole=0.6,
-                        marker_colors=['#00A0B0', '#F59E0B', '#10B981', '#8B5CF6', '#EC4899'],
-                        textinfo='percent+label',
-                        textfont=dict(family='Inter', size=11, color='#1B3A5F')
-                    )])
+                    if st.button("Dettagli", key=f"lb_det_{i}", type="secondary", use_container_width=True):
+                        st.session_state.nbo_page = 'detail'
+                        st.session_state.nbo_selected_client = rec['client_data']
+                        st.session_state.nbo_selected_recommendation = rec['recommendation']
+                        st.rerun()
+                
+                st.markdown("<div style='height: 1px; background: #F1F5F9; margin: 0.25rem 0;'></div>", unsafe_allow_html=True)
 
-                    fig_area.update_layout(
-                        title=dict(
-                            text="Distribuzione per Area Bisogno",
-                            font=dict(family='Inter', size=16, color='#1B3A5F', weight=600),
-                            x=0.5
-                        ),
-                        paper_bgcolor='rgba(255,255,255,0)',
-                        plot_bgcolor='rgba(255,255,255,0)',
-                        font=dict(color='#64748B', family='Inter'),
-                        showlegend=False,
-                        height=350,
-                        margin=dict(t=50, b=30, l=30, r=30),
-                        annotations=[dict(
-                            text=f"<b>{total_recs}</b><br>Totale",
-                            x=0.5, y=0.5,
-                            font=dict(family='JetBrains Mono', size=16, color='#1B3A5F'),
-                            showarrow=False
-                        )]
-                    )
+            st.markdown("<br>", unsafe_allow_html=True)
 
-                    st.plotly_chart(fig_area, use_container_width=True)
+            # ═══════════════════════════════════════════════════════════════════════════════
+            # MASS ACTION
+            # ═══════════════════════════════════════════════════════════════════════════════
+            st.markdown("""
+            <div class="standard-card card-with-button" style="border: 2px solid #00A0B0; background: #F0FDFA; display: flex; flex-direction: row; gap: 1.5rem; align-items: center;">
+                <div class="iris-icon-wrapper" style="width: 56px; height: 56px; border-radius: 16px; background: #FFFFFF; box-shadow: 0 2px 4px rgba(0,160,176,0.1); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 32px; height: 32px; color: #00A0B0;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
+                    </svg>
+                </div>
+                <div class="iris-content" style="flex: 1;">
+                    <p class="iris-title" style="margin: 0; font-weight: 700; color: #1B3A5F; font-size: 1.1rem;">Azioni Massive con Iris</p>
+                    <p class="iris-subtitle" style="margin: 0.25rem 0 0 0; font-size: 0.9rem; color: #475569;">Richiedi ad Iris di analizzare tutti i 20 clienti della leaderboard e preparare una bozza di email personalizzata per ciascuno.</p>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Genera Email Massive Button - Attached
+            st.markdown("<div style='margin-top: -16px;'></div>", unsafe_allow_html=True)
+            if st.button("✨ Genera Email Massive per Leaderboard (20 Clienti)", type="primary", use_container_width=True):
+                    # Prepare Context
+                    leaderboard_context = "Analizza i seguenti 20 clienti della leaderboard:\n\n"
+                    for i, rec in enumerate(top20_recs):
+                        leaderboard_context += f"{i+6}. {rec['nome']} {rec['cognome']} - Prodotto: {rec['prodotto']} - Score: {rec['score']:.1f}\n"
 
-                with analytics_col2:
-                    # Score distribution histogram
-                    scores = [r['score'] for r in all_recs]
-                    fig_score = go.Figure(data=[go.Histogram(
-                        x=scores,
-                        nbinsx=20,
-                        marker_color='#00A0B0',
-                        marker_line_color='white',
-                        marker_line_width=1
-                    )])
+                    st.session_state.iris_auto_prompt = f"""Analizza questi 20 clienti della leaderboard e crea una strategia di contatto massiva ma personalizzata:
+                    
+{leaderboard_context}
 
-                    fig_score.update_layout(
-                        title=dict(
-                            text="Distribuzione Score",
-                            font=dict(family='Inter', size=16, color='#1B3A5F', weight=600),
-                            x=0.5
-                        ),
-                        paper_bgcolor='rgba(255,255,255,0)',
-                        plot_bgcolor='rgba(255,255,255,0)',
-                        font=dict(color='#64748B', family='Inter'),
-                        xaxis=dict(
-                            title="Score",
-                            showgrid=True,
-                            gridcolor='rgba(226, 232, 240, 0.5)',
-                            linecolor='#E2E8F0'
-                        ),
-                        yaxis=dict(
-                            title="Frequenza",
-                            showgrid=True,
-                            gridcolor='rgba(226, 232, 240, 0.5)',
-                            linecolor='#E2E8F0'
-                        ),
-                        height=350,
-                        margin=dict(t=50, b=50, l=50, r=30)
-                    )
-
-                    st.plotly_chart(fig_score, use_container_width=True)
-
-                # Product distribution
-                st.markdown("### Top Prodotti Raccomandati")
-                product_counts = {}
-                for rec in all_recs:
-                    prod = rec['prodotto']
-                    product_counts[prod] = product_counts.get(prod, 0) + 1
-
-                sorted_products = sorted(product_counts.items(), key=lambda x: x[1], reverse=True)[:10]
-
-                fig_products = go.Figure(data=[go.Bar(
-                    y=[p[0] for p in sorted_products][::-1],
-                    x=[p[1] for p in sorted_products][::-1],
-                    orientation='h',
-                    marker_color='#00A0B0',
-                    marker_line_color='white',
-                    marker_line_width=1
-                )])
-
-                fig_products.update_layout(
-                    paper_bgcolor='rgba(255,255,255,0)',
-                    plot_bgcolor='rgba(255,255,255,0)',
-                    font=dict(color='#64748B', family='Inter'),
-                    xaxis=dict(
-                        title="Numero Raccomandazioni",
-                        showgrid=True,
-                        gridcolor='rgba(226, 232, 240, 0.5)'
-                    ),
-                    yaxis=dict(
-                        showgrid=False,
-                        tickfont=dict(size=10)
-                    ),
-                    height=400,
-                    margin=dict(t=20, b=50, l=250, r=30)
-                )
-
-                st.plotly_chart(fig_products, use_container_width=True)
-
-            # Search Expander at bottom
-            with st.expander("🔍 Ricerca Clienti NBO", expanded=False):
-                st.markdown("### Cerca e Visualizza Dettagli Cliente")
-
-                search_term = st.text_input(
-                    "Cerca cliente",
-                    placeholder="Inserisci nome, cognome o codice cliente...",
-                    key="nbo_search"
-                )
-
-                if search_term:
-                    search_lower = search_term.lower()
-                    filtered_clients = [
-                        c for c in nbo_data
-                        if search_lower in c['codice_cliente'].lower() or
-                           search_lower in c['anagrafica']['nome'].lower() or
-                           search_lower in c['anagrafica']['cognome'].lower() or
-                           search_lower in c['anagrafica']['citta'].lower()
-                    ]
-                else:
-                    filtered_clients = nbo_data[:20]
-
-                st.markdown(f"**{len(filtered_clients)}** clienti trovati")
-
-                for client in filtered_clients[:20]:
-                    meta = client['metadata']
-                    best_rec = max(client['raccomandazioni'], key=lambda r: calculate_recommendation_score(r, st.session_state.nbo_weights))
-                    best_score = calculate_recommendation_score(best_rec, st.session_state.nbo_weights)
-
-                    col_info, col_btn = st.columns([5, 1])
-
-                    with col_info:
-                        st.markdown(f"""
-                        <div class="glass-card" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
-                            <div style="flex: 1; min-width: 200px;">
-                                <h4 style="margin: 0; color: #1B3A5F; font-size: 1rem; font-weight: 600;">{client['anagrafica']['nome']} {client['anagrafica']['cognome']}</h4>
-                                <p style="margin: 0.25rem 0; color: #64748B; font-size: 0.85rem;">
-                                    {client['codice_cliente']} · {client['anagrafica']['citta']}
-                                </p>
-                            </div>
-                            <div style="display: flex; gap: 1.5rem; align-items: center;">
-                                <div style="text-align: center;">
-                                    <p style="margin: 0; color: #94A3B8; font-size: 0.6rem; text-transform: uppercase;">Polizze</p>
-                                    <p style="margin: 0; color: #1B3A5F; font-size: 1.1rem; font-weight: 600;">{meta['num_polizze_attuali']}</p>
-                                </div>
-                                <div style="text-align: center;">
-                                    <p style="margin: 0; color: #94A3B8; font-size: 0.6rem; text-transform: uppercase;">CLV</p>
-                                    <p style="margin: 0; color: #00A0B0; font-size: 1.1rem; font-weight: 600;">€{meta['clv_stimato']:,}</p>
-                                </div>
-                                <div style="text-align: center;">
-                                    <p style="margin: 0; color: #94A3B8; font-size: 0.6rem; text-transform: uppercase;">Best Score</p>
-                                    <p style="margin: 0; color: #10B981; font-size: 1.1rem; font-weight: 600;">{best_score:.1f}</p>
-                                </div>
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-
-                    with col_btn:
-                        if st.button("Vedi", key=f"client_{client['codice_cliente']}", use_container_width=True):
-                            st.session_state.nbo_page = 'detail'
-                            st.session_state.nbo_selected_client = client
-                            st.session_state.nbo_selected_recommendation = best_rec
-                            st.rerun()
+Per ciascuno, genera una breve bozza di email (2-3 frasi chiave) focalizzata sul loro prodotto raccomandato.
+Formatta la risposta come una lista chiara."""
+                    st.success("Richiesta inviata ad Iris!")
+                    
+                    with st.spinner("Iris sta elaborando le strategie..."):
+                         from src.iris.chat import get_iris_response, init_iris_engine
+                         init_iris_engine()
+                         res = get_iris_response(st.session_state.iris_auto_prompt)
+                         if res.get('success'):
+                             st.session_state.mass_email_result = res.get('response')
+                             st.rerun()
+                         else:
+                             st.error("Errore Iris.")
+            
+            if 'mass_email_result' in st.session_state and st.session_state.mass_email_result:
+                with st.expander("📬 Risultato Campagna Massiva", expanded=True):
+                    st.write(st.session_state.mass_email_result)
+                    if st.button("Chiudi Risultati", type="secondary"):
+                        del st.session_state.mass_email_result
+                        st.rerun()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

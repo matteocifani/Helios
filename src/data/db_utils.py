@@ -149,7 +149,7 @@ def fetch_abitazioni() -> pd.DataFrame:
                     lambda: client.table("abitazioni").select(
                         "id, codice_cliente, citta, latitudine, longitudine, "
                         "zona_sismica, hydro_risk_p3, hydro_risk_p2, flood_risk_p4, flood_risk_p3, "
-                        "risk_score, risk_category, solar_potential_kwh, updated_at"
+                        "risk_score, risk_category, solar_potential_kwh, updated_at, clienti(nome, cognome)"
                     ).range(start, end).execute()
                 )
                 return response.data
