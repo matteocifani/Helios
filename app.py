@@ -3284,19 +3284,110 @@ Mantieni formato **Oggetto:** e corpo email. GENERA ORA senza tool."""
             st.markdown("<br>", unsafe_allow_html=True)
 
             # ═══════════════════════════════════════════════════════════════════
-            # GRID LAYOUT (Pure HTML for Equal Heights)
+            # GRID LAYOUT - 2 colonne con card impilate verticalmente
             # ═══════════════════════════════════════════════════════════════════
-            
+
             # Prepare data
             indicators = client_data.get('_interaction_indicators', {})
             prodotti = meta.get('prodotti_posseduti', [])
             if prodotti and isinstance(prodotti, str):
                 prodotti = [prodotti]
-            
-            # Row 1: Anagrafica (Left) + Polizze Attive (Right)
-            col1, col2 = st.columns(2, gap="medium")
-            
-            with col1:
+
+            # Build polizze html con coefficienti attuariali (solo Casa e Salute)
+            polizze_html = ""
+            if prodotti:
+                for p in prodotti:
+                    prod_lower = p.lower()
+                    if 'casa' in prod_lower: icon = '🏠'
+                    elif 'vita' in prod_lower: icon = '💚'
+                    elif 'salute' in prod_lower: icon = '🏥'
+                    elif 'pension' in prod_lower: icon = '🎯'
+                    else: icon = '📋'
+
+                    # Genera coefficienti attuariali (solo per Casa e Salute)
+                    coeff = genera_coefficienti_polizza(ana, p, codice_cliente_ada)
+
+                    if coeff:
+                        # Polizza con coefficienti (Casa o Salute)
+                        gap_color = "#059669" if coeff['gap_relativo_perc'] >= 0 else "#DC2626"
+                        gap_sign = "+" if coeff['gap_relativo_perc'] >= 0 else ""
+
+                        polizze_html += f"""
+                        <div style='margin-bottom:1rem; padding:0.75rem; background:#F8FAFC; border-radius:8px; border:1px solid #E2E8F0;'>
+                            <div style='display:flex; justify-content:space-between; align-items:center;'>
+                                <span>{icon} <strong>{p}</strong></span>
+                                <span style='background:#D1FAE5;color:#059669;padding:2px 8px;border-radius:12px;font-size:0.7rem;'>Attiva</span>
+                            </div>
+                            <div style='font-size:0.7rem; color:#94A3B8; margin:0.25rem 0 0.5rem 0;'>Loss Ratio Target: {coeff['loss_ratio_label']}</div>
+                            <div style='display:grid; grid-template-columns:1fr 1fr; gap:0.5rem; font-size:0.8rem;'>
+                                <div style='background:#FFF; padding:0.4rem; border-radius:6px; border:1px solid #E2E8F0;'>
+                                    <div style='color:#64748B; font-size:0.7rem;'>Premio Pagato</div>
+                                    <div style='color:#1B3A5F; font-weight:600;'>€{coeff['premio_pagato']:,.0f}</div>
+                                </div>
+                                <div style='background:#FFF; padding:0.4rem; border-radius:6px; border:1px solid #E2E8F0;'>
+                                    <div style='color:#64748B; font-size:0.7rem;'>Premio Tecnico</div>
+                                    <div style='color:#1B3A5F; font-weight:600;'>€{coeff['premio_tecnico']:,.0f}</div>
+                                </div>
+                            </div>
+                            <div style='margin-top:0.5rem; padding:0.4rem; background:{gap_color}15; border-radius:6px; display:flex; justify-content:space-between; align-items:center;'>
+                                <span style='font-size:0.75rem; color:#64748B;'>Scarto: <strong style="color:{gap_color}">€{coeff['gap_assoluto']:+,.0f}</strong></span>
+                                <span style='font-size:0.85rem; font-weight:700; color:{gap_color};'>{gap_sign}{coeff['gap_relativo_perc']:.1f}%</span>
+                            </div>
+                        </div>"""
+                    else:
+                        # Polizza senza coefficienti (Vita, Pensione, etc.)
+                        polizze_html += f"""
+                        <div style='margin-bottom:0.5rem; padding:0.5rem 0.75rem; background:#F8FAFC; border-radius:8px; border:1px solid #E2E8F0; display:flex; justify-content:space-between; align-items:center;'>
+                            <span>{icon} <strong>{p}</strong></span>
+                            <span style='background:#D1FAE5;color:#059669;padding:2px 8px;border-radius:12px;font-size:0.7rem;'>Attiva</span>
+                        </div>"""
+            else:
+                polizze_html = "<em style='color:#94A3B8;'>Nessuna polizza attiva</em>"
+
+            # Build chip html for interactions
+            chip_html = "<div style='display: flex; flex-direction: column; gap: 0.75rem;'>"
+            chip_data = [
+                ("Email (5gg)", indicators.get('email_last_5_days', False), "✉️"),
+                ("Chiamata (10gg)", indicators.get('call_last_10_days', False), "📞"),
+                ("Polizza (30gg)", indicators.get('new_policy_last_30_days', False), "📋"),
+                ("Reclamo Aperto", indicators.get('open_complaint', False), "⚠️"),
+                ("Sinistro (60gg)", indicators.get('claim_last_60_days', False), "🚗")
+            ]
+
+            for label, value, icon in chip_data:
+                status_text = "Sì" if value else "No"
+                status_bg = "#EF4444" if value and "Reclamo" in label else "#10B981" if value else "#94A3B8"
+
+                chip_html += f"""<div style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0.75rem; background: #F8FAFC; border-radius: 8px; border: 1px solid #E2E8F0;">
+    <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <span>{icon}</span>
+        <span style="font-size: 0.85rem; font-weight: 500; color: #334155;">{label}</span>
+    </div>
+    <span style="font-size: 0.75rem; font-weight: 600; color: {status_bg};">{status_text}</span>
+</div>"""
+            chip_html += "</div>"
+
+            # Build rec html
+            rec_html = "<em>Nessuna raccomandazione</em>"
+            if recommendation:
+                comp = recommendation['componenti']
+                rec_html = f"""<div>
+    <span style='background:linear-gradient(135deg,#00A0B0,#00C9D4);color:white;padding:4px 12px;border-radius:6px;font-size:0.7rem;font-weight:700;'>RACCOMANDAZIONE AI</span>
+    <p style='margin:0.5rem 0; font-weight:700;'>{recommendation['prodotto']}</p>
+    <p style='margin:0 0 1rem 0; font-size:0.85rem; color:#64748B;'>📌 {recommendation['area_bisogno']}</p>
+    <div style='display:grid; grid-template-columns: 1fr 1fr; gap:0.5rem;'>
+        <div><small>🔄 RETENTION</small><div style='height:6px;width:100%;background:#F3F4F6;border-radius:10px;'><div style='height:100%;width:{min(comp['retention_gain'], 100)}%;background:#00A0B0;border-radius:10px;'></div></div><small><strong>{comp['retention_gain']:.1f}%</strong></small></div>
+        <div><small>💰 REDDITIVITÀ</small><div style='height:6px;width:100%;background:#F3F4F6;border-radius:10px;'><div style='height:100%;width:{min(comp['redditivita'], 100)}%;background:#00A0B0;border-radius:10px;'></div></div><small><strong>{comp['redditivita']:.1f}%</strong></small></div>
+        <div><small>🎯 PROPENSIONE</small><div style='height:6px;width:100%;background:#F3F4F6;border-radius:10px;'><div style='height:100%;width:{min(comp['propensione'], 100)}%;background:#00A0B0;border-radius:10px;'></div></div><small><strong>{comp['propensione']:.1f}%</strong></small></div>
+        <div><small>👥 AFFINITÀ</small><div style='height:6px;width:100%;background:#F3F4F6;border-radius:10px;'><div style='height:100%;width:{min(comp['affinita_cluster'], 100)}%;background:#00A0B0;border-radius:10px;'></div></div><small><strong>{comp['affinita_cluster']:.1f}%</strong></small></div>
+    </div>
+</div>"""
+
+            # 2 colonne con card impilate verticalmente
+            col_left, col_right = st.columns(2, gap="medium")
+
+            with col_left:
+                # Colonna sinistra: Anagrafica + Stato Interazioni
                 st.markdown(f"""
                 <div class="standard-card">
                      <h5 style="margin-bottom: 1rem;">👤 Anagrafica</h5>
@@ -3311,125 +3402,19 @@ Mantieni formato **Oggetto:** e corpo email. GENERA ORA senza tool."""
                         </div>
                      </div>
                 </div>
-                """, unsafe_allow_html=True)
-                
-            with col2:
-                # Build polizze html con coefficienti attuariali (solo Casa e Salute)
-                polizze_html = ""
-                if prodotti:
-                    for p in prodotti:
-                        prod_lower = p.lower()
-                        if 'casa' in prod_lower: icon = '🏠'
-                        elif 'vita' in prod_lower: icon = '💚'
-                        elif 'salute' in prod_lower: icon = '🏥'
-                        elif 'pension' in prod_lower: icon = '🎯'
-                        else: icon = '📋'
-
-                        # Genera coefficienti attuariali (solo per Casa e Salute)
-                        coeff = genera_coefficienti_polizza(ana, p, codice_cliente_ada)
-
-                        if coeff:
-                            # Polizza con coefficienti (Casa o Salute)
-                            gap_color = "#059669" if coeff['gap_relativo_perc'] >= 0 else "#DC2626"
-                            gap_sign = "+" if coeff['gap_relativo_perc'] >= 0 else ""
-
-                            polizze_html += f"""
-                            <div style='margin-bottom:1rem; padding:0.75rem; background:#F8FAFC; border-radius:8px; border:1px solid #E2E8F0;'>
-                                <div style='display:flex; justify-content:space-between; align-items:center;'>
-                                    <span>{icon} <strong>{p}</strong></span>
-                                    <span style='background:#D1FAE5;color:#059669;padding:2px 8px;border-radius:12px;font-size:0.7rem;'>Attiva</span>
-                                </div>
-                                <div style='font-size:0.7rem; color:#94A3B8; margin:0.25rem 0 0.5rem 0;'>Loss Ratio Target: {coeff['loss_ratio_label']}</div>
-                                <div style='display:grid; grid-template-columns:1fr 1fr; gap:0.5rem; font-size:0.8rem;'>
-                                    <div style='background:#FFF; padding:0.4rem; border-radius:6px; border:1px solid #E2E8F0;'>
-                                        <div style='color:#64748B; font-size:0.7rem;'>Premio Pagato</div>
-                                        <div style='color:#1B3A5F; font-weight:600;'>€{coeff['premio_pagato']:,.0f}</div>
-                                    </div>
-                                    <div style='background:#FFF; padding:0.4rem; border-radius:6px; border:1px solid #E2E8F0;'>
-                                        <div style='color:#64748B; font-size:0.7rem;'>Premio Tecnico</div>
-                                        <div style='color:#1B3A5F; font-weight:600;'>€{coeff['premio_tecnico']:,.0f}</div>
-                                    </div>
-                                </div>
-                                <div style='margin-top:0.5rem; padding:0.4rem; background:{gap_color}15; border-radius:6px; display:flex; justify-content:space-between; align-items:center;'>
-                                    <span style='font-size:0.75rem; color:#64748B;'>Scarto: <strong style="color:{gap_color}">€{coeff['gap_assoluto']:+,.0f}</strong></span>
-                                    <span style='font-size:0.85rem; font-weight:700; color:{gap_color};'>{gap_sign}{coeff['gap_relativo_perc']:.1f}%</span>
-                                </div>
-                            </div>"""
-                        else:
-                            # Polizza senza coefficienti (Vita, Pensione, etc.)
-                            polizze_html += f"""
-                            <div style='margin-bottom:0.5rem; padding:0.5rem 0.75rem; background:#F8FAFC; border-radius:8px; border:1px solid #E2E8F0; display:flex; justify-content:space-between; align-items:center;'>
-                                <span>{icon} <strong>{p}</strong></span>
-                                <span style='background:#D1FAE5;color:#059669;padding:2px 8px;border-radius:12px;font-size:0.7rem;'>Attiva</span>
-                            </div>"""
-                else:
-                    polizze_html = "<em style='color:#94A3B8;'>Nessuna polizza attiva</em>"
-
-                st.markdown(f"""
-                <div class="standard-card">
-                    <h5 style="margin-bottom: 1rem;">📦 Polizze Attive</h5>
-                    <div style="flex: 1;">{polizze_html}</div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-            # Row 2: Stato Interazioni (Left) + Prodotto Consigliato (Right)
-            col3, col4 = st.columns(2, gap="medium")
-            
-            with col3:
-                # Chips HTML logic - Redesigned as List
-                chip_html = "<div style='display: flex; flex-direction: column; gap: 0.75rem;'>"
-                chip_data = [
-                    ("Email (5gg)", indicators.get('email_last_5_days', False), "✉️"),
-                    ("Chiamata (10gg)", indicators.get('call_last_10_days', False), "📞"),
-                    ("Polizza (30gg)", indicators.get('new_policy_last_30_days', False), "📋"),
-                    ("Reclamo Aperto", indicators.get('open_complaint', False), "⚠️"),
-                    ("Sinistro (60gg)", indicators.get('claim_last_60_days', False), "🚗")
-                ]
-                
-                for label, value, icon in chip_data:
-                    bg_color = "#FEF2F2" if value and "Reclamo" in label else "#ECFDF5" if not value else "#FFF7ED" # Red if complaint, Green if clean, Orange if active interaction
-                    text_color = "#B91C1C" if value and "Reclamo" in label else "#047857" if not value else "#C2410C"
-                    border_color = "#FECACA" if value and "Reclamo" in label else "#A7F3D0" if not value else "#FFEDD5"
-                    
-                    # Logic: "No" is usually good for Reclamo/Sinistro. "Sì" is good for Email/Chiamata/Polizza? 
-                    # Actually, red/green logic depends on context. For now, let's just show status clearly.
-                    status_text = "Sì" if value else "No"
-                    status_bg = "#EF4444" if value and "Reclamo" in label else "#10B981" if value else "#94A3B8"
-                    
-                    # Cleaner Row Design
-                    chip_html += f"""<div style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0.75rem; background: #F8FAFC; border-radius: 8px; border: 1px solid #E2E8F0;">
-    <div style="display: flex; align-items: center; gap: 0.5rem;">
-        <span>{icon}</span>
-        <span style="font-size: 0.85rem; font-weight: 500; color: #334155;">{label}</span>
-    </div>
-    <span style="font-size: 0.75rem; font-weight: 600; color: {status_bg};">{status_text}</span>
-</div>"""
-                chip_html += "</div>"
-                
-                st.markdown(f"""
                 <div class="standard-card">
                     <h5 style="margin-bottom: 1rem;">📋 Stato Interazioni</h5>
                     <div style="flex: 1;">{chip_html}</div>
                 </div>
                 """, unsafe_allow_html=True)
-                
-            with col4:
-                # Rec HTML
-                rec_html = "<em>Nessuna raccomandazione</em>"
-                if recommendation:
-                    comp = recommendation['componenti']
-                    rec_html = f"""<div>
-    <span style='background:linear-gradient(135deg,#00A0B0,#00C9D4);color:white;padding:4px 12px;border-radius:6px;font-size:0.7rem;font-weight:700;'>RACCOMANDAZIONE AI</span>
-    <p style='margin:0.5rem 0; font-weight:700;'>{recommendation['prodotto']}</p>
-    <p style='margin:0 0 1rem 0; font-size:0.85rem; color:#64748B;'>📌 {recommendation['area_bisogno']}</p>
-    <div style='display:grid; grid-template-columns: 1fr 1fr; gap:0.5rem;'>
-        <div><small>🔄 RETENTION</small><div style='height:6px;width:100%;background:#F3F4F6;border-radius:10px;'><div style='height:100%;width:{min(comp['retention_gain'], 100)}%;background:#00A0B0;border-radius:10px;'></div></div><small><strong>{comp['retention_gain']:.1f}%</strong></small></div>
-        <div><small>💰 REDDITIVITÀ</small><div style='height:6px;width:100%;background:#F3F4F6;border-radius:10px;'><div style='height:100%;width:{min(comp['redditivita'], 100)}%;background:#00A0B0;border-radius:10px;'></div></div><small><strong>{comp['redditivita']:.1f}%</strong></small></div>
-        <div><small>🎯 PROPENSIONE</small><div style='height:6px;width:100%;background:#F3F4F6;border-radius:10px;'><div style='height:100%;width:{min(comp['propensione'], 100)}%;background:#00A0B0;border-radius:10px;'></div></div><small><strong>{comp['propensione']:.1f}%</strong></small></div>
-        <div><small>👥 AFFINITÀ</small><div style='height:6px;width:100%;background:#F3F4F6;border-radius:10px;'><div style='height:100%;width:{min(comp['affinita_cluster'], 100)}%;background:#00A0B0;border-radius:10px;'></div></div><small><strong>{comp['affinita_cluster']:.1f}%</strong></small></div>
-    </div>
-</div>"""
+
+            with col_right:
+                # Colonna destra: Polizze Attive + Prodotto Consigliato
                 st.markdown(f"""
+                <div class="standard-card">
+                    <h5 style="margin-bottom: 1rem;">📦 Polizze Attive</h5>
+                    <div style="flex: 1;">{polizze_html}</div>
+                </div>
                 <div class="standard-card">
                     <h5 style="margin-bottom: 1rem;">🎯 Prodotto Consigliato</h5>
                     <div style="flex: 1;">{rec_html}</div>
