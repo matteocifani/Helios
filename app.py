@@ -59,16 +59,6 @@ st.markdown("""
     ═══════════════════════════════════════════════════════════════════════ */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap');
 
-    /* ═══════════════════════════════════════════════════════════════════════
-       STREAMLIT UI OVERRIDES (Vertical Space)
-    ═══════════════════════════════════════════════════════════════════════ */
-    /* Reduce top padding for main content */
-    .block-container {
-        padding-top: 1rem !important; /* Reduced to reduce whitespace */
-        padding-bottom: 3rem !important;
-        max-width: 100% !important;
-    }
-
     /* Fix for Streamlit sidebar toggle button showing text instead of icon */
     [data-testid="collapsedControl"],
     [data-testid="stSidebarCollapsedControl"],
@@ -272,14 +262,73 @@ st.markdown("""
     }
 
     [data-testid="stMetric"]:hover {
-        transform: translateY(-4px);
-        box-shadow: var(--shadow-xl), var(--glow-teal);
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-lg);
         border-color: var(--vs-border-accent);
     }
 
     [data-testid="stMetric"]:hover::before {
         opacity: 1;
     }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       UNIFIED HTML CARD STYLING & BUTTON HACKS
+    ═══════════════════════════════════════════════════════════════════════ */
+    
+    /* Standard Card Definition */
+    .standard-card {
+        background: #FFFFFF;
+        border: 1px solid #E2E8F0;
+        border-radius: 16px;
+        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        height: 100%; /* For grid uniformity */
+        display: flex;
+        flex-direction: column;
+    }
+    
+    /* Card meant to have a button attached at bottom */
+    .card-with-button {
+        border-bottom-left-radius: 0 !important;
+        border-bottom-right-radius: 0 !important;
+        border-bottom: none !important;
+        margin-bottom: 0 !important;
+        padding-bottom: 2rem !important; /* Visual breathing room */
+    }
+
+    /* Target the button immediately following our custom card 
+       Note: This is tricky in Streamlit. We will use a specific class wrapper or rely on adjacency.
+       For now, we will use a specific hack: 
+       If a button is inside a container that follows our card... 
+       Actually, standard Streamlit buttons have margin. We need to override.
+    */
+    
+    /* Specific overrides for "Attached" buttons */
+    div[data-testid="stButton"] button.attached-button {
+        border-top-left-radius: 0 !important;
+        border-top-right-radius: 0 !important;
+        border-top: 1px solid #E2E8F0 !important; /* Re-add border that was missing from card */
+        margin-top: 0 !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); /* Restore shadow for the bottom part */
+    }
+
+    /* Helper utility for grid */
+    .grid-box-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+    
+    /* Remove native container styling if we revert to HTML cards */
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        border: none !important;
+        box-shadow: none !important;
+        background: transparent !important;
+        padding: 0 !important;
+    }
+
 
     [data-testid="stMetricLabel"] {
         font-family: 'Inter', sans-serif !important;
@@ -411,24 +460,58 @@ st.markdown("""
     ═══════════════════════════════════════════════════════════════════════ */
     .stButton > button {
         font-family: 'Inter', sans-serif !important;
-        font-weight: 600;
-        font-size: 0.875rem;
-        background: linear-gradient(135deg, var(--vs-teal) 0%, var(--vs-cyan) 100%);
-        color: white;
-        border: none;
-        border-radius: 12px;
-        padding: 0.75rem 1.5rem;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        box-shadow: 0 4px 6px -1px rgba(0, 160, 176, 0.25);
+        font-weight: 600 !important;
+        font-size: 0.875rem !important;
+        background: linear-gradient(135deg, var(--vs-teal) 0%, var(--vs-cyan) 100%) !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 12px !important;
+        padding: 0.75rem 1.5rem !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 160, 176, 0.25) !important;
     }
 
     .stButton > button:hover {
         transform: translateY(-2px);
-        box-shadow: var(--shadow-lg), var(--glow-teal);
+        box-shadow: var(--shadow-lg), var(--glow-teal) !important;
+        color: white !important;
     }
 
     .stButton > button:active {
         transform: translateY(0);
+        color: white !important;
+    }
+
+    /* Primary button - ensure white text - FORCE override Streamlit defaults */
+    .stButton > button[kind="primary"],
+    .stButton > button[data-testid="stBaseButton-primary"],
+    .stButton > button:not([kind="secondary"]):not([data-testid="stBaseButton-secondary"]) {
+        color: #FFFFFF !important;
+        -webkit-text-fill-color: #FFFFFF !important;
+    }
+    .stButton > button[kind="primary"] p,
+    .stButton > button[data-testid="stBaseButton-primary"] p,
+    .stButton > button:not([kind="secondary"]):not([data-testid="stBaseButton-secondary"]) p {
+        color: #FFFFFF !important;
+        -webkit-text-fill-color: #FFFFFF !important;
+    }
+
+    /* Secondary button style (ghost/link style) */
+    .stButton > button[kind="secondary"],
+    .stButton > button[data-testid="stBaseButton-secondary"] {
+        background: transparent !important;
+        color: var(--vs-text-secondary) !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0.5rem 0 !important;
+        font-weight: 500 !important;
+    }
+    .stButton > button[kind="secondary"]:hover,
+    .stButton > button[data-testid="stBaseButton-secondary"]:hover {
+        background: transparent !important;
+        color: var(--vs-teal) !important;
+        transform: none !important;
+        box-shadow: none !important;
     }
 
     /* Select boxes */
@@ -556,6 +639,667 @@ st.markdown("""
         .hero-title { font-size: 2rem !important; }
         .stat-highlight { font-size: 1.75rem; }
         [data-testid="stMetricValue"] { font-size: 1.5rem !important; }
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       CLIENT DETAIL REDESIGN - New Components
+    ═══════════════════════════════════════════════════════════════════════ */
+
+    /* Top Navigation Bar */
+    .client-nav-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+        padding: 0;
+    }
+
+    /* Back Button - Secondary/Ghost style */
+    .back-btn-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--vs-text-secondary);
+        font-size: 0.9rem;
+        font-weight: 500;
+        text-decoration: none;
+        padding: 0.5rem 0;
+        transition: all 0.2s ease;
+        cursor: pointer;
+        background: none;
+        border: none;
+    }
+    .back-btn-link:hover {
+        color: var(--vs-teal);
+    }
+    .back-btn-link .arrow {
+        font-size: 1.1rem;
+        transition: transform 0.2s ease;
+    }
+    .back-btn-link:hover .arrow {
+        transform: translateX(-3px);
+    }
+
+    /* Call Action Button - Primary CTA */
+    .call-action-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: linear-gradient(135deg, var(--vs-teal) 0%, var(--vs-cyan) 100%);
+        color: white;
+        font-size: 0.9rem;
+        font-weight: 600;
+        padding: 0.75rem 1.25rem;
+        border-radius: 12px;
+        border: none;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        box-shadow: 0 2px 8px rgba(0, 160, 176, 0.25);
+    }
+    .call-action-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 160, 176, 0.35);
+    }
+
+    /* Iris AI Assistant Card - Wrapper includes button visually */
+    .iris-outer-wrapper {
+        background: white;
+        border: 1px solid var(--vs-teal);
+        border-radius: 16px;
+        margin: 1rem 0;
+        overflow: hidden;
+    }
+    .iris-card-header {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1.25rem 1.5rem;
+    }
+    .iris-icon-wrapper {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, rgba(0, 160, 176, 0.1) 0%, rgba(0, 201, 212, 0.05) 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+    .iris-icon-wrapper svg {
+        width: 24px;
+        height: 24px;
+        color: var(--vs-teal);
+    }
+    .iris-content {
+        flex: 1;
+    }
+    .iris-title {
+        margin: 0;
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--vs-navy);
+    }
+    .iris-subtitle {
+        margin: 0.15rem 0 0 0;
+        font-size: 0.8rem;
+        color: var(--vs-text-secondary);
+    }
+    /* Style for button container inside iris wrapper */
+    .iris-button-container {
+        padding: 0 1.5rem 1.25rem 1.5rem;
+    }
+    .iris-button-container .stButton > button {
+        border-radius: 12px !important;
+        width: 100%;
+    }
+
+    /* Client Header Card - Better Alignment */
+    .client-header-card {
+        background: white;
+        border: 1px solid var(--vs-border);
+        border-radius: 20px;
+        padding: 1.75rem 2rem;
+        margin-bottom: 1.5rem;
+        box-shadow: var(--shadow-md);
+    }
+    .client-header-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1.5rem;
+    }
+    .client-header-left {
+        flex: 1;
+    }
+    .client-header-right {
+        text-align: right;
+        flex-shrink: 0;
+    }
+    .client-name {
+        margin: 0;
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: var(--vs-navy);
+        line-height: 1.2;
+    }
+    .client-id-location {
+        margin: 0.5rem 0 0 0;
+        color: var(--vs-text-secondary);
+        font-size: 0.9rem;
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+    }
+    .client-id-location .pin-icon {
+        color: #EF4444;
+    }
+    .client-stats-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1.5rem;
+        margin-top: 1.5rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid var(--vs-border);
+    }
+    .client-stat-item {
+        text-align: center;
+    }
+    .client-stat-label {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--vs-text-muted);
+        margin: 0;
+        font-weight: 500;
+    }
+    .client-stat-value {
+        font-size: 1.35rem;
+        font-weight: 700;
+        color: var(--vs-navy);
+        font-family: 'JetBrains Mono', monospace;
+        margin: 0.35rem 0 0 0;
+    }
+    .client-stat-value.teal { color: var(--vs-teal); }
+    .client-stat-value.success { color: #10B981; }
+    .client-stat-value.warning { color: #F59E0B; }
+
+    /* Info Grid */
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.75rem;
+    }
+    .info-item {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        background: var(--vs-gray-light);
+        border-radius: 12px;
+    }
+    .info-icon {
+        font-size: 1.1rem;
+        width: 24px;
+        text-align: center;
+    }
+    .info-label {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: var(--vs-text-muted);
+        margin: 0;
+    }
+    .info-value {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--vs-navy);
+        margin: 0;
+    }
+
+    /* Product Cards */
+    .product-card {
+        background: white;
+        border: 1px solid var(--vs-border);
+        border-radius: 16px;
+        padding: 1rem 1.25rem;
+        margin-bottom: 0.75rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        transition: all 0.2s ease;
+    }
+    .product-card:hover {
+        border-color: var(--vs-teal);
+        box-shadow: var(--shadow-md);
+    }
+    .product-info {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+    .product-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+    }
+    .product-icon.casa { background: #DBEAFE; }
+    .product-icon.vita { background: #D1FAE5; }
+    .product-icon.salute { background: #FCE7F3; }
+    .product-icon.pensione { background: #FEF3C7; }
+    .product-name {
+        font-weight: 600;
+        color: var(--vs-navy);
+        font-size: 0.9rem;
+        margin: 0;
+    }
+    .product-badge {
+        background: #D1FAE5;
+        color: #059669;
+        padding: 0.25rem 0.75rem;
+        border-radius: 100px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    /* Recommendation Hero Card */
+    .recommendation-hero {
+        background: linear-gradient(135deg, rgba(0, 160, 176, 0.05) 0%, rgba(16, 185, 129, 0.03) 100%);
+        border: 2px solid var(--vs-teal);
+        border-radius: 20px;
+        padding: 1.5rem;
+        margin: 1rem 0;
+    }
+    .rec-product-badge {
+        display: inline-block;
+        background: linear-gradient(135deg, var(--vs-teal), var(--vs-cyan));
+        color: white;
+        padding: 0.25rem 0.75rem;
+        border-radius: 6px;
+        font-size: 0.65rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 0.75rem;
+    }
+    .rec-product-name {
+        font-size: 1.3rem;
+        font-weight: 700;
+        color: var(--vs-navy);
+        margin: 0 0 0.25rem 0;
+    }
+    .rec-area {
+        font-size: 0.85rem;
+        color: var(--vs-text-secondary);
+        margin: 0 0 1rem 0;
+    }
+    .score-bars {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+    }
+    .score-bar-item {
+        background: white;
+        border-radius: 12px;
+        padding: 0.75rem 1rem;
+    }
+    .score-bar-label {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        color: var(--vs-text-muted);
+        margin: 0 0 0.5rem 0;
+    }
+    .score-bar-track {
+        height: 8px;
+        background: var(--vs-gray-light);
+        border-radius: 100px;
+        overflow: hidden;
+    }
+    .score-bar-fill {
+        height: 100%;
+        border-radius: 100px;
+        background: linear-gradient(90deg, var(--vs-teal), var(--vs-cyan));
+    }
+    .score-bar-value {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: var(--vs-navy);
+        margin: 0.25rem 0 0 0;
+    }
+
+    /* Status Chips (Interactions) */
+    .status-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    .status-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.4rem 0.75rem;
+        border-radius: 100px;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+    .status-chip.ok {
+        background: #D1FAE5;
+        color: #059669;
+    }
+    .status-chip.warning {
+        background: #FEE2E2;
+        color: #DC2626;
+    }
+    .status-chip-icon {
+        font-size: 0.85rem;
+    }
+
+    /* CV Badges */
+    .cv-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+    .cv-badge {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.6rem 1rem;
+        border-radius: 12px;
+        font-size: 0.85rem;
+        font-weight: 500;
+    }
+    .cv-badge.detected {
+        background: #D1FAE5;
+        color: #059669;
+        border: 1px solid #A7F3D0;
+    }
+    .cv-badge.not-detected {
+        background: #F3F4F6;
+        color: #6B7280;
+        border: 1px solid #E5E7EB;
+    }
+    .cv-badge-icon {
+        font-size: 1.1rem;
+    }
+
+    /* Recommendation Cards (List) */
+    .rec-card {
+        background: white;
+        border: 1px solid var(--vs-border);
+        border-radius: 16px;
+        padding: 1rem 1.25rem;
+        margin-bottom: 0.75rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        transition: all 0.2s ease;
+    }
+    .rec-card:hover {
+        border-color: var(--vs-teal);
+        box-shadow: var(--shadow-md);
+        transform: translateY(-1px);
+    }
+    .rec-rank {
+        width: 32px;
+        height: 32px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, var(--vs-teal), var(--vs-cyan));
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 0.85rem;
+    }
+    .rec-details {
+        flex: 1;
+        margin-left: 1rem;
+    }
+    .rec-product {
+        font-weight: 600;
+        color: var(--vs-navy);
+        font-size: 0.9rem;
+        margin: 0;
+    }
+    .rec-area-small {
+        font-size: 0.75rem;
+        color: var(--vs-text-muted);
+        margin: 0.15rem 0 0 0;
+    }
+    .rec-score {
+        text-align: right;
+    }
+    .rec-score-value {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 1.1rem;
+        font-weight: 700;
+    }
+    .rec-score-value.high { color: #10B981; }
+    .rec-score-value.medium { color: #F59E0B; }
+    .rec-score-value.low { color: #EF4444; }
+    .rec-score-label {
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        color: var(--vs-text-muted);
+        margin: 0;
+    }
+
+    /* Section Headers */
+    .section-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin: 1.5rem 0 0.75rem 0;
+    }
+    .section-icon {
+        font-size: 1.1rem;
+    }
+    .section-title {
+        margin: 0;
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--vs-navy);
+    }
+
+    /* Uniform Glass Card for all sections */
+    .glass-card {
+        background: white;
+        border: 1px solid var(--vs-border);
+        border-radius: 16px;
+        padding: 1.25rem;
+        box-shadow: var(--shadow-sm);
+    }
+
+    /* Two Column Layout - Equal Heights */
+    .column-section {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+    .column-section .glass-card {
+        flex: 1;
+        margin-bottom: 0;
+    }
+
+    /* Abitazione Card - Flexible Layout for Variable Image Sizes */
+    .abitazione-card {
+        background: white;
+        border: 1px solid var(--vs-border);
+        border-radius: 16px;
+        padding: 1.5rem;
+        box-shadow: var(--shadow-sm);
+    }
+    .abitazione-layout {
+        display: flex;
+        gap: 2rem;
+        align-items: stretch;
+    }
+    .satellite-container {
+        flex: 0 0 300px;
+        min-width: 200px;
+    }
+    .satellite-preview {
+        background: var(--vs-gray-light);
+        border-radius: 12px;
+        padding: 2rem;
+        text-align: center;
+        min-height: 180px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+    .satellite-preview.has-image {
+        padding: 0;
+        overflow: hidden;
+        min-height: auto;
+    }
+    .satellite-preview.has-image img {
+        width: 100%;
+        height: auto;
+        max-height: 250px;
+        object-fit: cover;
+        border-radius: 12px;
+    }
+    .satellite-preview .icon {
+        font-size: 3.5rem;
+        margin-bottom: 0.75rem;
+    }
+    .satellite-preview .label {
+        font-size: 0.95rem;
+        color: var(--vs-text-secondary);
+        margin: 0;
+        font-weight: 500;
+    }
+    .satellite-preview .coords {
+        font-size: 0.75rem;
+        color: var(--vs-text-muted);
+        margin: 0.5rem 0 0 0;
+        font-family: 'JetBrains Mono', monospace;
+    }
+    .cv-features {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+    .cv-section-title {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--vs-text-muted);
+        margin: 0 0 1rem 0;
+        font-weight: 600;
+    }
+
+    /* Recommendations List - Clearer Design */
+    .recommendations-section {
+        background: white;
+        border: 1px solid var(--vs-border);
+        border-radius: 16px;
+        padding: 1.25rem;
+        box-shadow: var(--shadow-sm);
+    }
+    .rec-list-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-bottom: 0.75rem;
+        border-bottom: 1px solid var(--vs-border);
+        margin-bottom: 0.75rem;
+    }
+    .rec-list-title {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--vs-text-muted);
+        margin: 0;
+        font-weight: 500;
+    }
+    .rec-card {
+        background: white;
+        border: 1px solid var(--vs-border);
+        border-radius: 12px;
+        padding: 1rem;
+        margin-bottom: 0.5rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        transition: all 0.2s ease;
+    }
+    .rec-card:last-child {
+        margin-bottom: 0;
+    }
+    .rec-card:hover {
+        border-color: var(--vs-teal);
+        background: rgba(0, 160, 176, 0.02);
+    }
+
+    /* Four Equal Boxes Grid */
+    .four-box-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+        margin: 1rem 0;
+    }
+    .grid-box {
+        background: white;
+        border: 1px solid var(--vs-border);
+        border-radius: 16px;
+        padding: 1.25rem;
+        box-shadow: var(--shadow-sm);
+        min-height: 200px;
+        display: flex;
+        flex-direction: column;
+    }
+    .box-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 1px solid var(--vs-border);
+    }
+    .box-icon {
+        font-size: 1.1rem;
+    }
+    .box-title {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--vs-navy);
+    }
+    .box-content {
+        flex: 1;
+    }
+    .recommendation-content .rec-product-badge {
+        margin-bottom: 0.5rem;
+    }
+    .recommendation-content .rec-product-name {
+        font-size: 1rem;
+        margin: 0.5rem 0 0.25rem 0;
+    }
+    .recommendation-content .rec-area {
+        font-size: 0.8rem;
+        margin-bottom: 0.75rem;
+    }
+    .recommendation-content .score-bars {
+        gap: 0.5rem;
+    }
+    .recommendation-content .score-bar-item {
+        padding: 0.5rem 0.75rem;
+    }
+
+    /* Responsive: Stack on mobile */
+    @media (max-width: 768px) {
+        .four-box-grid {
+            grid-template-columns: 1fr;
+        }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -693,16 +1437,26 @@ def calculate_recommendation_score(rec, weights):
     )
 
 
-@st.cache_data(ttl=1800)
-def get_ranked_candidates(data, weights):
+def get_all_recommendations(data, weights, filter_top20=True):
     """
-    Calculate scores for all recommendations and return ranked list.
-    Cached to avoid re-calculating 11k+ clients on every rerun.
+    Get all recommendations with scores across all clients.
+    
+    Optimized to only check interactions for top-scoring candidates when filtering for Top 20,
+    reducing DB queries from thousands to dozens.
+
+    Args:
+        data: Client data with recommendations
+        weights: Scoring weights
+        filter_top20: If True, filter out clients not eligible for Top 20
+
+    Returns:
+        List of recommendations sorted by score (descending)
     """
+    # STEP 1: Score ALL clients first (no DB queries, just calculations)
     all_recs = []
     for client in data:
         codice_cliente = client['codice_cliente']
-        # Initialize eligibility flags (will be populated in the filtering step)
+        # Initialize eligibility flags (updated later if filter_top20)
         client['_is_eligible_top20'] = True
         client['_interaction_indicators'] = {}
         
@@ -721,27 +1475,6 @@ def get_ranked_candidates(data, weights):
     
     # Sort by score descending
     all_recs.sort(key=lambda x: x['score'], reverse=True)
-    return all_recs
-
-
-def get_all_recommendations(data, weights, filter_top20=True):
-    """
-    Get all recommendations with scores across all clients.
-    
-    Optimized to only check interactions for top-scoring candidates when filtering for Top 20,
-    reducing DB queries from thousands to dozens.
-
-    Args:
-        data: Client data with recommendations
-        weights: Scoring weights
-        filter_top20: If True, filter out clients not eligible for Top 20
-
-    Returns:
-        List of recommendations sorted by score (descending)
-    """
-    # STEP 1: Get ranked candidates (CACHED)
-    # This avoids looping through 11k clients every time
-    all_recs = get_ranked_candidates(data, weights)
     
     # STEP 2: If filtering for Top 20, only check interactions for top candidates
     # Check more than 20 to account for some being filtered out
@@ -762,48 +1495,20 @@ def get_all_recommendations(data, weights, filter_top20=True):
         
         # Filter out ineligible clients and update their flags
         filtered_recs = []
-        # We only need to process the top portion of the list for display usually, 
-        # but to be safe we process the whole list or just the top logic?
-        # The UI shows "Top 20", so we really only need the top valid ones.
-        # But the function returns "all".
-        
-        # Optimization: We know we only care about the top ones for the main view.
-        # But the "Analysis" view uses statistics on ALL of them.
-        # Wait, get_all_recommendations is used for statistics too?
-        # Line 2361: all_recs = get_all_recommendations(nbo_data, st.session_state.nbo_weights)
-        # Line 2364: total_clients = len(nbo_data)
-        # Line 2365: total_recs = len(all_recs)
-        
-        # If we return a filtered list, the stats will only reflect the filtered ones?
-        # If filter_top20 is True (default), it filters.
-        
-        # Let's stick to the original logic: filter the list based on eligibility
-        
-        count_valid = 0
         for rec in all_recs:
             cc = rec['codice_cliente']
             client = rec['client_data']
             
-            # If this client was checked (because they were in top candidates)
             if cc in batch_interactions:
                 indicators = batch_interactions[cc]
                 is_eligible = not any(indicators.values())  # Eligible if NO interactions
-                
-                # Update client object in place (be careful with cache mutability, but these are transient flags)
                 client['_is_eligible_top20'] = is_eligible
                 client['_interaction_indicators'] = indicators
                 
                 if is_eligible:
                     filtered_recs.append(rec)
             else:
-                # Client wasn't in top 100 candidates. 
-                # They are eligible by default (we didn't check them), but they are low score.
-                # However, if we want a STRICT Top 20 list, we only care about the ones we checked.
-                # But if we want the full list for stats, we should include them?
-                # The prompt implies "Policy Advisor" loads slowly.
-                
-                # If we assume unchecked clients are eligible (or we don't care because they are low score),
-                # we pass them through.
+                # Client wasn't in top candidates, include them (they're lower scored anyway)
                 filtered_recs.append(rec)
         
         return filtered_recs
@@ -975,26 +1680,30 @@ else:
     page_title = "Analytics Dashboard"
     page_description = "Monitoraggio in tempo reale del portafoglio assicurativo territoriale"
 
-# Header with logo - centered layout using Flexbox for perfect alignment
-st.markdown(f"""
-<div style="position: relative; width: 100%; padding: 0.5rem 0 1.5rem; display: flex; justify-content: center; align-items: flex-start;">
-    <!-- CENTER CONTENT -->
-    <div style="text-align: center; z-index: 1;">
+# Header with logo - centered layout (restored elegant original style)
+header_col1, header_col2 = st.columns([8, 2])
+
+with header_col1:
+    st.markdown(f"""
+    <div style="text-align: center; padding-left: 10%;">
         <div style="display: flex; flex-direction: column; align-items: center; gap: 0.25rem;">
             <span style="font-family: 'Inter', sans-serif; font-size: 5rem; font-weight: 800; background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: -0.02em; line-height: 1;">HELIOS</span>
-            <span style="font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 600; color: #334155; letter-spacing: 0.15em; text-transform: uppercase;">Geo-Cognitive Intelligence</span>
+            <span style="font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 500; color: #64748B; letter-spacing: 0.15em; text-transform: uppercase;">Geo-Cognitive Intelligence</span>
         </div>
         <h1 style="font-family: 'Playfair Display', serif; font-size: 1.5rem; font-weight: 700; color: #1B3A5F; margin: 0.75rem 0 0; letter-spacing: -0.02em;">{page_title}</h1>
-        <p style="font-family: 'Inter', sans-serif; font-size: 0.85rem; color: #334155; margin-top: 0.25rem; font-weight: 500;">{page_description}</p>
+        <p style="font-family: 'Inter', sans-serif; font-size: 0.85rem; color: #64748B; margin-top: 0.25rem; font-weight: 400;">{page_description}</p>
     </div>
+    """, unsafe_allow_html=True)
 
-    <!-- RIGHT BADGE (Absolute positioning) -->
-    <div style="position: absolute; right: 0; top: 0.5rem; display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 100px; font-family: 'Inter', sans-serif; font-size: 0.75rem; font-weight: 500; color: #10B981; white-space: nowrap; z-index: 2;">
-        <span style="width: 8px; height: 8px; background: #10B981; border-radius: 50%;"></span>
-        Sistema Attivo
+with header_col2:
+    st.markdown("""
+    <div style="display: flex; justify-content: flex-end; align-items: flex-start; padding-top: 0.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 100px; font-family: 'Inter', sans-serif; font-size: 0.75rem; font-weight: 500; color: #10B981; white-space: nowrap;">
+            <span style="width: 8px; height: 8px; background: #10B981; border-radius: 50%;"></span>
+            Sistema Attivo
+        </div>
     </div>
-</div>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
 # Elegant navigation using styled radio buttons
 st.markdown("""
@@ -1071,6 +1780,73 @@ st.markdown("""
     div[data-testid="stRadio"] > div > label > div > p {
         margin: 0 !important;
         font-weight: 600 !important;
+    }
+</style>
+
+<style>
+    /* Active Strategy Card */
+    .active-strategy-card {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: #F8FAFF;
+        border: 1px solid #E6F0FF;
+        border-radius: 16px;
+        padding: 1.5rem 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 12px rgba(0, 160, 176, 0.05);
+    }
+
+    .strategy-info {
+        flex: 1;
+    }
+
+    .strategy-label {
+        font-size: 0.7rem;
+        font-weight: 700;
+        color: #64748B;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 0.25rem;
+    }
+
+    .strategy-title {
+        font-size: 1.5rem;
+        font-weight: 800;
+        color: #1B3A5F;
+        letter-spacing: -0.01em;
+    }
+
+    .strategy-metrics {
+        display: flex;
+        align-items: center;
+        gap: 2rem;
+    }
+
+    .metric-item {
+        text-align: right;
+        min-width: 90px;
+    }
+
+    .metric-label {
+        font-size: 0.65rem;
+        font-weight: 600;
+        color: #94A3B8;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 0.15rem;
+    }
+
+    .metric-value {
+        font-size: 1.5rem;
+        font-weight: 800;
+        font-family: 'Inter', sans-serif;
+    }
+
+    .metric-divider {
+        width: 1px;
+        height: 40px;
+        background: #E2E8F0;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -1868,426 +2644,188 @@ Le email devono essere personalizzate per ogni cliente, non identiche."""
 
             client_data = st.session_state.nbo_selected_client
             recommendation = st.session_state.nbo_selected_recommendation
+            meta = client_data.get('metadata', {})
+            ana = client_data.get('anagrafica', {})
 
-            # Back button and action button
-            col_back, col_action = st.columns([1, 1])
-            with col_back:
-                if st.button("← Torna alla Dashboard", type="secondary", use_container_width=True):
-                    st.session_state.nbo_page = 'dashboard'
-                    st.session_state.nbo_selected_client = None
-                    st.session_state.nbo_selected_recommendation = None
-                    st.rerun()
+            # ═══════════════════════════════════════════════════════════════════
+            # TOP NAVIGATION BAR (Redesigned - Clear hierarchy)
+            # ═══════════════════════════════════════════════════════════════════
+            # Back button on the left, full width for proper alignment
+            if st.button("← Torna alla Dashboard", key="back_btn", type="secondary"):
+                st.session_state.nbo_page = 'dashboard'
+                st.session_state.nbo_selected_client = None
+                st.session_state.nbo_selected_recommendation = None
+                st.rerun()
 
-            with col_action:
-                # Create a button instead of expander to avoid label issues
-                if st.button("📞 Ho chiamato il cliente", type="primary", use_container_width=True, key="open_call_form"):
-                    st.session_state.show_call_form = True
+            # Show call form if open
+            if st.session_state.get('show_call_form', False):
+                st.markdown("---")
+                st.markdown("##### 📞 Dettagli della chiamata")
 
-                # Show form in a modal-like container if button was clicked
-                if st.session_state.get('show_call_form', False):
-                    st.markdown("---")
-                    st.markdown("##### 📞 Dettagli della chiamata")
+                top_recommendation = None
+                if client_data.get('raccomandazioni'):
+                    recs_with_scores = []
+                    for rec in client_data['raccomandazioni']:
+                        score = calculate_recommendation_score(rec, st.session_state.nbo_weights)
+                        recs_with_scores.append((score, rec))
+                    recs_with_scores.sort(key=lambda x: x[0], reverse=True)
+                    top_recommendation = recs_with_scores[0][1] if recs_with_scores else None
 
-                    # Get top recommendation for this client
-                    top_recommendation = None
-                    if client_data.get('raccomandazioni'):
-                        # Calculate scores and get the top one
-                        recs_with_scores = []
-                        for rec in client_data['raccomandazioni']:
-                            score = calculate_recommendation_score(rec, st.session_state.nbo_weights)
-                            recs_with_scores.append((score, rec))
-                        recs_with_scores.sort(key=lambda x: x[0], reverse=True)
-                        top_recommendation = recs_with_scores[0][1] if recs_with_scores else None
+                available_products = [
+                    "Assicurazione Casa e Famiglia: Casa Serena",
+                    "Piano Individuale Pensionistico (PIP): Pensione Serenità",
+                    "Polizza Salute e Infortuni: Salute Protetta",
+                    "Polizza Vita a Premi Ricorrenti: Risparmio Costante",
+                    "Polizza Vita a Premio Unico: Futuro Sicuro"
+                ]
 
-                    # Define available products
-                    available_products = [
-                        "Assicurazione Casa e Famiglia: Casa Serena",
-                        "Piano Individuale Pensionistico (PIP): Pensione Serenità",
-                        "Polizza Salute e Infortuni: Salute Protetta",
-                        "Polizza Vita a Premi Ricorrenti: Risparmio Costante",
-                        "Polizza Vita a Premio Unico: Futuro Sicuro"
-                    ]
+                polizza_scelta = st.radio("Polizza proposta *", options=["Sì", "No", "Altre"], horizontal=True)
+                polizza_proposta = None
+                if polizza_scelta == "Sì" and top_recommendation:
+                    polizza_proposta = top_recommendation['prodotto']
+                    st.info(f"💡 Polizza raccomandata: **{polizza_proposta}**")
+                elif polizza_scelta == "Altre":
+                    polizza_proposta = st.selectbox("Seleziona polizza", options=available_products)
+                elif polizza_scelta == "No":
+                    polizza_proposta = "Nessuna proposta"
 
-                    # Polizza proposta (obbligatorio) - Sì/No/Altre
-                    polizza_scelta = st.radio(
-                        "Polizza proposta *",
-                        options=["Sì", "No", "Altre"],
-                        help="Sì = raccomandata con score maggiore, Altre = scegli tra le opzioni disponibili",
-                        horizontal=True
-                    )
+                esito = st.selectbox("Esito della chiamata *", options=["Positivo", "Neutro", "Negativo"])
+                note_aggiuntive = st.text_area("Note aggiuntive", placeholder="Inserisci eventuali note...")
 
-                    # If "Sì", use top recommendation; if "Altre", show dropdown
-                    polizza_proposta = None
-                    if polizza_scelta == "Sì" and top_recommendation:
-                        polizza_proposta = top_recommendation['prodotto']
-                        st.info(f"💡 Polizza raccomandata: **{polizza_proposta}**")
-                    elif polizza_scelta == "Altre":
-                        polizza_proposta = st.selectbox(
-                            "Seleziona polizza",
-                            options=available_products,
-                            help="Scegli una polizza tra quelle disponibili"
-                        )
-                    elif polizza_scelta == "No":
-                        polizza_proposta = "Nessuna proposta"
-
-                    # Esito (obbligatorio) - no empty option
-                    esito = st.selectbox(
-                        "Esito della chiamata *",
-                        options=["Positivo", "Neutro", "Negativo"],
-                        help="Campo obbligatorio"
-                    )
-
-                    # Note aggiuntive (opzionale)
-                    note_aggiuntive = st.text_area(
-                        "Note aggiuntive",
-                        placeholder="Inserisci eventuali note sulla chiamata...",
-                        help="Campo opzionale"
-                    )
-
-                    st.markdown("<br>", unsafe_allow_html=True)
-
-                    col_cancel, col_submit = st.columns(2)
-                    with col_cancel:
-                        if st.button("❌ Annulla", use_container_width=True):
+                col_cancel, col_submit = st.columns(2)
+                with col_cancel:
+                    if st.button("❌ Annulla", use_container_width=True):
+                        st.session_state.show_call_form = False
+                        st.rerun()
+                with col_submit:
+                    if st.button("✅ Registra chiamata", type="primary", use_container_width=True):
+                        codice_cliente = client_data['codice_cliente']
+                        note_complete = f"Polizza proposta: {polizza_proposta}\nEsito: {esito}"
+                        if note_aggiuntive and note_aggiuntive.strip():
+                            note_complete += f"\nNote: {note_aggiuntive}"
+                        success = insert_phone_call_interaction(codice_cliente, polizza_proposta=polizza_proposta, esito=esito.lower(), note=note_complete)
+                        if success:
+                            if '_interaction_indicators' not in client_data:
+                                client_data['_interaction_indicators'] = {}
+                            client_data['_interaction_indicators']['call_last_10_days'] = True
+                            client_data['_is_eligible_top20'] = False
                             st.session_state.show_call_form = False
+                            st.session_state.show_success_message = True
                             st.rerun()
+                        else:
+                            st.error("❌ Errore nella registrazione della chiamata.")
+                st.markdown("---")
 
-                    with col_submit:
-                        if st.button("✅ Registra chiamata", type="primary", use_container_width=True):
-                            codice_cliente = client_data['codice_cliente']
+            if st.session_state.get('show_success_message', False):
+                st.success("✅ Esito registrato! Il cliente non sara più visibile nel Top 20/Top 5.")
+                st.session_state.show_success_message = False
 
-                            # Costruisci le note complete
-                            note_complete = f"Polizza proposta: {polizza_proposta}\nEsito: {esito}"
-                            if note_aggiuntive and note_aggiuntive.strip():
-                                note_complete += f"\nNote: {note_aggiuntive}"
+            # ═══════════════════════════════════════════════════════════════════
+            # CLIENT HEADER CARD (HTML Standard)
+            # ═══════════════════════════════════════════════════════════════════
+            churn = meta.get('churn_attuale', 0)
+            churn_class = 'success' if churn < 0.1 else 'warning' if churn < 0.3 else 'teal'
+            num_polizze = meta.get('num_polizze_attuali', 0)
+            clv = meta.get('clv_stimato', 0)
+            cluster = meta.get('cluster_risposta', 'N/D')
 
-                            success = insert_phone_call_interaction(
-                                codice_cliente,
-                                polizza_proposta=polizza_proposta,
-                                esito=esito.lower(),
-                                note=note_complete
-                            )
-
-                            if success:
-                                # Update client data to reflect the call
-                                if '_interaction_indicators' not in client_data:
-                                    client_data['_interaction_indicators'] = {}
-                                client_data['_interaction_indicators']['call_last_10_days'] = True
-                                client_data['_is_eligible_top20'] = False
-
-                                # Close form and show success
-                                st.session_state.show_call_form = False
-                                st.session_state.show_success_message = True
-                                st.rerun()
-                            else:
-                                st.error("❌ Errore nella registrazione della chiamata. Riprova.")
-
-                    st.markdown("---")
-
-                # Show success message if flag is set
-                if st.session_state.get('show_success_message', False):
-                    st.success("✅ Esito registrato! Il cliente non sara piu visibile nel Top 20/Top 5.")
-                    st.session_state.show_success_message = False
-
-            st.markdown("<br>", unsafe_allow_html=True)
-
-            # Client header
             st.markdown(f"""
-            <div class="glass-card" style="margin-bottom: 1.5rem;">
-                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
-                    <div>
-                        <h2 style="margin: 0; color: #1B3A5F; font-size: 1.75rem; font-weight: 700;">
-                            {client_data.get('anagrafica', {}).get('nome', 'N/D')} {client_data.get('anagrafica', {}).get('cognome', 'N/D')}
-                        </h2>
-                        <p style="margin: 0.25rem 0; color: #64748B; font-size: 0.9rem;">
-                            {client_data.get('codice_cliente', 'N/D')} · {client_data.get('anagrafica', {}).get('citta', 'N/D')}, {client_data.get('anagrafica', {}).get('provincia', 'N/D')}
-                        </p>
+            <div class="standard-card card-with-button">
+                <div class="client-header-top">
+                    <div class="client-header-left">
+                        <h2 class="client-name">{ana.get('nome', 'N/D')} {ana.get('cognome', 'N/D')}</h2>
+                        <p class="client-id-location"><span class="pin-icon">📍</span> {client_data.get('codice_cliente', 'N/D')} · {ana.get('citta', 'N/D')}</p>
                     </div>
-                    <div style="text-align: right;">
-                        <p style="margin: 0; color: #94A3B8; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em;">CLV Stimato</p>
-                        <p style="margin: 0; color: #00A0B0; font-size: 1.75rem; font-weight: 700; font-family: 'JetBrains Mono', monospace;">
-                            €{client_data.get('metadata', {}).get('clv_stimato', 0):,}
-                        </p>
+                    <div class="client-header-right">
+                        <span class="rec-product-badge">PRODOTTO CONSIGLIATO</span>
+                        <p style="margin: 0.5rem 0 0 0; font-size: 0.95rem; font-weight: 600; color: #1B3A5F; max-width: 280px;">{recommendation['prodotto'] if recommendation else 'N/D'}</p>
+                    </div>
+                </div>
+                <div class="client-stats-grid">
+                    <div class="client-stat-item">
+                        <p class="client-stat-label">CLV Stimato</p>
+                        <p class="client-stat-value teal">€{clv:,.0f}</p>
+                    </div>
+                    <div class="client-stat-item">
+                        <p class="client-stat-label">Polizze Attive</p>
+                        <p class="client-stat-value">{num_polizze}</p>
+                    </div>
+                    <div class="client-stat-item">
+                        <p class="client-stat-label">Rischio Churn</p>
+                        <p class="client-stat-value {churn_class}">{churn:.1%}</p>
+                    </div>
+                    <div class="client-stat-item">
+                        <p class="client-stat-label">Cluster</p>
+                        <p class="client-stat-value">{cluster.replace('_', ' ').split()[0] if cluster != 'N/D' else 'N/D'}</p>
                     </div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
-
-            # Client info columns
-            col1, col2 = st.columns(2)
-
-            with col1:
-                st.markdown("### Anagrafica")
-                ana = client_data['anagrafica']
-                st.markdown(f"""
-                <div class="glass-card">
-                    <p><strong>Eta:</strong> {ana.get('eta', 'N/D')} anni</p>
-                    <p><strong>Indirizzo:</strong> {ana.get('indirizzo', 'N/D')}</p>
-                    <p><strong>Citta:</strong> {ana.get('citta', 'N/D')}</p>
-                    <p><strong>Provincia:</strong> {ana.get('provincia', 'N/D')}</p>
-                    <p><strong>Regione:</strong> {ana.get('regione', 'N/D')}</p>
-                </div>
-                """, unsafe_allow_html=True)
-
-                st.markdown("### Metadata Cliente")
-                meta = client_data.get('metadata', {})
-
-                # Determine cluster response badge color
-                cluster_colors = {
-                    'High_Responder': '#10B981',
-                    'Moderate_Responder': '#F59E0B',
-                    'Low_Responder': '#EF4444'
+            
+            # Registra Chiamata button - "Attached" style
+            # We use a container to apply specific styling if possible, but here we rely on the CSS targeting stButton
+            st.markdown("""
+            <style>
+                /* Hack to target the specific button using adjacency or N-th child is hard.
+                   We will inject a specific style block just for this button if possible.
+                   Actually, we updated the global CSS to handle 'card-with-button' followed by button? 
+                   No, CSS next-sibling selector doesn't work well with Streamlit's wrapping divs.
+                   We will use a negative margin here to force it. */
+                div[data-testid="column"] > div > div > div > div > button {
+                    /* This is too generic. We'll rely on the margin-top: 0 from the code block below. */
                 }
-                cluster_color = cluster_colors.get(meta.get('cluster_risposta'), '#64748B')
-
-                st.markdown(f"""
-                <div class="glass-card">
-                    <p><strong>Churn Attuale:</strong> <span style="font-family: 'JetBrains Mono', monospace;">{meta.get('churn_attuale', 0):.4f}</span></p>
-                    <p><strong>Polizze Attuali:</strong> {meta.get('num_polizze_attuali', 'N/D')}</p>
-                    <p><strong>Cluster NBA:</strong> {meta.get('cluster_nba', 'N/D')}</p>
-                    <p><strong>Cluster Risposta:</strong> <span style="background: {cluster_color}20; color: {cluster_color}; padding: 0.25rem 0.5rem; border-radius: 4px; font-weight: 600;">{meta.get('cluster_risposta', 'N/D')}</span></p>
-                    <p><strong>Satisfaction Score:</strong> {meta.get('satisfaction_score', 0):.1f}</p>
-                    <p><strong>Engagement Score:</strong> {meta.get('engagement_score', 0):.1f}</p>
-                </div>
-                """, unsafe_allow_html=True)
-
-                # Interazione cliente section
-                st.markdown("<br>", unsafe_allow_html=True)
-
-                # Get interaction indicators
-                indicators = client_data.get('_interaction_indicators', {})
-                is_eligible = client_data.get('_is_eligible_top20', True)
-
-                # Show warning icon if client has any active interaction
-                warning_icon = " ⚠️" if not is_eligible else ""
-
-                st.markdown(f"### Interazione cliente{warning_icon}")
-
-                if not is_eligible:
-                    st.markdown("""
-                    <div style="background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 0.75rem; margin-bottom: 1rem; border-radius: 4px;">
-                        <p style="margin: 0; color: #92400E; font-size: 0.85rem; font-weight: 500;">
-                            ⚠️ Cliente non eleggibile per azioni commerciali a causa di interazioni recenti
-                        </p>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-                # Indicators display
-                def render_indicator(label, value):
-                    icon = "✓" if value else "✗"
-                    color = "#EF4444" if value else "#10B981"
-                    bg_color = "#FEE2E2" if value else "#DCFCE7"
-                    text = "Sì" if value else "No"
-
-                    return f"""<div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid #E2E8F0;">
-    <span style="color: #64748B; font-size: 0.85rem;">{label}</span>
-    <span style="background: {bg_color}; color: {color}; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">{icon} {text}</span>
-</div>"""
-
-                indicators_html = "".join([
-                    render_indicator("Email ultimi 5 giorni lav.", indicators.get('email_last_5_days', False)),
-                    render_indicator("Telefonata ultimi 10 giorni", indicators.get('call_last_10_days', False)),
-                    render_indicator("Nuova polizza ultimi 30 gg", indicators.get('new_policy_last_30_days', False)),
-                    render_indicator("Reclamo aperto", indicators.get('open_complaint', False)),
-                    render_indicator("Sinistro ultimi 60 giorni", indicators.get('claim_last_60_days', False))
-                ])
-
-                st.markdown(f"""<div class="glass-card">{indicators_html}</div>""", unsafe_allow_html=True)
-
-            with col2:
-                st.markdown("### Prodotti Posseduti")
-                prodotti = meta.get('prodotti_posseduti', [])
-                if prodotti:
-                    if isinstance(prodotti, str):
-                        prodotti = [prodotti]
-                    products_html = "".join([f"<li style='margin: 0.5rem 0; color: #1B3A5F;'>{p}</li>" for p in prodotti])
-                    st.markdown(f"""
-                    <div class="glass-card">
-                        <ul style="padding-left: 1.25rem; margin: 0;">
-                            {products_html}
-                        </ul>
-                    </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    st.markdown("""
-                    <div class="glass-card">
-                        <p style="color: #94A3B8; font-style: italic;">Nessun prodotto posseduto</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-                if recommendation:
-                    st.markdown("### Raccomandazione Selezionata")
-                    comp = recommendation['componenti']
-                    det = recommendation['dettagli']
-                    st.markdown(f"""
-                    <div class="glass-card" style="border-left: 4px solid #00A0B0;">
-                        <p style="font-size: 1.1rem; font-weight: 600; color: #1B3A5F; margin-bottom: 0.5rem;">{recommendation['prodotto']}</p>
-                        <p style="color: #64748B; margin-bottom: 1rem;">Area: {recommendation['area_bisogno']}</p>
-                        <hr style="border: none; border-top: 1px solid #E2E8F0; margin: 1rem 0;">
-                        <p style="color: #94A3B8; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Componenti Score</p>
-                        <p><strong>Retention Gain:</strong> {comp['retention_gain']:.1f}%</p>
-                        <p><strong>Redditivita:</strong> {comp['redditivita']:.1f}%</p>
-                        <p><strong>Propensione:</strong> {comp['propensione']:.1f}%</p>
-                        <p><strong>Affinita Cluster:</strong> {comp['affinita_cluster']:.1f}%</p>
-                        <hr style="border: none; border-top: 1px solid #E2E8F0; margin: 1rem 0;">
-                        <p style="color: #94A3B8; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Dettagli Churn</p>
-                        <p><strong>Delta Churn:</strong> <span style="color: #10B981;">-{det['delta_churn']:.6f}</span></p>
-                        <p><strong>Churn Prima:</strong> {det['churn_prima']:.6f}</p>
-                        <p><strong>Churn Dopo:</strong> {det['churn_dopo']:.6f}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-            # Map
-            st.markdown("### Localizzazione Cliente")
-            lat = client_data['anagrafica']['latitudine']
-            lon = client_data['anagrafica']['longitudine']
-
-            m = folium.Map(location=[lat, lon], zoom_start=13, tiles='CartoDB positron')
-            folium.Marker(
-                [lat, lon],
-                popup=f"{client_data['anagrafica']['nome']} {client_data['anagrafica']['cognome']}<br>{client_data['anagrafica']['indirizzo']}<br>{client_data['anagrafica']['citta']}",
-                tooltip=f"{client_data['anagrafica']['nome']} {client_data['anagrafica']['cognome']}",
-                icon=folium.Icon(color='lightblue', icon='home', prefix='fa')
-            ).add_to(m)
-
-            folium_static(m, width=None, height=400)
-
-            # ═══════════════════════════════════════════════════════════════════
-            # Computer Vision - Satellite View Section
-            # ═══════════════════════════════════════════════════════════════════
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("### 🛰️ Abitazione – Vista Satellitare")
-
-            # For now, use simulated CV data (will be replaced with real DB fields)
-            # In production, these would come from: client_data.get('has_solar_panels', False), etc.
-            import hashlib
-            codice_cliente = client_data.get('codice_cliente', '')
-            client_hash = int(hashlib.md5(str(codice_cliente).encode()).hexdigest(), 16)
-
-            # Simulate CV detections based on client hash (for demonstration)
-            has_solar_panels = (client_hash % 3) == 0  # ~33% have solar panels
-            has_pool = (client_hash % 5) == 0  # ~20% have pool
-            has_garden = (client_hash % 2) == 0  # ~50% have garden
-
-            # Satellite image placeholder
-            st.markdown(f"""
-            <div class="glass-card" style="text-align: center; background: #F3F4F6; padding: 2rem;">
-                <p style="color: #94A3B8; font-size: 3rem; margin: 0;">🗺️</p>
-                <p style="color: #64748B; font-size: 0.85rem; margin-top: 0.5rem;">
-                    Immagine satellitare dell'abitazione<br>
-                    <span style="font-size: 0.75rem; color: #94A3B8;">
-                        Lat: {lat:.6f}, Lon: {lon:.6f}
-                    </span>
-                </p>
-                <p style="color: #94A3B8; font-size: 0.75rem; font-style: italic; margin-top: 1rem;">
-                    [L'immagine satellitare verra caricata dal database]
-                </p>
-            </div>
+            </style>
+            <!-- Zero Gap Spacer -->
+            <div style="margin-top: -16px;"></div>
             """, unsafe_allow_html=True)
 
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("#### Caratteristiche Rilevate (Computer Vision)")
-
-            # CV indicators
-            col_cv1, col_cv2, col_cv3 = st.columns(3)
-
-            with col_cv1:
-                icon = "✅" if has_solar_panels else "❌"
-                color = "#10B981" if has_solar_panels else "#EF4444"
-                bg_color = "#DCFCE7" if has_solar_panels else "#FEE2E2"
-
-                st.markdown(f"""
-                <div class="glass-card" style="text-align: center; background: {bg_color}; border-left: 4px solid {color};">
-                    <p style="font-size: 2rem; margin: 0;">{icon}</p>
-                    <p style="margin: 0.5rem 0 0 0; color: {color}; font-weight: 600; font-size: 0.9rem;">
-                        Pannelli Solari
-                    </p>
-                    <p style="margin: 0.25rem 0 0 0; color: #64748B; font-size: 0.75rem;">
-                        {'Rilevati' if has_solar_panels else 'Non rilevati'}
-                    </p>
-                </div>
-                """, unsafe_allow_html=True)
-
-            with col_cv2:
-                icon = "✅" if has_pool else "❌"
-                color = "#10B981" if has_pool else "#EF4444"
-                bg_color = "#DCFCE7" if has_pool else "#FEE2E2"
-
-                st.markdown(f"""
-                <div class="glass-card" style="text-align: center; background: {bg_color}; border-left: 4px solid {color};">
-                    <p style="font-size: 2rem; margin: 0;">{icon}</p>
-                    <p style="margin: 0.5rem 0 0 0; color: {color}; font-weight: 600; font-size: 0.9rem;">
-                        Piscina
-                    </p>
-                    <p style="margin: 0.25rem 0 0 0; color: #64748B; font-size: 0.75rem;">
-                        {'Rilevata' if has_pool else 'Non rilevata'}
-                    </p>
-                </div>
-                """, unsafe_allow_html=True)
-
-            with col_cv3:
-                icon = "✅" if has_garden else "❌"
-                color = "#10B981" if has_garden else "#EF4444"
-                bg_color = "#DCFCE7" if has_garden else "#FEE2E2"
-
-                st.markdown(f"""
-                <div class="glass-card" style="text-align: center; background: {bg_color}; border-left: 4px solid {color};">
-                    <p style="font-size: 2rem; margin: 0;">{icon}</p>
-                    <p style="margin: 0.5rem 0 0 0; color: {color}; font-weight: 600; font-size: 0.9rem;">
-                        Giardino
-                    </p>
-                    <p style="margin: 0.25rem 0 0 0; color: #64748B; font-size: 0.75rem;">
-                        {'Rilevato' if has_garden else 'Non rilevato'}
-                    </p>
-                </div>
-                """, unsafe_allow_html=True)
-
-            # All recommendations for this client
-            st.markdown("### Tutte le Raccomandazioni")
-            recs_data = []
-            for rec in client_data['raccomandazioni']:
-                score = calculate_recommendation_score(rec, st.session_state.nbo_weights)
-                recs_data.append({
-                    'Prodotto': rec['prodotto'],
-                    'Area Bisogno': rec['area_bisogno'],
-                    'Score': f"{score:.2f}",
-                    'Retention Gain': f"{rec['componenti']['retention_gain']:.1f}%",
-                    'Redditivita': f"{rec['componenti']['redditivita']:.1f}%",
-                    'Propensione': f"{rec['componenti']['propensione']:.1f}%",
-                    'Affinita': f"{rec['componenti']['affinita_cluster']:.1f}%"
-                })
-
-            df_recs = pd.DataFrame(recs_data)
-            st.dataframe(df_recs, use_container_width=True, hide_index=True)
+            if st.button("📞 Registra Chiamata", type="primary", key="open_call_form", use_container_width=True):
+                st.session_state.show_call_form = True
 
             # ═══════════════════════════════════════════════════════════════════
-            # Iris SECTION - Client Support
+            # IRIS AI SECTION (HTML Standard - AI Theme)
             # ═══════════════════════════════════════════════════════════════════
-            st.markdown("<br><br>", unsafe_allow_html=True)
-            st.markdown("## 🤖 Iris – Supporto Cliente")
+            
+            # Separation from Header
+            st.markdown("<div style='margin-top: 2rem;'></div>", unsafe_allow_html=True)
 
-            # Initialize session state for email draft
             if 'client_email_draft' not in st.session_state:
                 st.session_state.client_email_draft = None
             if 'current_draft_client' not in st.session_state:
                 st.session_state.current_draft_client = None
 
-            # Prepare client context for Iris
             codice_cliente_ada = client_data['codice_cliente']
-            nome_completo = f"{client_data['anagrafica']['nome']} {client_data['anagrafica']['cognome']}"
+            nome_completo = f"{ana.get('nome', '')} {ana.get('cognome', '')}"
 
-            # Build context string
             client_context = f"""Cliente: {nome_completo} ({codice_cliente_ada})
-CLV Stimato: €{client_data['metadata']['clv_stimato']:,}
-Polizze Attuali: {client_data['metadata']['num_polizze_attuali']}
-Prodotto Raccomandato: {recommendation['prodotto']}
-Area Bisogno: {recommendation['area_bisogno']}
-Score Raccomandazione: {calculate_recommendation_score(recommendation, st.session_state.nbo_weights):.1f}
-Retention Gain: {recommendation['componenti']['retention_gain']:.1f}%
-Propensione: {recommendation['componenti']['propensione']:.1f}%"""
+CLV Stimato: €{clv:,}
+Polizze Attuali: {num_polizze}
+Prodotto Raccomandato: {recommendation['prodotto'] if recommendation else 'N/D'}
+Area Bisogno: {recommendation['area_bisogno'] if recommendation else 'N/D'}
+Score Raccomandazione: {(calculate_recommendation_score(recommendation, st.session_state.nbo_weights) if recommendation else 0):.1f}
+Retention Gain: {(recommendation['componenti']['retention_gain'] if recommendation else 0):.1f}%
+Propensione: {(recommendation['componenti']['propensione'] if recommendation else 0):.1f}%"""
 
-            # Generate email draft button
-            if st.button("✍️ Genera Bozza Email con Iris", type="primary", use_container_width=True, key="generate_email_draft"):
+            # Iris Card - AI Style (Blue Border)
+            st.markdown("""
+            <div class="standard-card card-with-button" style="border: 2px solid #00A0B0; background: #F0FDFA; display: flex; flex-direction: row; gap: 1.5rem; align-items: center;">
+                <div class="iris-icon-wrapper" style="width: 56px; height: 56px; border-radius: 16px; background: #FFFFFF; box-shadow: 0 2px 4px rgba(0,160,176,0.1); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 32px; height: 32px; color: #00A0B0;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
+                    </svg>
+                </div>
+                <div class="iris-content" style="flex: 1;">
+                    <p class="iris-title" style="margin: 0; font-weight: 700; color: #1B3A5F; font-size: 1.1rem;">Iris – Assistente AI</p>
+                    <p class="iris-subtitle" style="margin: 0.25rem 0 0 0; font-size: 0.9rem; color: #475569;">Genera comunicazioni personalizzate e sfrutta l'intelligenza artificiale per supportare questo cliente.</p>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Genera Email Button - Attached
+            st.markdown("<div style='margin-top: -16px;'></div>", unsafe_allow_html=True)
+            email_btn_clicked = st.button("📧 Genera Email Personalizzata", type="primary", use_container_width=True, key="generate_email_draft")
+
+            if email_btn_clicked:
                 prompt = f"""IMPORTANTE: NON usare alcun tool. Ti sto fornendo TUTTI i dati necessari qui sotto. Genera DIRETTAMENTE l'email.
 
 DATI CLIENTE (già forniti, non recuperare dal database):
@@ -2301,95 +2839,264 @@ Azienda: Vita Sicura
 
 TASK: Scrivi una bozza di email commerciale professionale che:
 1. Sia personalizzata per {nome_completo}
-2. Proponga il prodotto "{recommendation['prodotto']}" evidenziandone i benefici
+2. Proponga il prodotto "{recommendation['prodotto'] if recommendation else ''}" evidenziandone i benefici
 3. Usi un tono professionale ma cordiale
 4. Includa una call-to-action chiara
 5. Sia lunga 150-200 parole
 6. Sia firmata da {st.session_state.user_name} di Vita Sicura
-7. Includa i contatti dell'agente (email e telefono) nella firma
+7. Includa i contatti dell'agente nella firma
 
-FORMATO RICHIESTO:
+FORMATO:
 **Oggetto:** [scrivi qui l'oggetto]
 
 ---
 
-[Corpo dell'email con saluti, contenuto e firma che include nome agente, "Vita Sicura", email e telefono]
+[Corpo dell'email]
 
 GENERA L'EMAIL ORA senza usare tool."""
 
-                # Generate email using Iris engine
-                with st.spinner("🤖 Iris sta generando la bozza email..."):
-                    # Import Iris chat function
+                with st.spinner("Iris sta generando la bozza email..."):
                     from src.iris.chat import init_iris_engine, get_iris_response
-
-                    # Initialize engine if needed
                     init_iris_engine()
-
-                    # Get response from Iris
                     result = get_iris_response(prompt)
-
                     if result.get("success"):
                         st.session_state.client_email_draft = result.get("response")
                         st.session_state.current_draft_client = codice_cliente_ada
-                        st.success("✅ Bozza email generata con successo!")
+                        st.success("Bozza email generata!")
                         st.rerun()
                     else:
-                        st.error("❌ Errore nella generazione della bozza email. Riprova.")
+                        st.error("Errore nella generazione. Riprova.")
 
-            # Show email draft if available
             if st.session_state.current_draft_client == codice_cliente_ada and st.session_state.client_email_draft:
-                st.markdown("### 📧 Bozza Email Generata")
-                st.markdown(f"""
-                <div class="glass-card" style="background: #F0FDF4; border-left: 4px solid #10B981;">
-                    {st.session_state.client_email_draft}
-                </div>
-                """, unsafe_allow_html=True)
+                st.markdown("""<div class="section-header"><span class="section-icon">📧</span><h3 class="section-title">Bozza Email Generata</h3></div>""", unsafe_allow_html=True)
+                st.markdown(f"""<div class="glass-card" style="background: #F0FDF4; border-left: 4px solid #10B981;">{st.session_state.client_email_draft}</div>""", unsafe_allow_html=True)
 
-                # Modify email button
                 col1, col2 = st.columns(2)
                 with col1:
-                    modify_prompt = st.text_input(
-                        "Modifica l'email con un prompt",
-                        placeholder="es. 'rendila piu formale', 'aggiungi urgenza'",
-                        key="email_modify_prompt"
-                    )
-
+                    modify_prompt = st.text_input("Modifica l'email", placeholder="es. 'rendila più formale'", key="email_modify_prompt")
                 with col2:
                     if st.button("🔄 Applica Modifica", key="apply_email_modification") and modify_prompt:
-                        updated_prompt = f"""IMPORTANTE: NON usare alcun tool. Modifica DIRETTAMENTE l'email fornita.
+                        updated_prompt = f"""Modifica l'email seguente: {st.session_state.client_email_draft}
 
-EMAIL ATTUALE:
-{st.session_state.client_email_draft}
+Richiesta: {modify_prompt}
 
-RICHIESTA DI MODIFICA:
-{modify_prompt}
-
-CONTESTO CLIENTE (già fornito):
-{client_context}
-
-TASK: Modifica l'email secondo la richiesta mantenendo il formato:
-**Oggetto:** [oggetto modificato]
-
----
-
-[Corpo modificato]
-
-GENERA LA VERSIONE MODIFICATA ORA senza usare tool."""
-
-                        # Update email using Iris engine
-                        with st.spinner("🤖 Iris sta modificando l'email..."):
-                            # Import Iris chat function
+Mantieni formato **Oggetto:** e corpo email. GENERA ORA senza tool."""
+                        with st.spinner("🤖 Modificando..."):
                             from src.iris.chat import get_iris_response
-
-                            # Get response from Iris
                             result = get_iris_response(updated_prompt)
-
                             if result.get("success"):
                                 st.session_state.client_email_draft = result.get("response")
-                                st.success("✅ Email modificata con successo!")
+                                st.success("✅ Email modificata!")
                                 st.rerun()
                             else:
-                                st.error("❌ Errore nella modifica dell'email. Riprova.")
+                                st.error("❌ Errore nella modifica.")
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            # ═══════════════════════════════════════════════════════════════════
+            # GRID LAYOUT (Pure HTML for Equal Heights)
+            # ═══════════════════════════════════════════════════════════════════
+            
+            # Prepare data
+            indicators = client_data.get('_interaction_indicators', {})
+            prodotti = meta.get('prodotti_posseduti', [])
+            if prodotti and isinstance(prodotti, str):
+                prodotti = [prodotti]
+            
+            # Row 1: Anagrafica (Left) + Polizze Attive (Right)
+            col1, col2 = st.columns(2, gap="medium")
+            
+            with col1:
+                st.markdown(f"""
+                <div class="standard-card">
+                     <h5 style="margin-bottom: 1rem;">👤 Anagrafica</h5>
+                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; flex: 1;">
+                        <div>
+                            <p style="margin:0; font-size:0.9rem;"><strong>🎂 Età:</strong> {ana.get('eta', 'N/D')} anni</p>
+                            <p style="margin:0.5rem 0 0 0; font-size:0.9rem;"><strong>🏙️ Città:</strong> {ana.get('citta', 'N/D')}</p>
+                        </div>
+                        <div>
+                            <p style="margin:0; font-size:0.9rem;"><strong>🏠 Indirizzo:</strong> {ana.get('indirizzo', 'N/D')}</p>
+                            <p style="margin:0.5rem 0 0 0; font-size:0.9rem;"><strong>📍 Provincia:</strong> {ana.get('provincia', 'N/D')}</p>
+                        </div>
+                     </div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+            with col2:
+                # Build polizze html
+                polizze_html = ""
+                if prodotti:
+                    for p in prodotti:
+                        prod_lower = p.lower()
+                        if 'casa' in prod_lower: icon = '🏠'
+                        elif 'vita' in prod_lower: icon = '💚'
+                        elif 'salute' in prod_lower: icon = '🏥'
+                        elif 'pension' in prod_lower: icon = '🎯'
+                        else: icon = '📋'
+                        polizze_html += f"<div style='margin-bottom:0.5rem;'>{icon} <strong>{p}</strong> <span style='background:#D1FAE5;color:#059669;padding:2px 8px;border-radius:12px;font-size:0.75rem;margin-left:8px;'>Attiva</span></div>"
+                else:
+                    polizze_html = "<em>Nessuna polizza attiva</em>"
+                    
+                st.markdown(f"""
+                <div class="standard-card">
+                    <h5 style="margin-bottom: 1rem;">📦 Polizze Attive</h5>
+                    <div style="flex: 1;">{polizze_html}</div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+            # Row 2: Stato Interazioni (Left) + Prodotto Consigliato (Right)
+            col3, col4 = st.columns(2, gap="medium")
+            
+            with col3:
+                # Chips HTML logic - Redesigned as List
+                chip_html = "<div style='display: flex; flex-direction: column; gap: 0.75rem;'>"
+                chip_data = [
+                    ("Email (5gg)", indicators.get('email_last_5_days', False), "✉️"),
+                    ("Chiamata (10gg)", indicators.get('call_last_10_days', False), "📞"),
+                    ("Polizza (30gg)", indicators.get('new_policy_last_30_days', False), "📋"),
+                    ("Reclamo Aperto", indicators.get('open_complaint', False), "⚠️"),
+                    ("Sinistro (60gg)", indicators.get('claim_last_60_days', False), "🚗")
+                ]
+                
+                for label, value, icon in chip_data:
+                    bg_color = "#FEF2F2" if value and "Reclamo" in label else "#ECFDF5" if not value else "#FFF7ED" # Red if complaint, Green if clean, Orange if active interaction
+                    text_color = "#B91C1C" if value and "Reclamo" in label else "#047857" if not value else "#C2410C"
+                    border_color = "#FECACA" if value and "Reclamo" in label else "#A7F3D0" if not value else "#FFEDD5"
+                    
+                    # Logic: "No" is usually good for Reclamo/Sinistro. "Sì" is good for Email/Chiamata/Polizza? 
+                    # Actually, red/green logic depends on context. For now, let's just show status clearly.
+                    status_text = "Sì" if value else "No"
+                    status_bg = "#EF4444" if value and "Reclamo" in label else "#10B981" if value else "#94A3B8"
+                    
+                    # Cleaner Row Design
+                    chip_html += f"""<div style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0.75rem; background: #F8FAFC; border-radius: 8px; border: 1px solid #E2E8F0;">
+    <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <span>{icon}</span>
+        <span style="font-size: 0.85rem; font-weight: 500; color: #334155;">{label}</span>
+    </div>
+    <span style="font-size: 0.75rem; font-weight: 600; color: {status_bg};">{status_text}</span>
+</div>"""
+                chip_html += "</div>"
+                
+                st.markdown(f"""
+                <div class="standard-card">
+                    <h5 style="margin-bottom: 1rem;">📋 Stato Interazioni</h5>
+                    <div style="flex: 1;">{chip_html}</div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+            with col4:
+                # Rec HTML
+                rec_html = "<em>Nessuna raccomandazione</em>"
+                if recommendation:
+                    comp = recommendation['componenti']
+                    rec_html = f"""<div>
+    <span style='background:linear-gradient(135deg,#00A0B0,#00C9D4);color:white;padding:4px 12px;border-radius:6px;font-size:0.7rem;font-weight:700;'>RACCOMANDAZIONE AI</span>
+    <p style='margin:0.5rem 0; font-weight:700;'>{recommendation['prodotto']}</p>
+    <p style='margin:0 0 1rem 0; font-size:0.85rem; color:#64748B;'>📌 {recommendation['area_bisogno']}</p>
+    <div style='display:grid; grid-template-columns: 1fr 1fr; gap:0.5rem;'>
+        <div><small>🔄 RETENTION</small><div style='height:6px;width:100%;background:#F3F4F6;border-radius:10px;'><div style='height:100%;width:{min(comp['retention_gain'], 100)}%;background:#00A0B0;border-radius:10px;'></div></div><small><strong>{comp['retention_gain']:.1f}%</strong></small></div>
+        <div><small>💰 REDDITIVITÀ</small><div style='height:6px;width:100%;background:#F3F4F6;border-radius:10px;'><div style='height:100%;width:{min(comp['redditivita'], 100)}%;background:#00A0B0;border-radius:10px;'></div></div><small><strong>{comp['redditivita']:.1f}%</strong></small></div>
+        <div><small>🎯 PROPENSIONE</small><div style='height:6px;width:100%;background:#F3F4F6;border-radius:10px;'><div style='height:100%;width:{min(comp['propensione'], 100)}%;background:#00A0B0;border-radius:10px;'></div></div><small><strong>{comp['propensione']:.1f}%</strong></small></div>
+        <div><small>👥 AFFINITÀ</small><div style='height:6px;width:100%;background:#F3F4F6;border-radius:10px;'><div style='height:100%;width:{min(comp['affinita_cluster'], 100)}%;background:#00A0B0;border-radius:10px;'></div></div><small><strong>{comp['affinita_cluster']:.1f}%</strong></small></div>
+    </div>
+</div>"""
+                st.markdown(f"""
+                <div class="standard-card">
+                    <h5 style="margin-bottom: 1rem;">🎯 Prodotto Consigliato</h5>
+                    <div style="flex: 1;">{rec_html}</div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+            # Spacing before expander
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            # Expander for details
+            with st.expander("📊 Dettagli Avanzati", expanded=False):
+                 st.markdown(f"**Churn:** {meta.get('churn_attuale', 0):.4f} | **Cluster NBA:** {meta.get('cluster_nba', 'N/D')}")
+
+            # ═══════════════════════════════════════════════════════════════════
+            # ABITAZIONE CLIENT (HTML Standard + Fix Overflow)
+            # ═══════════════════════════════════════════════════════════════════
+            st.markdown("##### 📍 Abitazione Cliente")
+            
+            lat = ana.get('latitudine', 0)
+            lon = ana.get('longitudine', 0)
+            
+            # Mapbox static image or placeholder - Using Placeholder for now as requested
+            # Use pure HTML for container and image
+            
+            # Need to get CV data
+            import hashlib
+            client_hash = int(hashlib.md5(str(client_data.get('codice_cliente', '')).encode()).hexdigest(), 16)
+            has_solar_panels = (client_hash % 3) == 0
+            has_pool = (client_hash % 5) == 0
+            has_garden = (client_hash % 2) == 0
+
+            # Combined content for Abitazione
+            # We can use st columns for layout but standard cards for content
+            ac1, ac2 = st.columns([1, 2], gap="medium")
+            
+            with ac1:
+                 # Satellite image card
+                 st.markdown(f"""
+                 <div class="standard-card" style="padding: 0; overflow: hidden; position: relative; height: 100%; min-height: 200px; display: flex; align-items: center; justify-content: center; background: #F3F4F6;">
+                    <div style="text-align: center; z-index: 2;">
+                        <span style="font-size: 3rem;">🛰️</span>
+                        <p style="margin:0; font-weight:600; color:#64748B;">Vista Satellitare</p>
+                        <small style="color:#94A3B8;">{lat:.4f}, {lon:.4f}</small>
+                    </div>
+                 </div>
+                 """, unsafe_allow_html=True)
+                 
+            with ac2:
+                # Features card - HEIGHT 100% enforced
+                st.markdown(f"""
+                <div class="standard-card" style="height: 100%; display: flex; flex-direction: column;">
+                    <h5 style="margin-bottom: 1rem;">Caratteristiche Rilevate (CV)</h5>
+                    <div style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; flex: 1;">
+                         <div style="flex: 1; min-width: 120px; padding: 1rem; border-radius: 12px; background: {'#D1FAE5' if has_solar_panels else '#F3F4F6'}; color: {'#059669' if has_solar_panels else '#6B7280'}; text-align: center;">{'✅' if has_solar_panels else '❌'} Pannelli Solari</div>
+                         <div style="flex: 1; min-width: 120px; padding: 1rem; border-radius: 12px; background: {'#D1FAE5' if has_pool else '#F3F4F6'}; color: {'#059669' if has_pool else '#6B7280'}; text-align: center;">{'✅' if has_pool else '❌'} Piscina</div>
+                         <div style="flex: 1; min-width: 120px; padding: 1rem; border-radius: 12px; background: {'#D1FAE5' if has_garden else '#F3F4F6'}; color: {'#059669' if has_garden else '#6B7280'}; text-align: center;">{'✅' if has_garden else '❌'} Giardino</div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+            # ═══════════════════════════════════════════════════════════════════
+            # RECOMMENDATIONS (HTML Standard)
+            # ═══════════════════════════════════════════════════════════════════
+            st.markdown("##### 📊 Tutte le Raccomandazioni")
+            
+            recs_with_scores = []
+            for rec in client_data.get('raccomandazioni', []):
+                score = calculate_recommendation_score(rec, st.session_state.nbo_weights)
+                recs_with_scores.append((score, rec))
+            recs_with_scores.sort(key=lambda x: x[0], reverse=True)
+            
+            rec_rows_html = ""
+            for i, (score, rec) in enumerate(recs_with_scores):
+                score_color = "#10B981" if score >= 0.7 else "#F59E0B" if score >= 0.5 else "#EF4444"
+                border_style = "border-bottom: 1px solid #E2E8F0;" if i < len(recs_with_scores) - 1 else ""
+                
+                rec_rows_html += f"""<div style="display: flex; align-items: center; padding: 1rem 0; {border_style}">
+    <div style="width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(135deg,#00A0B0,#00C9D4); color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; margin-right: 1rem; flex-shrink: 0;">{i+1}</div>
+    <div style="flex: 1;">
+        <p style="margin: 0; font-weight: 600; color: #1B3A5F;">{rec['prodotto']}</p>
+        <p style="margin: 0; font-size: 0.8rem; color: #64748B;">{rec['area_bisogno']}</p>
+    </div>
+    <div style="text-align: right;">
+        <p style="margin: 0; font-weight: 700; color: {score_color}; font-size: 1.2rem;">{score:.1f}</p>
+        <p style="margin: 0; font-size: 0.65rem; color: #94A3B8; text-transform: uppercase;">SCORE</p>
+    </div>
+</div>"""
+                
+            st.markdown(f"""
+            <div class="standard-card">
+                {rec_rows_html}
+            </div>
+            """, unsafe_allow_html=True)
+
 
         else:
             # ═══════════════════════════════════════════════════════════════════════════════
@@ -2454,60 +3161,87 @@ GENERA LA VERSIONE MODIFICATA ORA senza usare tool."""
             total_weight = w_ret + w_red + w_pro
             weight_valid = abs(total_weight - 1.0) < 0.01
 
-            with st.expander("⚖️ Pesi delle Raccomandazioni — Configurazione Q1 2026", expanded=False):
+            with st.expander("Visualizza Dettagli Strategia Attiva (Q1 2026)", expanded=False):
+                # Custom Strategy Card
+                st.markdown(f"""
+                <div class="active-strategy-card">
+                    <div class="strategy-info">
+                        <div class="strategy-label">STRATEGIA ATTIVA</div>
+                        <div class="strategy-title">Q1 2026 - Focus Retention</div>
+                    </div>
+                    <div class="strategy-metrics">
+                        <div class="metric-item">
+                            <div class="metric-label">RETENTION</div>
+                            <div class="metric-value" style="color: #00A0B0;">{w_ret:.0%}</div>
+                        </div>
+                        <div class="metric-divider"></div>
+                        <div class="metric-item">
+                            <div class="metric-label">REDDITIVITA</div>
+                            <div class="metric-value" style="color: #F59E0B;">{w_red:.0%}</div>
+                        </div>
+                        <div class="metric-divider"></div>
+                        <div class="metric-item">
+                            <div class="metric-label">PROPENSIONE</div>
+                            <div class="metric-value" style="color: #8B5CF6;">{w_pro:.0%}</div>
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # Explanation text
                 st.markdown(f"""
                 <div style="background: linear-gradient(135deg, rgba(0, 160, 176, 0.06) 0%, rgba(0, 201, 212, 0.03) 100%); border-radius: 16px; padding: 1.5rem; margin-bottom: 1rem;">
-                    <h4 style="margin: 0 0 1rem 0; font-family: 'Inter', sans-serif; font-size: 1rem; font-weight: 700; color: #1B3A5F;">
-                        Come viene calcolato lo Score delle raccomandazioni
-                    </h4>
-                    <p style="color: #64748B; font-size: 0.9rem; line-height: 1.7; margin-bottom: 1.25rem;">
-                        Lo <strong>score di priorità</strong> determina quali clienti contattare per primo.
-                        È calcolato combinando tre fattori chiave, ciascuno con un peso specifico definito
-                        trimestralmente dalla direzione commerciale.
-                    </p>
+                  <h4 style="margin: 0 0 1rem 0; font-family: 'Inter', sans-serif; font-size: 1rem; font-weight: 700; color: #1B3A5F;">
+                    Come viene calcolato lo Score delle raccomandazioni
+                  </h4>
+                  <p style="color: #64748B; font-size: 0.9rem; line-height: 1.7; margin-bottom: 1.25rem;">
+                    Lo <strong>score di priorità</strong> determina quali clienti contattare per primo.
+                    È calcolato combinando tre fattori chiave, ciascuno con un peso specifico definito
+                    trimestralmente dalla direzione commerciale.
+                  </p>
 
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem;">
-                        <div style="background: white; border-radius: 12px; padding: 1rem; border: 1px solid #E2E8F0; text-align: center;">
-                            <p style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 1.75rem; font-weight: 700; color: #00A0B0;">{w_ret:.0%}</p>
-                            <p style="margin: 0.25rem 0 0 0; font-family: 'Inter', sans-serif; font-size: 0.7rem; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em;">Retention</p>
-                        </div>
-                        <div style="background: white; border-radius: 12px; padding: 1rem; border: 1px solid #E2E8F0; text-align: center;">
-                            <p style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 1.75rem; font-weight: 700; color: #00A0B0;">{w_red:.0%}</p>
-                            <p style="margin: 0.25rem 0 0 0; font-family: 'Inter', sans-serif; font-size: 0.7rem; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em;">Redditivita</p>
-                        </div>
-                        <div style="background: white; border-radius: 12px; padding: 1rem; border: 1px solid #E2E8F0; text-align: center;">
-                            <p style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 1.75rem; font-weight: 700; color: #00A0B0;">{w_pro:.0%}</p>
-                            <p style="margin: 0.25rem 0 0 0; font-family: 'Inter', sans-serif; font-size: 0.7rem; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em;">Propensione</p>
-                        </div>
+                  <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem;">
+                    <div style="background: white; border-radius: 12px; padding: 1rem; border: 1px solid #E2E8F0; text-align: center;">
+                      <p style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 1.75rem; font-weight: 700; color: #00A0B0;">{w_ret:.0%}</p>
+                      <p style="margin: 0.25rem 0 0 0; font-family: 'Inter', sans-serif; font-size: 0.7rem; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em;">Retention</p>
                     </div>
-
-                    <div style="background: white; border-radius: 12px; padding: 1.25rem; border: 1px solid #E2E8F0;">
-                        <div style="margin-bottom: 1rem;">
-                            <p style="margin: 0; font-family: 'Inter', sans-serif; font-size: 0.8rem; font-weight: 600; color: #1B3A5F;">🔄 Retention Gain</p>
-                            <p style="margin: 0.25rem 0 0 0; color: #64748B; font-size: 0.8rem; line-height: 1.5;">
-                                Misura quanto l'acquisto del prodotto ridurrebbe la probabilità di abbandono (churn) del cliente.
-                                Un valore alto indica che il prodotto è particolarmente efficace nel fidelizzare quel cliente.
-                            </p>
-                        </div>
-                        <div style="margin-bottom: 1rem;">
-                            <p style="margin: 0; font-family: 'Inter', sans-serif; font-size: 0.8rem; font-weight: 600; color: #1B3A5F;">💰 Redditività</p>
-                            <p style="margin: 0.25rem 0 0 0; color: #64748B; font-size: 0.8rem; line-height: 1.5;">
-                                Stima il valore economico atteso dalla vendita del prodotto, considerando premio, marginalità
-                                e probabilità di rinnovo negli anni successivi.
-                            </p>
-                        </div>
-                        <div>
-                            <p style="margin: 0; font-family: 'Inter', sans-serif; font-size: 0.8rem; font-weight: 600; color: #1B3A5F;">🎯 Propensione</p>
-                            <p style="margin: 0.25rem 0 0 0; color: #64748B; font-size: 0.8rem; line-height: 1.5;">
-                                Indica la probabilità che il cliente accetti l'offerta, basata sul suo profilo comportamentale,
-                                storico di risposta alle campagne e cluster di appartenenza.
-                            </p>
-                        </div>
+                    <div style="background: white; border-radius: 12px; padding: 1rem; border: 1px solid #E2E8F0; text-align: center;">
+                      <p style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 1.75rem; font-weight: 700; color: #00A0B0;">{w_red:.0%}</p>
+                      <p style="margin: 0.25rem 0 0 0; font-family: 'Inter', sans-serif; font-size: 0.7rem; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em;">Redditivita</p>
                     </div>
+                    <div style="background: white; border-radius: 12px; padding: 1rem; border: 1px solid #E2E8F0; text-align: center;">
+                      <p style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 1.75rem; font-weight: 700; color: #00A0B0;">{w_pro:.0%}</p>
+                      <p style="margin: 0.25rem 0 0 0; font-family: 'Inter', sans-serif; font-size: 0.7rem; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em;">Propensione</p>
+                    </div>
+                  </div>
 
-                    <p style="color: #94A3B8; font-size: 0.75rem; margin-top: 1rem; font-style: italic; text-align: center;">
-                        I pesi vengono aggiornati ogni trimestre dalla Direzione Commerciale • Ultimo aggiornamento: Q1 2026
-                    </p>
+                  <div style="background: white; border-radius: 12px; padding: 1.25rem; border: 1px solid #E2E8F0;">
+                    <div style="margin-bottom: 1rem;">
+                      <p style="margin: 0; font-family: 'Inter', sans-serif; font-size: 0.8rem; font-weight: 600; color: #1B3A5F;">🔄 Retention Gain</p>
+                      <p style="margin: 0.25rem 0 0 0; color: #64748B; font-size: 0.8rem; line-height: 1.5;">
+                        Misura quanto l'acquisto del prodotto ridurrebbe la probabilità di abbandono (churn) del cliente.
+                        Un valore alto indica che il prodotto è particolarmente efficace nel fidelizzare quel cliente.
+                      </p>
+                    </div>
+                    <div style="margin-bottom: 1rem;">
+                      <p style="margin: 0; font-family: 'Inter', sans-serif; font-size: 0.8rem; font-weight: 600; color: #1B3A5F;">💰 Redditività</p>
+                      <p style="margin: 0.25rem 0 0 0; color: #64748B; font-size: 0.8rem; line-height: 1.5;">
+                        Stima il valore economico atteso dalla vendita del prodotto, considerando premio, marginalità
+                        e probabilità di rinnovo negli anni successivi.
+                      </p>
+                    </div>
+                    <div>
+                      <p style="margin: 0; font-family: 'Inter', sans-serif; font-size: 0.8rem; font-weight: 600; color: #1B3A5F;">🎯 Propensione</p>
+                      <p style="margin: 0.25rem 0 0 0; color: #64748B; font-size: 0.8rem; line-height: 1.5;">
+                        Indica la probabilità che il cliente accetti l'offerta, basata sul suo profilo comportamentale,
+                        storico di risposta alle campagne e cluster di appartenenza.
+                      </p>
+                    </div>
+                  </div>
+
+                  <p style="color: #94A3B8; font-size: 0.75rem; margin-top: 1rem; font-style: italic; text-align: center;">
+                    I pesi vengono aggiornati ogni trimestre dalla Direzione Commerciale • Ultimo aggiornamento: Q1 2026
+                  </p>
                 </div>
                 """, unsafe_allow_html=True)
 
