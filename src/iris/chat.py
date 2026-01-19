@@ -55,8 +55,37 @@ def render_iris_chat() -> None:
     Optimized for sidebar display (compact mode).
     """
     # Apply Vita Sicura Light Theme CSS for sidebar chat
+    # Elegant typing indicator CSS
     st.markdown("""
     <style>
+        .typing-indicator {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            padding: 12px 16px;
+            background: #F3F4F6;
+            border-radius: 16px;
+            border-bottom-left-radius: 4px;
+            min-height: 24px;
+        }
+        
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            background: #64748B;
+            border-radius: 50%;
+            animation: typing 1.4s infinite ease-in-out both;
+        }
+        
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        
+        @keyframes typing {
+            0%, 100% { transform: scale(0.5); opacity: 0.5; }
+            50% { transform: scale(1); opacity: 1; }
+        }
+
         /* Sidebar-optimized chat styling */
         [data-testid="stSidebar"] [data-testid="stChatMessage"] {
             background: rgba(255, 255, 255, 0.9) !important;
@@ -72,28 +101,17 @@ def render_iris_chat() -> None:
             background: linear-gradient(135deg, rgba(0, 160, 176, 0.08) 0%, rgba(0, 201, 212, 0.04) 100%) !important;
             border: 1px solid rgba(0, 160, 176, 0.12) !important;
         }
-
-        /* FORCE CHAT INPUT TO BOTTOM - STICKY MODE */
-        [data-testid="stSidebar"] [data-testid="stChatInput"] {
-            position: sticky !important;
-            bottom: 0 !important;
-            z-index: 1000 !important;
-            padding-bottom: 1rem !important;
-            padding-top: 1rem !important;
-            background: linear-gradient(180deg, rgba(255,255,255,0) 0%, #FFFFFF 20%) !important; /* Fade effect */
-        }
         
-        /* Adjust the inner container of the input */
+        /* Input styling - Standard Streamlit behavior restored */
+        [data-testid="stSidebar"] [data-testid="stChatInput"] {
+            padding-bottom: 1rem !important;
+        }
+
         [data-testid="stSidebar"] [data-testid="stChatInput"] > div {
             background: #FFFFFF !important;
             border: 1px solid #E2E8F0 !important;
             border-radius: 12px !important;
-            box-shadow: 0 -4px 6px -1px rgba(27, 58, 95, 0.05) !important;
-        }
-        
-        /* Ensure there's space at bottom of sidebar content so input doesn't cover last message */
-        [data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
-            padding-bottom: 20px !important;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
         }
 
         [data-testid="stSidebar"] [data-testid="stChatInput"] input {
@@ -220,26 +238,37 @@ def render_iris_chat() -> None:
         
         # Get response
         with st.chat_message("assistant", avatar="☀️"):
-            with helio_spinner("Iris sta elaborando..."):
-                result = get_iris_response(prompt)
-                
-                response = result.get("response", "Errore di elaborazione.")
-                tools_used = result.get("tools_used", [])
-                
-                st.markdown(response)
-                
-                # Show tools if used
-                if tools_used:
-                    with st.expander("🔧 Tools utilizzati"):
-                        for tool in tools_used:
-                            st.code(tool, language="text")
-                
-                # Add to history
-                st.session_state.iris_messages.append({
-                    "role": "assistant",
-                    "content": response,
-                    "tools_used": tools_used
-                })
+            # Placeholder for typing animation
+            message_placeholder = st.empty()
+            message_placeholder.markdown("""
+                <div class="typing-indicator">
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            # Generate response
+            result = get_iris_response(prompt)
+            
+            response = result.get("response", "Errore di elaborazione.")
+            tools_used = result.get("tools_used", [])
+            
+            # Overwrite placeholder with response
+            message_placeholder.markdown(response)
+            
+            # Show tools if used
+            if tools_used:
+                with st.expander("🔧 Tools utilizzati"):
+                    for tool in tools_used:
+                        st.code(tool, language="text")
+            
+            # Add to history
+            st.session_state.iris_messages.append({
+                "role": "assistant",
+                "content": response,
+                "tools_used": tools_used
+            })
 
 
 def get_iris_response(prompt: str) -> Dict:
@@ -247,7 +276,8 @@ def get_iris_response(prompt: str) -> Dict:
     Get response from Iris - tries Python engine, falls back to local.
     """
     client_id = st.session_state.get("selected_client_id")
-    history = st.session_state.iris_messages
+    # Exclude the last message (current prompt) from history because the engine adds it again with context
+    history = st.session_state.iris_messages[:-1] if st.session_state.iris_messages else []
     
     # Try Python engine
     if st.session_state.get("iris_engine"):

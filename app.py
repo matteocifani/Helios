@@ -1656,9 +1656,9 @@ if 'nbo_page' not in st.session_state:
     st.session_state.nbo_page = 'dashboard'
 if 'nbo_weights' not in st.session_state:
     st.session_state.nbo_weights = {
-        'retention': 0.33,
-        'redditivita': 0.33,
-        'propensione': 0.34
+        'retention': 0.50,
+        'redditivita': 0.30,
+        'propensione': 0.20
     }
 if 'nbo_selected_client' not in st.session_state:
     st.session_state.nbo_selected_client = None
@@ -1759,9 +1759,16 @@ with st.sidebar:
     render_iris_chat()
 
     # Elegant footer
-    # Footer removed to prevent interference with fixed chat input
-    # st.markdown(...) 
-
+    st.markdown("""
+    <div style="text-align: center; padding: 1rem 0; margin-top: 1rem; border-top: 1px solid #E2E8F0;">
+        <p style="font-family: 'Inter', sans-serif; font-size: 0.65rem; color: #94A3B8; margin: 0;">
+            Powered by <strong style="color: #1B3A5F;">Vita Sicura</strong>
+        </p>
+        <p style="font-family: 'Inter', sans-serif; font-size: 0.6rem; color: #CBD5E1; margin-top: 0.15rem;">
+            Helios v2.0 • Generali AI Challenge
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
 # Filter logic moved to Analytics block
 
@@ -2004,7 +2011,7 @@ if st.session_state.dashboard_mode == 'Analytics':
             st.rerun()
             
         if st.session_state.analytics_client_id:
-            with st.spinner("Caricamento scheda cliente..."):
+            with helio_spinner("Recupero profilo cliente..."):
                 detail_data = get_client_detail(st.session_state.analytics_client_id)
             
             if "error" in detail_data:
@@ -2907,7 +2914,9 @@ Le email devono essere personalizzate per ogni cliente, non identiche."""
             ana = client_data.get('anagrafica', {})
             
             # Fetch Satellite Data
-            sat_data = get_client_satellite(client_data['codice_cliente'])
+            # Fetch Satellite Data
+            with helio_spinner("Analisi dati satellitari..."):
+                sat_data = get_client_satellite(client_data['codice_cliente'])
             # DEBUG: Uncomment to see data
             # st.write(f"DEBUG: Client {client_data['codice_cliente']} Sat Data:", sat_data)
             
@@ -3395,27 +3404,27 @@ Mantieni formato **Oggetto:** e corpo email. GENERA ORA senza tool."""
             <div class="active-strategy-card" style="margin-bottom: 0;">
                 <div class="strategy-info">
                     <div class="strategy-label">STRATEGIA ATTIVA</div>
-                    <div class="strategy-title">Q1 2026 - Focus Retention</div>
+                    <div class="strategy-title">Q1 2026</div>
                 </div>
                 <div class="strategy-metrics" style="gap: 3rem;">
                     <div class="metric-item">
                         <div class="metric-label">key driver</div>
-                        <div class="metric-value" style="color: #00A0B0;">RETENTION</div>
+                        <div class="metric-value" style="color: #00A0B0;">Retention</div>
                     </div>
                     <div class="metric-divider"></div>
                      <div class="metric-item">
                         <div class="metric-label">Retention</div>
-                        <div class="metric-value">{w_ret:.0%}</div>
+                        <div class="metric-value" style="font-weight: 700; color: #1B3A5F;">{w_ret:.0%}</div>
                     </div>
                     <div class="metric-divider"></div>
                     <div class="metric-item">
                         <div class="metric-label">Redditività</div>
-                        <div class="metric-value">{w_red:.0%}</div>
+                        <div class="metric-value" style="font-weight: 700; color: #64748B;">{w_red:.0%}</div>
                     </div>
                     <div class="metric-divider"></div>
                     <div class="metric-item">
                         <div class="metric-label">Propensione</div>
-                        <div class="metric-value">{w_pro:.0%}</div>
+                        <div class="metric-value" style="font-weight: 700; color: #64748B;">{w_pro:.0%}</div>
                     </div>
                 </div>
             </div>
