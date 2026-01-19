@@ -3311,6 +3311,9 @@ Mantieni formato **Oggetto:** e corpo email. GENERA ORA senza tool."""
                         # Polizza con coefficienti (Casa o Salute)
                         gap_color = "#059669" if coeff['gap_relativo_perc'] >= 0 else "#DC2626"
                         gap_sign = "+" if coeff['gap_relativo_perc'] >= 0 else ""
+                        # Label: Under Pricing (negativo) o Premium Surplus (positivo)
+                        scarto_label = "Premium Surplus" if coeff['gap_relativo_perc'] >= 0 else "Under Pricing"
+                        scarto_icon = "🟢" if coeff['gap_relativo_perc'] >= 0 else "🔴"
 
                         polizze_html += f"""
                         <div style='margin-bottom:1rem; padding:0.75rem; background:#F8FAFC; border-radius:8px; border:1px solid #E2E8F0;'>
@@ -3318,20 +3321,19 @@ Mantieni formato **Oggetto:** e corpo email. GENERA ORA senza tool."""
                                 <span>{icon} <strong>{p}</strong></span>
                                 <span style='background:#D1FAE5;color:#059669;padding:2px 8px;border-radius:12px;font-size:0.7rem;'>Attiva</span>
                             </div>
-                            <div style='font-size:0.7rem; color:#94A3B8; margin:0.25rem 0 0.5rem 0;'>Loss Ratio Target: {coeff['loss_ratio_label']}</div>
-                            <div style='display:grid; grid-template-columns:1fr 1fr; gap:0.5rem; font-size:0.8rem;'>
-                                <div style='background:#FFF; padding:0.4rem; border-radius:6px; border:1px solid #E2E8F0;'>
-                                    <div style='color:#64748B; font-size:0.7rem;'>Premio Pagato</div>
-                                    <div style='color:#1B3A5F; font-weight:600;'>€{coeff['premio_pagato']:,.0f}</div>
+                            <div style='font-size:0.7rem; color:#94A3B8; margin:0.25rem 0 0.75rem 0;'>Loss Ratio Target: {coeff['loss_ratio_label']}</div>
+                            <div style='display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:0.75rem;'>
+                                <div>
+                                    <div style='color:#94A3B8; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em;'>Premio Pagato</div>
+                                    <div style='color:#1B3A5F; font-size:1.1rem; font-weight:700;'>€{coeff['premio_pagato']:,.0f}</div>
                                 </div>
-                                <div style='background:#FFF; padding:0.4rem; border-radius:6px; border:1px solid #E2E8F0;'>
-                                    <div style='color:#64748B; font-size:0.7rem;'>Premio Tecnico</div>
-                                    <div style='color:#1B3A5F; font-weight:600;'>€{coeff['premio_tecnico']:,.0f}</div>
+                                <div>
+                                    <div style='color:#94A3B8; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em;'>Premio Tecnico</div>
+                                    <div style='color:#1B3A5F; font-size:1.1rem; font-weight:700;'>€{coeff['premio_tecnico']:,.0f}</div>
                                 </div>
                             </div>
-                            <div style='margin-top:0.5rem; padding:0.4rem; background:{gap_color}15; border-radius:6px; display:flex; justify-content:space-between; align-items:center;'>
-                                <span style='font-size:0.75rem; color:#64748B;'>Scarto: <strong style="color:{gap_color}">€{coeff['gap_assoluto']:+,.0f}</strong></span>
-                                <span style='font-size:0.85rem; font-weight:700; color:{gap_color};'>{gap_sign}{coeff['gap_relativo_perc']:.1f}%</span>
+                            <div style='color:{gap_color}; font-size:0.8rem; font-weight:600;'>
+                                {scarto_icon} {scarto_label}: €{coeff['gap_assoluto']:+,.0f} ({gap_sign}{coeff['gap_relativo_perc']:.1f}%)
                             </div>
                         </div>"""
                     else:
