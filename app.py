@@ -38,6 +38,133 @@ from src.data.db_utils import (
     get_client_detail
 )
 
+import random
+import hashlib
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# FUNZIONE COEFFICIENTI ATTUARIALI (simulati ma realistici)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def genera_coefficienti_polizza(cliente_meta: dict, tipo_polizza: str, codice_cliente: str = None) -> dict:
+    """
+    Genera coefficienti attuariali realistici per una polizza.
+    Usa un seed deterministico basato sul codice cliente per consistenza.
+
+    Basato sui modelli:
+    - Frequenza: logit(P) = β0 + β1*Età + β2*Metratura + β3*Zona + ...
+    - Severità: log(E[Costo]) = β0 + β1*log(Metratura) + β2*Zona + ...
+    - Premio tecnico = premio_puro * (1 + loading) / loss_ratio_target
+    """
+    # Seed deterministico per consistenza
+    seed_str = f"{codice_cliente}_{tipo_polizza}" if codice_cliente else tipo_polizza
+    seed = int(hashlib.md5(seed_str.encode()).hexdigest()[:8], 16)
+    rng = random.Random(seed)
+
+    # Estrai dati cliente
+    eta = cliente_meta.get('eta', 45)
+    if isinstance(eta, str):
+        try:
+            eta = int(eta)
+        except:
+            eta = 45
+
+    metratura = cliente_meta.get('metratura', 100)
+    if isinstance(metratura, str):
+        try:
+            metratura = int(metratura)
+        except:
+            metratura = 100
+
+    zona_sismica = cliente_meta.get('zona_sismica', 3)
+    if isinstance(zona_sismica, str):
+        try:
+            zona_sismica = int(zona_sismica)
+        except:
+            zona_sismica = 3
+
+    tipo_lower = tipo_polizza.lower()
+
+    # Loading e loss ratio standard
+    loading = 0.30
+    loss_ratio_target = 0.70
+
+    if 'casa' in tipo_lower or 'abitazione' in tipo_lower:
+        # Polizza Casa/Abitazione
+        # Frequenza base: 1.5% - 4% annuo
+        freq_base = 0.015 + (metratura / 15000) + (4 - zona_sismica) * 0.005
+        freq_base += rng.uniform(-0.005, 0.012)
+        freq_base = max(0.008, min(0.06, freq_base))
+
+        # Severità: €500 - €5000 per sinistro medio
+        sev_base = 600 + metratura * 6 + (4 - zona_sismica) * 200
+        sev_base += rng.uniform(-150, 400)
+        sev_base = max(400, min(8000, sev_base))
+
+    elif 'vita' in tipo_lower:
+        # Polizza Vita
+        # Frequenza (mortalità): molto bassa, cresce con età
+        freq_base = 0.001 + (eta / 8000) + (eta ** 2) / 500000
+        freq_base += rng.uniform(-0.0005, 0.002)
+        freq_base = max(0.0005, min(0.05, freq_base))
+
+        # Severità: capitale assicurato medio €20k - €100k
+        sev_base = 25000 + eta * 300
+        sev_base += rng.uniform(-5000, 15000)
+        sev_base = max(15000, min(150000, sev_base))
+
+    elif 'salute' in tipo_lower or 'infortuni' in tipo_lower:
+        # Polizza Salute/Infortuni
+        # Frequenza: 5% - 15% annuo (più frequente ma meno severa)
+        freq_base = 0.05 + (eta / 1000)
+        freq_base += rng.uniform(-0.02, 0.05)
+        freq_base = max(0.03, min(0.20, freq_base))
+
+        # Severità: €200 - €3000 per sinistro
+        sev_base = 300 + eta * 15
+        sev_base += rng.uniform(-100, 500)
+        sev_base = max(150, min(5000, sev_base))
+
+    elif 'pension' in tipo_lower or 'risparmio' in tipo_lower:
+        # Polizza Pensione/Risparmio
+        # Frequenza riscatto anticipato: 2% - 8%
+        freq_base = 0.02 + rng.uniform(0, 0.04)
+        freq_base = max(0.01, min(0.10, freq_base))
+
+        # Severità: valore medio riscatto
+        sev_base = 8000 + eta * 100
+        sev_base += rng.uniform(-2000, 5000)
+        sev_base = max(5000, min(50000, sev_base))
+
+    else:
+        # Polizza generica
+        freq_base = 0.02 + rng.uniform(-0.005, 0.015)
+        freq_base = max(0.01, min(0.08, freq_base))
+        sev_base = 1000 + rng.uniform(-200, 800)
+        sev_base = max(500, min(5000, sev_base))
+
+    # Calcoli premio
+    premio_puro = freq_base * sev_base
+    premio_tecnico = premio_puro * (1 + loading) / loss_ratio_target
+
+    # Simula premio pagato (può essere sopra o sotto il tecnico)
+    gap_factor = rng.uniform(-0.25, 0.35)  # -25% a +35%
+    premio_pagato = premio_tecnico * (1 + gap_factor)
+
+    gap_assoluto = premio_pagato - premio_tecnico
+    gap_relativo = (gap_assoluto / premio_tecnico) * 100 if premio_tecnico > 0 else 0
+
+    return {
+        'frequenza_perc': freq_base * 100,
+        'severita': sev_base,
+        'premio_puro': premio_puro,
+        'premio_tecnico': premio_tecnico,
+        'premio_pagato': premio_pagato,
+        'gap_assoluto': gap_assoluto,
+        'gap_relativo_perc': gap_relativo,
+        'loading_perc': loading * 100,
+        'loss_ratio_perc': loss_ratio_target * 100
+    }
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # CONFIGURAZIONE PAGINA
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -3202,7 +3329,7 @@ Mantieni formato **Oggetto:** e corpo email. GENERA ORA senza tool."""
                 """, unsafe_allow_html=True)
                 
             with col2:
-                # Build polizze html
+                # Build polizze html con coefficienti attuariali
                 polizze_html = ""
                 if prodotti:
                     for p in prodotti:
@@ -3212,10 +3339,36 @@ Mantieni formato **Oggetto:** e corpo email. GENERA ORA senza tool."""
                         elif 'salute' in prod_lower: icon = '🏥'
                         elif 'pension' in prod_lower: icon = '🎯'
                         else: icon = '📋'
-                        polizze_html += f"<div style='margin-bottom:0.5rem;'>{icon} <strong>{p}</strong> <span style='background:#D1FAE5;color:#059669;padding:2px 8px;border-radius:12px;font-size:0.75rem;margin-left:8px;'>Attiva</span></div>"
+
+                        # Genera coefficienti attuariali per questa polizza
+                        coeff = genera_coefficienti_polizza(ana, p, codice_cliente_ada)
+
+                        # Colore gap: verde se pagano di più (positivo per compagnia), rosso se pagano meno
+                        gap_color = "#059669" if coeff['gap_relativo_perc'] >= 0 else "#DC2626"
+                        gap_sign = "+" if coeff['gap_relativo_perc'] >= 0 else ""
+
+                        polizze_html += f"""
+                        <div style='margin-bottom:1rem; padding:0.75rem; background:#F8FAFC; border-radius:8px; border:1px solid #E2E8F0;'>
+                            <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;'>
+                                <span>{icon} <strong>{p}</strong></span>
+                                <span style='background:#D1FAE5;color:#059669;padding:2px 8px;border-radius:12px;font-size:0.7rem;'>Attiva</span>
+                            </div>
+                            <div style='display:grid; grid-template-columns:1fr 1fr; gap:0.4rem; font-size:0.75rem; color:#64748B;'>
+                                <div>📊 Freq: <strong style="color:#1B3A5F">{coeff['frequenza_perc']:.2f}%</strong></div>
+                                <div>💰 Sev: <strong style="color:#1B3A5F">€{coeff['severita']:,.0f}</strong></div>
+                                <div>📋 P.Puro: <strong style="color:#1B3A5F">€{coeff['premio_puro']:,.0f}</strong></div>
+                                <div>🎯 P.Tecnico: <strong style="color:#1B3A5F">€{coeff['premio_tecnico']:,.0f}</strong></div>
+                            </div>
+                            <div style='margin-top:0.5rem; padding-top:0.5rem; border-top:1px dashed #E2E8F0; font-size:0.75rem;'>
+                                <div style='display:flex; justify-content:space-between;'>
+                                    <span>Premio pagato: <strong>€{coeff['premio_pagato']:,.0f}</strong></span>
+                                    <span style='color:{gap_color}; font-weight:600;'>Gap: {gap_sign}{coeff['gap_relativo_perc']:.1f}%</span>
+                                </div>
+                            </div>
+                        </div>"""
                 else:
-                    polizze_html = "<em>Nessuna polizza attiva</em>"
-                    
+                    polizze_html = "<em style='color:#94A3B8;'>Nessuna polizza attiva</em>"
+
                 st.markdown(f"""
                 <div class="standard-card">
                     <h5 style="margin-bottom: 1rem;">📦 Polizze Attive</h5>

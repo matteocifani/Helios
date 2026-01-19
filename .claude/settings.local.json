@@ -5,7 +5,9 @@
       "Bash(python3:*)",
       "Bash(source .venv/bin/activate)",
       "Bash(python scripts/python/generate_nbo_master.py:*)",
-      "Bash(python scripts/python/export_supabase_schema.py:*)"
+      "Bash(python scripts/python/export_supabase_schema.py:*)",
+      "Bash(python:*)",
+      "Bash(git checkout:*)"
     ]
   }
 }
