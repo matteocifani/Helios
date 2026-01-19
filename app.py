@@ -22,7 +22,7 @@ import os
 load_dotenv()
 
 # Import from new src structure
-from src.ada.chat import render_ada_chat
+from src.iris.chat import render_iris_chat
 from src.config.constants import (
     DEFAULT_SEISMIC_ZONE,
     SEISMIC_ZONE_COLORS,
@@ -58,6 +58,16 @@ st.markdown("""
        GOOGLE FONTS IMPORT
     ═══════════════════════════════════════════════════════════════════════ */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap');
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       STREAMLIT UI OVERRIDES (Vertical Space)
+    ═══════════════════════════════════════════════════════════════════════ */
+    /* Reduce top padding for main content */
+    .block-container {
+        padding-top: 1rem !important; /* Reduced to reduce whitespace */
+        padding-bottom: 3rem !important;
+        max-width: 100% !important;
+    }
 
     /* Fix for Streamlit sidebar toggle button showing text instead of icon */
     [data-testid="collapsedControl"],
@@ -683,26 +693,16 @@ def calculate_recommendation_score(rec, weights):
     )
 
 
-def get_all_recommendations(data, weights, filter_top20=True):
+@st.cache_data(ttl=1800)
+def get_ranked_candidates(data, weights):
     """
-    Get all recommendations with scores across all clients.
-    
-    Optimized to only check interactions for top-scoring candidates when filtering for Top 20,
-    reducing DB queries from thousands to dozens.
-
-    Args:
-        data: Client data with recommendations
-        weights: Scoring weights
-        filter_top20: If True, filter out clients not eligible for Top 20
-
-    Returns:
-        List of recommendations sorted by score (descending)
+    Calculate scores for all recommendations and return ranked list.
+    Cached to avoid re-calculating 11k+ clients on every rerun.
     """
-    # STEP 1: Score ALL clients first (no DB queries, just calculations)
     all_recs = []
     for client in data:
         codice_cliente = client['codice_cliente']
-        # Initialize eligibility flags (updated later if filter_top20)
+        # Initialize eligibility flags (will be populated in the filtering step)
         client['_is_eligible_top20'] = True
         client['_interaction_indicators'] = {}
         
@@ -721,6 +721,27 @@ def get_all_recommendations(data, weights, filter_top20=True):
     
     # Sort by score descending
     all_recs.sort(key=lambda x: x['score'], reverse=True)
+    return all_recs
+
+
+def get_all_recommendations(data, weights, filter_top20=True):
+    """
+    Get all recommendations with scores across all clients.
+    
+    Optimized to only check interactions for top-scoring candidates when filtering for Top 20,
+    reducing DB queries from thousands to dozens.
+
+    Args:
+        data: Client data with recommendations
+        weights: Scoring weights
+        filter_top20: If True, filter out clients not eligible for Top 20
+
+    Returns:
+        List of recommendations sorted by score (descending)
+    """
+    # STEP 1: Get ranked candidates (CACHED)
+    # This avoids looping through 11k clients every time
+    all_recs = get_ranked_candidates(data, weights)
     
     # STEP 2: If filtering for Top 20, only check interactions for top candidates
     # Check more than 20 to account for some being filtered out
@@ -741,20 +762,48 @@ def get_all_recommendations(data, weights, filter_top20=True):
         
         # Filter out ineligible clients and update their flags
         filtered_recs = []
+        # We only need to process the top portion of the list for display usually, 
+        # but to be safe we process the whole list or just the top logic?
+        # The UI shows "Top 20", so we really only need the top valid ones.
+        # But the function returns "all".
+        
+        # Optimization: We know we only care about the top ones for the main view.
+        # But the "Analysis" view uses statistics on ALL of them.
+        # Wait, get_all_recommendations is used for statistics too?
+        # Line 2361: all_recs = get_all_recommendations(nbo_data, st.session_state.nbo_weights)
+        # Line 2364: total_clients = len(nbo_data)
+        # Line 2365: total_recs = len(all_recs)
+        
+        # If we return a filtered list, the stats will only reflect the filtered ones?
+        # If filter_top20 is True (default), it filters.
+        
+        # Let's stick to the original logic: filter the list based on eligibility
+        
+        count_valid = 0
         for rec in all_recs:
             cc = rec['codice_cliente']
             client = rec['client_data']
             
+            # If this client was checked (because they were in top candidates)
             if cc in batch_interactions:
                 indicators = batch_interactions[cc]
                 is_eligible = not any(indicators.values())  # Eligible if NO interactions
+                
+                # Update client object in place (be careful with cache mutability, but these are transient flags)
                 client['_is_eligible_top20'] = is_eligible
                 client['_interaction_indicators'] = indicators
                 
                 if is_eligible:
                     filtered_recs.append(rec)
             else:
-                # Client wasn't in top candidates, include them (they're lower scored anyway)
+                # Client wasn't in top 100 candidates. 
+                # They are eligible by default (we didn't check them), but they are low score.
+                # However, if we want a STRICT Top 20 list, we only care about the ones we checked.
+                # But if we want the full list for stats, we should include them?
+                # The prompt implies "Policy Advisor" loads slowly.
+                
+                # If we assume unchecked clients are eligible (or we don't care because they are low score),
+                # we pass them through.
                 filtered_recs.append(rec)
         
         return filtered_recs
@@ -781,9 +830,9 @@ if 'selected_client_id' not in st.session_state:
 if 'selected_abitazione' not in st.session_state:
     st.session_state.selected_abitazione = None
 
-# A.D.A. integration
-if 'ada_auto_prompt' not in st.session_state:
-    st.session_state.ada_auto_prompt = None
+# Iris integration
+if 'iris_auto_prompt' not in st.session_state:
+    st.session_state.iris_auto_prompt = None
 
 # User info (for login - to be implemented)
 if 'user_name' not in st.session_state:
@@ -793,9 +842,9 @@ if 'user_email' not in st.session_state:
 if 'user_phone' not in st.session_state:
     st.session_state.user_phone = "+39 02 1234 5678"  # Default until login is implemented
 
-# Dashboard mode
+# Dashboard mode (renamed: Helios View -> Analytics, Helios NBO -> Policy Advisor)
 if 'dashboard_mode' not in st.session_state:
-    st.session_state.dashboard_mode = 'Helios View'
+    st.session_state.dashboard_mode = 'Analytics'
 
 # NBO state
 if 'nbo_page' not in st.session_state:
@@ -812,15 +861,28 @@ if 'nbo_selected_recommendation' not in st.session_state:
     st.session_state.nbo_selected_recommendation = None
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# SIDEBAR
+# LOAD DATA (needed before sidebar)
+# ═══════════════════════════════════════════════════════════════════════════════
+df = load_data()
+
+# Initialize filter state if not exists (for Analytics mode)
+if 'selected_city' not in st.session_state:
+    st.session_state.selected_city = 'Tutte le città'
+if 'selected_risk' not in st.session_state:
+    st.session_state.selected_risk = 'Tutti i rischi'
+if 'selected_zone' not in st.session_state:
+    st.session_state.selected_zone = 'Tutte le zone'
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SIDEBAR - ADA CHAT (Always visible)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 with st.sidebar:
-    # Sidebar header with logo
+    # Elegant brand header with full logo
     st.markdown("""
-    <div style="text-align: center; padding: 1rem 0 0.5rem;">
+    <div style="text-align: center; padding: 1rem 0 0.75rem;">
         <div style="display: inline-flex; align-items: center; gap: 0.5rem;">
-            <svg width="44" height="44" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <svg width="40" height="40" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
                 <defs>
                     <linearGradient id="tealGrad" x1="0%" y1="0%" x2="100%" y2="100%">
                         <stop offset="0%" stop-color="#00A0B0"/>
@@ -846,347 +908,193 @@ with st.sidebar:
                     <line x1="32" y1="68" x2="22" y2="78"/>
                 </g>
             </svg>
-            <span style="font-family: 'Inter', sans-serif; font-size: 2rem; font-weight: 800; background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">HELIOS</span>
+            <span style="font-family: 'Inter', sans-serif; font-size: 1.5rem; font-weight: 800; background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">HELIOS</span>
         </div>
-        <p style="font-family: 'Inter', sans-serif; font-size: 0.85rem; color: #94A3B8; letter-spacing: 0.08em; margin-top: 0.25rem;">VITA SICURA INTELLIGENCE</p>
+        <p style="font-family: 'Inter', sans-serif; font-size: 0.65rem; color: #94A3B8; letter-spacing: 0.08em; margin-top: 0.15rem; text-transform: uppercase;">Vita Sicura Intelligence</p>
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown("---")
+    st.markdown("""<div style="height: 1px; background: linear-gradient(90deg, transparent 0%, #E2E8F0 50%, transparent 100%); margin: 0.5rem 0;"></div>""", unsafe_allow_html=True)
 
-    # Dashboard mode selector
+    # Iris Chat Header - elegant card
     st.markdown("""
-    <p style="font-family: 'Inter', sans-serif; font-size: 0.7rem; font-weight: 600; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.75rem;">
-        Modalita Dashboard
-    </p>
+    <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.85rem; background: linear-gradient(135deg, rgba(0, 160, 176, 0.1) 0%, rgba(0, 201, 212, 0.05) 100%); border: 1px solid rgba(0, 160, 176, 0.15); border-radius: 14px; margin-bottom: 0.75rem;">
+        <div style="width: 38px; height: 38px; background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.15rem; box-shadow: 0 2px 8px rgba(0, 160, 176, 0.3);">☀️</div>
+        <div>
+            <p style="margin: 0; font-family: 'Inter', sans-serif; font-size: 0.9rem; font-weight: 700; color: #1B3A5F;">Iris</p>
+            <p style="margin: 0; font-family: 'Inter', sans-serif; font-size: 0.65rem; color: #64748B;">Intelligent Advisor</p>
+        </div>
+        <div style="margin-left: auto; display: flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.5rem; background: rgba(16, 185, 129, 0.1); border-radius: 100px;">
+            <span style="width: 6px; height: 6px; background: #10B981; border-radius: 50%; animation: pulse 2s infinite;"></span>
+            <span style="font-family: 'Inter', sans-serif; font-size: 0.6rem; color: #10B981; font-weight: 500;">Online</span>
+        </div>
+    </div>
+    <style>
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
     """, unsafe_allow_html=True)
 
-    dashboard_mode = st.radio(
-        "Seleziona modalita",
-        ["Helios View", "Helios NBO"],
-        index=0 if st.session_state.dashboard_mode == 'Helios View' else 1,
-        label_visibility="collapsed",
-        horizontal=True
-    )
-    st.session_state.dashboard_mode = dashboard_mode
+    # Render Iris chat in sidebar
+    render_iris_chat()
 
-    st.markdown("---")
-
-    # Load data (always needed)
-    df = load_data()
-
-    # Conditional sidebar content based on mode
-    if st.session_state.dashboard_mode == 'Helios View':
-        # Filter section title
-        st.markdown("""
-        <p style="font-family: 'Inter', sans-serif; font-size: 0.7rem; font-weight: 600; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.75rem;">
-            Filtri Analisi
-        </p>
-        """, unsafe_allow_html=True)
-
-        # City filter
-        cities_list = ['Tutte le città'] + sorted(df['citta'].unique().tolist())
-        selected_city = st.selectbox("Città", cities_list, label_visibility="collapsed")
-        st.caption("📍 Filtra per città")
-
-        # Risk category filter
-        risk_options = ['Tutti i rischi', 'Critico', 'Alto', 'Medio', 'Basso']
-        selected_risk = st.selectbox("Categoria Rischio", risk_options, label_visibility="collapsed")
-        st.caption("⚠️ Filtra per livello di rischio")
-
-        # Seismic zone filter
-        zone_options = ['Tutte le zone', 'Zona 1', 'Zona 2', 'Zona 3', 'Zona 4']
-        selected_zone = st.selectbox("Zona Sismica", zone_options, label_visibility="collapsed")
-        st.caption("🌍 Filtra per zona sismica")
-
-        st.markdown("---")
-
-        # Apply filters
-        filtered_df = df.copy()
-        if selected_city != 'Tutte le città':
-            filtered_df = filtered_df[filtered_df['citta'] == selected_city]
-        if selected_risk != 'Tutti i rischi':
-            filtered_df = filtered_df[filtered_df['risk_category'] == selected_risk]
-        if selected_zone != 'Tutte le zone':
-            zone_num = int(selected_zone.split()[-1])
-            filtered_df = filtered_df[filtered_df['zona_sismica'] == zone_num]
-
-        # Quick stats card
-        st.markdown(f"""
-        <div style="background: linear-gradient(135deg, rgba(0, 160, 176, 0.08) 0%, rgba(0, 201, 212, 0.05) 100%); border: 1px solid rgba(0, 160, 176, 0.15); border-radius: 16px; padding: 1.25rem; margin: 0.5rem 0;">
-            <p style="font-family: 'Inter', sans-serif; font-size: 0.65rem; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em; margin: 0;">Abitazioni Filtrate</p>
-            <p style="font-family: 'JetBrains Mono', monospace; font-size: 2.25rem; font-weight: 700; background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin: 0.25rem 0; line-height: 1.1;">{len(filtered_df):,}</p>
-            <p style="font-family: 'Inter', sans-serif; font-size: 0.75rem; color: #94A3B8; margin: 0;">di {len(df):,} totali ({round(len(filtered_df)/len(df)*100) if len(df) > 0 else 0}%)</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-        st.markdown("---")
-
-        # Connections status
-        st.markdown("""
-        <p style="font-family: 'Inter', sans-serif; font-size: 0.7rem; font-weight: 600; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.75rem;">
-            Connessioni
-        </p>
-        """, unsafe_allow_html=True)
-
-        st.markdown("""
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
-            <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: rgba(16, 185, 129, 0.08); border-radius: 8px;">
-                <span style="width: 6px; height: 6px; background: #10B981; border-radius: 50%;"></span>
-                <span style="font-family: 'Inter', sans-serif; font-size: 0.7rem; color: #1B3A5F; font-weight: 500;">Supabase</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: rgba(16, 185, 129, 0.08); border-radius: 8px;">
-                <span style="width: 6px; height: 6px; background: #10B981; border-radius: 50%;"></span>
-                <span style="font-family: 'Inter', sans-serif; font-size: 0.7rem; color: #1B3A5F; font-weight: 500;">INGV</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: rgba(16, 185, 129, 0.08); border-radius: 8px;">
-                <span style="width: 6px; height: 6px; background: #10B981; border-radius: 50%;"></span>
-                <span style="font-family: 'Inter', sans-serif; font-size: 0.7rem; color: #1B3A5F; font-weight: 500;">n8n</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: rgba(16, 185, 129, 0.08); border-radius: 8px;">
-                <span style="width: 6px; height: 6px; background: #10B981; border-radius: 50%;"></span>
-                <span style="font-family: 'Inter', sans-serif; font-size: 0.7rem; color: #1B3A5F; font-weight: 500;">ISPRA</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        st.markdown("---")
-
-    else:
-        # NBO Mode sidebar
-        st.markdown("""
-        <p style="font-family: 'Inter', sans-serif; font-size: 0.7rem; font-weight: 600; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.75rem;">
-            Pesi Componenti NBO
-        </p>
-        """, unsafe_allow_html=True)
-
-        st.markdown("""
-        <p style="font-family: 'Inter', sans-serif; font-size: 0.75rem; color: #64748B; margin-bottom: 1rem;">
-            Regola i pesi per calcolare lo score delle raccomandazioni
-        </p>
-        """, unsafe_allow_html=True)
-
-        retention_weight = st.slider(
-            "Retention Gain",
-            min_value=0.0,
-            max_value=1.0,
-            value=st.session_state.nbo_weights['retention'],
-            step=0.01,
-            help="Peso per la componente Retention Gain"
-        )
-
-        redditivita_weight = st.slider(
-            "Redditivita",
-            min_value=0.0,
-            max_value=1.0,
-            value=st.session_state.nbo_weights['redditivita'],
-            step=0.01,
-            help="Peso per la componente Redditivita"
-        )
-
-        propensione_weight = st.slider(
-            "Propensione",
-            min_value=0.0,
-            max_value=1.0,
-            value=st.session_state.nbo_weights['propensione'],
-            step=0.01,
-            help="Peso per la componente Propensione"
-        )
-
-        # Update weights
-        st.session_state.nbo_weights = {
-            'retention': retention_weight,
-            'redditivita': redditivita_weight,
-            'propensione': propensione_weight
-        }
-
-        # Show total weight
-        total_weight = retention_weight + redditivita_weight + propensione_weight
-        weight_color = "#10B981" if abs(total_weight - 1.0) < 0.01 else "#DC2626"
-
-        st.markdown(f"""
-        <div style="background: linear-gradient(135deg, rgba(0, 160, 176, 0.08) 0%, rgba(0, 201, 212, 0.05) 100%); border: 1px solid rgba(0, 160, 176, 0.15); border-radius: 16px; padding: 1.25rem; margin: 0.5rem 0;">
-            <p style="font-family: 'Inter', sans-serif; font-size: 0.65rem; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em; margin: 0;">Somma Pesi</p>
-            <p style="font-family: 'JetBrains Mono', monospace; font-size: 2rem; font-weight: 700; color: {weight_color}; margin: 0.25rem 0; line-height: 1.1;">{total_weight:.2f}</p>
-            <p style="font-family: 'Inter', sans-serif; font-size: 0.7rem; color: #94A3B8; margin: 0;">{"Ottimo" if abs(total_weight - 1.0) < 0.01 else "Somma consigliata: 1.00"}</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-        st.markdown("---")
-
-        # Load NBO data and show stats
-        nbo_data = load_nbo_data()
-        if nbo_data:
-            st.markdown(f"""
-            <div style="background: linear-gradient(135deg, rgba(0, 160, 176, 0.08) 0%, rgba(0, 201, 212, 0.05) 100%); border: 1px solid rgba(0, 160, 176, 0.15); border-radius: 16px; padding: 1.25rem; margin: 0.5rem 0;">
-                <p style="font-family: 'Inter', sans-serif; font-size: 0.65rem; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em; margin: 0;">Clienti NBO</p>
-                <p style="font-family: 'JetBrains Mono', monospace; font-size: 2.25rem; font-weight: 700; background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin: 0.25rem 0; line-height: 1.1;">{len(nbo_data):,}</p>
-                <p style="font-family: 'Inter', sans-serif; font-size: 0.75rem; color: #94A3B8; margin: 0;">clienti con raccomandazioni</p>
-            </div>
-            """, unsafe_allow_html=True)
-
-        st.markdown("---")
-
-        # Set default for filtered_df to avoid NameError
-        filtered_df = df
-
-    # Footer
+    # Elegant footer
     st.markdown("""
-    <div style="text-align: center; padding: 0.5rem 0;">
+    <div style="text-align: center; padding: 1rem 0; margin-top: 1rem; border-top: 1px solid #E2E8F0;">
         <p style="font-family: 'Inter', sans-serif; font-size: 0.65rem; color: #94A3B8; margin: 0;">
             Powered by <strong style="color: #1B3A5F;">Vita Sicura</strong>
         </p>
-        <p style="font-family: 'Inter', sans-serif; font-size: 0.6rem; color: #CBD5E1; margin-top: 0.25rem;">
+        <p style="font-family: 'Inter', sans-serif; font-size: 0.6rem; color: #CBD5E1; margin-top: 0.15rem;">
             Helios v2.0 • Generali AI Challenge
         </p>
     </div>
     """, unsafe_allow_html=True)
+
+# Set default for filtered_df based on stored filter state
+filtered_df = df.copy()
+if st.session_state.selected_city != 'Tutte le città':
+    filtered_df = filtered_df[filtered_df['citta'] == st.session_state.selected_city]
+if st.session_state.selected_risk != 'Tutti i rischi':
+    filtered_df = filtered_df[filtered_df['risk_category'] == st.session_state.selected_risk]
+if st.session_state.selected_zone != 'Tutte le zone':
+    zone_num = int(st.session_state.selected_zone.split()[-1])
+    filtered_df = filtered_df[filtered_df['zona_sismica'] == zone_num]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # MAIN CONTENT
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# Hero Header with Vita Sicura Logo + Helios Brand
+# Dynamic header content based on mode
+if st.session_state.dashboard_mode == 'Policy Advisor':
+    page_title = "Policy Advisor"
+    page_description = "Sistema intelligente di raccomandazioni prodotti per cross-selling e up-selling"
+else:
+    page_title = "Analytics Dashboard"
+    page_description = "Monitoraggio in tempo reale del portafoglio assicurativo territoriale"
+
+# Header with logo - centered layout using Flexbox for perfect alignment
+st.markdown(f"""
+<div style="position: relative; width: 100%; padding: 0.5rem 0 1.5rem; display: flex; justify-content: center; align-items: flex-start;">
+    <!-- CENTER CONTENT -->
+    <div style="text-align: center; z-index: 1;">
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 0.25rem;">
+            <span style="font-family: 'Inter', sans-serif; font-size: 5rem; font-weight: 800; background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: -0.02em; line-height: 1;">HELIOS</span>
+            <span style="font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 600; color: #334155; letter-spacing: 0.15em; text-transform: uppercase;">Geo-Cognitive Intelligence</span>
+        </div>
+        <h1 style="font-family: 'Playfair Display', serif; font-size: 1.5rem; font-weight: 700; color: #1B3A5F; margin: 0.75rem 0 0; letter-spacing: -0.02em;">{page_title}</h1>
+        <p style="font-family: 'Inter', sans-serif; font-size: 0.85rem; color: #334155; margin-top: 0.25rem; font-weight: 500;">{page_description}</p>
+    </div>
+
+    <!-- RIGHT BADGE (Absolute positioning) -->
+    <div style="position: absolute; right: 0; top: 0.5rem; display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 100px; font-family: 'Inter', sans-serif; font-size: 0.75rem; font-weight: 500; color: #10B981; white-space: nowrap; z-index: 2;">
+        <span style="width: 8px; height: 8px; background: #10B981; border-radius: 50%;"></span>
+        Sistema Attivo
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# Elegant navigation using styled radio buttons
 st.markdown("""
 <style>
-    .header-container {
+    /* Style the radio button container as elegant pills */
+    div[data-testid="stHorizontalBlock"]:has(div[data-testid="stRadio"]) {
         display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 1rem 0 1.5rem;
-        margin-bottom: 1rem;
+        justify-content: center;
     }
 
-    .logo-section {
-        display: flex;
-        align-items: center;
-        gap: 1.5rem;
+    /* Hide the default radio label */
+    div[data-testid="stRadio"] > label {
+        display: none !important;
     }
 
-    .vita-sicura-logo {
-        height: 60px;
-        width: auto;
+    /* Style the radio options container */
+    div[data-testid="stRadio"] > div {
+        display: flex !important;
+        flex-direction: row !important;
+        gap: 0.5rem !important;
+        background: #F8FAFC !important;
+        padding: 0.35rem !important;
+        border-radius: 100px !important;
+        border: 1px solid #E2E8F0 !important;
     }
 
-    .logo-divider {
-        width: 1px;
-        height: 45px;
-        background: linear-gradient(180deg, transparent 0%, #E2E8F0 50%, transparent 100%);
+    /* Style each radio option as a pill */
+    div[data-testid="stRadio"] > div > label {
+        background: transparent !important;
+        border: none !important;
+        border-radius: 100px !important;
+        padding: 0.6rem 1.5rem !important;
+        margin: 0 !important;
+        font-family: 'Inter', sans-serif !important;
+        font-size: 0.875rem !important;
+        font-weight: 600 !important;
+        color: #64748B !important;
+        cursor: pointer !important;
+        transition: all 0.2s ease !important;
     }
 
-    .helios-brand {
-        display: flex;
-        flex-direction: column;
-        gap: 0.15rem;
+    /* Hover state for unselected pills */
+    div[data-testid="stRadio"] > div > label:hover {
+        background: rgba(0, 160, 176, 0.08) !important;
+        color: #00A0B0 !important;
     }
 
-    .helios-title {
-        font-family: 'Inter', sans-serif;
-        font-size: 1.5rem;
-        font-weight: 800;
-        background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        letter-spacing: -0.025em;
-        line-height: 1.1;
+    /* Selected/active pill */
+    div[data-testid="stRadio"] > div > label[data-checked="true"],
+    div[data-testid="stRadio"] > div > label:has(input:checked) {
+        background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%) !important;
+        color: white !important;
+        box-shadow: 0 4px 12px rgba(0, 160, 176, 0.25) !important;
     }
 
-    .helios-subtitle {
-        font-family: 'Inter', sans-serif;
-        font-size: 0.65rem;
-        font-weight: 500;
-        color: #64748B;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
+    /* Force all text elements inside selected pill to be white */
+    div[data-testid="stRadio"] > div > label[data-checked="true"] *,
+    div[data-testid="stRadio"] > div > label:has(input:checked) * {
+        color: white !important;
     }
 
-    .header-status {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
+    /* Hide the actual radio input */
+    div[data-testid="stRadio"] input {
+        display: none !important;
     }
 
-    .status-badge {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        padding: 0.5rem 1rem;
-        background: rgba(16, 185, 129, 0.1);
-        border: 1px solid rgba(16, 185, 129, 0.2);
-        border-radius: 100px;
-        font-family: 'Inter', sans-serif;
-        font-size: 0.75rem;
-        font-weight: 500;
-        color: #10B981;
+    /* Style the text inside radio options */
+    div[data-testid="stRadio"] > div > label > div {
+        display: flex !important;
+        align-items: center !important;
+        gap: 0.4rem !important;
     }
 
-    .status-dot {
-        width: 8px;
-        height: 8px;
-        background: #10B981;
-        border-radius: 50%;
-        animation: pulse-dot 2s ease-in-out infinite;
-    }
-
-    @keyframes pulse-dot {
-        0%, 100% { opacity: 1; transform: scale(1); }
-        50% { opacity: 0.7; transform: scale(0.9); }
-    }
-
-    .page-title-section {
-        text-align: center;
-        padding: 0.5rem 0 1rem;
-    }
-
-    .page-title {
-        font-family: 'Playfair Display', serif;
-        font-size: 2rem;
-        font-weight: 700;
-        color: #1B3A5F;
-        margin: 0;
-        letter-spacing: -0.02em;
-    }
-
-    .page-description {
-        font-family: 'Inter', sans-serif;
-        font-size: 0.85rem;
-        color: #64748B;
-        margin-top: 0.25rem;
-        font-weight: 400;
+    div[data-testid="stRadio"] > div > label > div > p {
+        margin: 0 !important;
+        font-weight: 600 !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Dynamic header content based on mode
-page_title = "Dashboard Geo-Rischio" if st.session_state.dashboard_mode == 'Helios View' else "NBO Dashboard - Raccomandazioni Prodotti"
-page_description = "Monitoraggio in tempo reale del portafoglio assicurativo territoriale" if st.session_state.dashboard_mode == 'Helios View' else "Sistema intelligente di Next Best Offer per cross-selling e up-selling"
+# Centered navigation
+nav_spacer1, nav_center, nav_spacer2 = st.columns([1, 2, 1])
 
-# Header with logo - centered layout
-header_col1, header_col2 = st.columns([8, 2])
+with nav_center:
+    dashboard_mode = st.radio(
+        "Navigazione",
+        ["🎯 Policy Advisor", "📊 Analytics"],
+        index=0 if st.session_state.dashboard_mode == 'Policy Advisor' else 1,
+        horizontal=True,
+        label_visibility="collapsed",
+        key="nav_radio"
+    )
 
-with header_col1:
-    st.markdown(f"""
-    <div style="text-align: center; padding-left: 10%;">
-        <div style="display: flex; flex-direction: column; align-items: center; gap: 0.25rem;">
-            <span style="font-family: 'Inter', sans-serif; font-size: 5rem; font-weight: 800; background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: -0.02em; line-height: 1;">HELIOS</span>
-            <span style="font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 500; color: #64748B; letter-spacing: 0.15em; text-transform: uppercase;">Geo-Cognitive Intelligence</span>
-        </div>
-        <h1 style="font-family: 'Playfair Display', serif; font-size: 1.5rem; font-weight: 700; color: #1B3A5F; margin: 0.75rem 0 0; letter-spacing: -0.02em;">{page_title}</h1>
-        <p style="font-family: 'Inter', sans-serif; font-size: 0.85rem; color: #64748B; margin-top: 0.25rem; font-weight: 400;">{page_description}</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-with header_col2:
-    st.markdown("""
-    <div style="display: flex; justify-content: flex-end; align-items: flex-start; padding-top: 0.5rem;">
-        <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 100px; font-family: 'Inter', sans-serif; font-size: 0.75rem; font-weight: 500; color: #10B981; white-space: nowrap;">
-            <span style="width: 8px; height: 8px; background: #10B981; border-radius: 50%;"></span>
-            Sistema Attivo
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    # Update session state based on selection
+    if "Policy Advisor" in dashboard_mode and st.session_state.dashboard_mode != 'Policy Advisor':
+        st.session_state.dashboard_mode = 'Policy Advisor'
+        st.rerun()
+    elif "Analytics" in dashboard_mode and st.session_state.dashboard_mode != 'Analytics':
+        st.session_state.dashboard_mode = 'Analytics'
+        st.rerun()
 
 # Divider
 st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
@@ -1195,10 +1103,83 @@ st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
 # CONDITIONAL CONTENT BASED ON DASHBOARD MODE
 # ═══════════════════════════════════════════════════════════════════════════════
 
-if st.session_state.dashboard_mode == 'Helios View':
+if st.session_state.dashboard_mode == 'Analytics':
     # ═══════════════════════════════════════════════════════════════════════════════
-    # HELIOS VIEW CONTENT
+    # ANALYTICS CONTENT (formerly Helios View)
     # ═══════════════════════════════════════════════════════════════════════════════
+
+    # Inline filters - modern pill style
+    st.markdown("""
+    <style>
+        .filter-container {
+            background: #FFFFFF;
+            border: 1px solid #E2E8F0;
+            border-radius: 16px;
+            padding: 1rem 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+        .filter-label {
+            font-family: 'Inter', sans-serif;
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: #94A3B8;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.25rem;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Filter row
+    filter_col1, filter_col2, filter_col3, filter_col4 = st.columns([2, 2, 2, 1])
+
+    with filter_col1:
+        cities_list = ['Tutte le città'] + sorted(df['citta'].unique().tolist())
+        selected_city = st.selectbox(
+            "📍 Città",
+            cities_list,
+            index=cities_list.index(st.session_state.selected_city) if st.session_state.selected_city in cities_list else 0,
+            key="filter_city"
+        )
+        if selected_city != st.session_state.selected_city:
+            st.session_state.selected_city = selected_city
+            st.rerun()
+
+    with filter_col2:
+        risk_options = ['Tutti i rischi', 'Critico', 'Alto', 'Medio', 'Basso']
+        selected_risk = st.selectbox(
+            "⚠️ Categoria Rischio",
+            risk_options,
+            index=risk_options.index(st.session_state.selected_risk) if st.session_state.selected_risk in risk_options else 0,
+            key="filter_risk"
+        )
+        if selected_risk != st.session_state.selected_risk:
+            st.session_state.selected_risk = selected_risk
+            st.rerun()
+
+    with filter_col3:
+        zone_options = ['Tutte le zone', 'Zona 1', 'Zona 2', 'Zona 3', 'Zona 4']
+        selected_zone = st.selectbox(
+            "🌍 Zona Sismica",
+            zone_options,
+            index=zone_options.index(st.session_state.selected_zone) if st.session_state.selected_zone in zone_options else 0,
+            key="filter_zone"
+        )
+        if selected_zone != st.session_state.selected_zone:
+            st.session_state.selected_zone = selected_zone
+            st.rerun()
+
+    with filter_col4:
+        # Quick stats
+        st.markdown(f"""
+        <div style="text-align: center; padding: 0.5rem;">
+            <p style="font-family: 'JetBrains Mono', monospace; font-size: 1.5rem; font-weight: 700; background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin: 0; line-height: 1;">{len(filtered_df):,}</p>
+            <p style="font-family: 'Inter', sans-serif; font-size: 0.65rem; color: #94A3B8; margin: 0;">di {len(df):,}</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
 
     # Warning if no results match filters
     if len(filtered_df) == 0:
@@ -1270,12 +1251,11 @@ if st.session_state.dashboard_mode == 'Helios View':
     # ═══════════════════════════════════════════════════════════════════════════════
     # MAIN TABS
     # ═══════════════════════════════════════════════════════════════════════════════
-    
-    tab1, tab2, tab3, tab4 = st.tabs([
-        "🗺️ Mappa Geo-Rischio", 
-        "📊 Analytics", 
-        "🔍 Dettaglio Clienti",
-        "🤖 A.D.A. Chat"
+
+    tab1, tab2, tab3 = st.tabs([
+        "🗺️ Mappa Geo-Rischio",
+        "📈 Grafici",
+        "🔍 Dettaglio Clienti"
     ])
     
     # ═══════════════════════════════════════════════════════════════════════════════
@@ -1775,14 +1755,6 @@ if st.session_state.dashboard_mode == 'Helios View':
         if len(display_df) > 20:
             st.info(f"📄 Mostrati i primi 20 risultati di {len(display_df):,}. Usa i filtri per restringere la ricerca.")
     
-    
-    # ═══════════════════════════════════════════════════════════════════════════════
-    # TAB 4: A.D.A. CHAT
-    # ═══════════════════════════════════════════════════════════════════════════════
-    
-    with tab4:
-        render_ada_chat()
-
 else:
     # ═══════════════════════════════════════════════════════════════════════════════
     # NBO DASHBOARD CONTENT
@@ -1858,25 +1830,25 @@ else:
                         st.session_state.nbo_selected_recommendation = rec['recommendation']
                         st.rerun()
 
-            # ADA Section at the end of Top 5
+            # Iris Section at the end of Top 5
             st.markdown("<br><br>", unsafe_allow_html=True)
-            st.markdown("## 🤖 ADA – Sintesi e Azioni")
+            st.markdown("## 🤖 Iris – Sintesi e Azioni")
             st.markdown("""
             <div class="glass-card" style="border-left: 4px solid #00A0B0;">
                 <p style="color: #64748B; font-size: 0.95rem; line-height: 1.6; margin-bottom: 1rem;">
-                    ADA puo aiutarti ad analizzare questi clienti prioritari e preparare comunicazioni personalizzate.
+                    Iris può aiutarti ad analizzare questi clienti prioritari e preparare comunicazioni personalizzate.
                 </p>
             </div>
             """, unsafe_allow_html=True)
 
-            # Prepare context for ADA about Top 5 clients
+            # Prepare context for Iris about Top 5 clients
             top5_context = "I Top 5 clienti prioritari sono:\n\n"
             for i, rec in enumerate(top5_recs):
                 top5_context += f"{i+1}. {rec['nome']} {rec['cognome']} ({rec['codice_cliente']}) - Score: {rec['score']:.1f} - Prodotto raccomandato: {rec['prodotto']}\n"
 
             # Button for mass email action
             if st.button("📧 Prepara Email Personalizzate", type="primary", use_container_width=True, key="mass_email_top5"):
-                st.session_state.ada_auto_prompt = f"""Analizza questi {len(top5_recs)} clienti prioritari e crea una strategia di contatto:
+                st.session_state.iris_auto_prompt = f"""Analizza questi {len(top5_recs)} clienti prioritari e crea una strategia di contatto:
 
 {top5_context}
 
@@ -2025,16 +1997,16 @@ Le email devono essere personalizzate per ogni cliente, non identiche."""
                 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
                     <div>
                         <h2 style="margin: 0; color: #1B3A5F; font-size: 1.75rem; font-weight: 700;">
-                            {client_data['anagrafica']['nome']} {client_data['anagrafica']['cognome']}
+                            {client_data.get('anagrafica', {}).get('nome', 'N/D')} {client_data.get('anagrafica', {}).get('cognome', 'N/D')}
                         </h2>
                         <p style="margin: 0.25rem 0; color: #64748B; font-size: 0.9rem;">
-                            {client_data['codice_cliente']} · {client_data['anagrafica']['citta']}, {client_data['anagrafica']['provincia']}
+                            {client_data.get('codice_cliente', 'N/D')} · {client_data.get('anagrafica', {}).get('citta', 'N/D')}, {client_data.get('anagrafica', {}).get('provincia', 'N/D')}
                         </p>
                     </div>
                     <div style="text-align: right;">
                         <p style="margin: 0; color: #94A3B8; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em;">CLV Stimato</p>
                         <p style="margin: 0; color: #00A0B0; font-size: 1.75rem; font-weight: 700; font-family: 'JetBrains Mono', monospace;">
-                            €{client_data['metadata']['clv_stimato']:,}
+                            €{client_data.get('metadata', {}).get('clv_stimato', 0):,}
                         </p>
                     </div>
                 </div>
@@ -2049,16 +2021,16 @@ Le email devono essere personalizzate per ogni cliente, non identiche."""
                 ana = client_data['anagrafica']
                 st.markdown(f"""
                 <div class="glass-card">
-                    <p><strong>Eta:</strong> {ana['eta']} anni</p>
-                    <p><strong>Indirizzo:</strong> {ana['indirizzo']}</p>
-                    <p><strong>Citta:</strong> {ana['citta']}</p>
-                    <p><strong>Provincia:</strong> {ana['provincia']}</p>
-                    <p><strong>Regione:</strong> {ana['regione']}</p>
+                    <p><strong>Eta:</strong> {ana.get('eta', 'N/D')} anni</p>
+                    <p><strong>Indirizzo:</strong> {ana.get('indirizzo', 'N/D')}</p>
+                    <p><strong>Citta:</strong> {ana.get('citta', 'N/D')}</p>
+                    <p><strong>Provincia:</strong> {ana.get('provincia', 'N/D')}</p>
+                    <p><strong>Regione:</strong> {ana.get('regione', 'N/D')}</p>
                 </div>
                 """, unsafe_allow_html=True)
 
                 st.markdown("### Metadata Cliente")
-                meta = client_data['metadata']
+                meta = client_data.get('metadata', {})
 
                 # Determine cluster response badge color
                 cluster_colors = {
@@ -2066,16 +2038,16 @@ Le email devono essere personalizzate per ogni cliente, non identiche."""
                     'Moderate_Responder': '#F59E0B',
                     'Low_Responder': '#EF4444'
                 }
-                cluster_color = cluster_colors.get(meta['cluster_risposta'], '#64748B')
+                cluster_color = cluster_colors.get(meta.get('cluster_risposta'), '#64748B')
 
                 st.markdown(f"""
                 <div class="glass-card">
-                    <p><strong>Churn Attuale:</strong> <span style="font-family: 'JetBrains Mono', monospace;">{meta['churn_attuale']:.4f}</span></p>
-                    <p><strong>Polizze Attuali:</strong> {meta['num_polizze_attuali']}</p>
-                    <p><strong>Cluster NBA:</strong> {meta['cluster_nba']}</p>
-                    <p><strong>Cluster Risposta:</strong> <span style="background: {cluster_color}20; color: {cluster_color}; padding: 0.25rem 0.5rem; border-radius: 4px; font-weight: 600;">{meta['cluster_risposta']}</span></p>
-                    <p><strong>Satisfaction Score:</strong> {meta['satisfaction_score']:.1f}</p>
-                    <p><strong>Engagement Score:</strong> {meta['engagement_score']:.1f}</p>
+                    <p><strong>Churn Attuale:</strong> <span style="font-family: 'JetBrains Mono', monospace;">{meta.get('churn_attuale', 0):.4f}</span></p>
+                    <p><strong>Polizze Attuali:</strong> {meta.get('num_polizze_attuali', 'N/D')}</p>
+                    <p><strong>Cluster NBA:</strong> {meta.get('cluster_nba', 'N/D')}</p>
+                    <p><strong>Cluster Risposta:</strong> <span style="background: {cluster_color}20; color: {cluster_color}; padding: 0.25rem 0.5rem; border-radius: 4px; font-weight: 600;">{meta.get('cluster_risposta', 'N/D')}</span></p>
+                    <p><strong>Satisfaction Score:</strong> {meta.get('satisfaction_score', 0):.1f}</p>
+                    <p><strong>Engagement Score:</strong> {meta.get('engagement_score', 0):.1f}</p>
                 </div>
                 """, unsafe_allow_html=True)
 
@@ -2189,8 +2161,8 @@ Le email devono essere personalizzate per ogni cliente, non identiche."""
             # For now, use simulated CV data (will be replaced with real DB fields)
             # In production, these would come from: client_data.get('has_solar_panels', False), etc.
             import hashlib
-            codice_cliente = client_data['codice_cliente']
-            client_hash = int(hashlib.md5(codice_cliente.encode()).hexdigest(), 16)
+            codice_cliente = client_data.get('codice_cliente', '')
+            client_hash = int(hashlib.md5(str(codice_cliente).encode()).hexdigest(), 16)
 
             # Simulate CV detections based on client hash (for demonstration)
             has_solar_panels = (client_hash % 3) == 0  # ~33% have solar panels
@@ -2289,10 +2261,10 @@ Le email devono essere personalizzate per ogni cliente, non identiche."""
             st.dataframe(df_recs, use_container_width=True, hide_index=True)
 
             # ═══════════════════════════════════════════════════════════════════
-            # ADA SECTION - Client Support
+            # Iris SECTION - Client Support
             # ═══════════════════════════════════════════════════════════════════
             st.markdown("<br><br>", unsafe_allow_html=True)
-            st.markdown("## 🤖 ADA – Supporto Cliente")
+            st.markdown("## 🤖 Iris – Supporto Cliente")
 
             # Initialize session state for email draft
             if 'client_email_draft' not in st.session_state:
@@ -2300,7 +2272,7 @@ Le email devono essere personalizzate per ogni cliente, non identiche."""
             if 'current_draft_client' not in st.session_state:
                 st.session_state.current_draft_client = None
 
-            # Prepare client context for ADA
+            # Prepare client context for Iris
             codice_cliente_ada = client_data['codice_cliente']
             nome_completo = f"{client_data['anagrafica']['nome']} {client_data['anagrafica']['cognome']}"
 
@@ -2315,7 +2287,7 @@ Retention Gain: {recommendation['componenti']['retention_gain']:.1f}%
 Propensione: {recommendation['componenti']['propensione']:.1f}%"""
 
             # Generate email draft button
-            if st.button("✍️ Genera Bozza Email con ADA", type="primary", use_container_width=True, key="generate_email_draft"):
+            if st.button("✍️ Genera Bozza Email con Iris", type="primary", use_container_width=True, key="generate_email_draft"):
                 prompt = f"""IMPORTANTE: NON usare alcun tool. Ti sto fornendo TUTTI i dati necessari qui sotto. Genera DIRETTAMENTE l'email.
 
 DATI CLIENTE (già forniti, non recuperare dal database):
@@ -2345,16 +2317,16 @@ FORMATO RICHIESTO:
 
 GENERA L'EMAIL ORA senza usare tool."""
 
-                # Generate email using ADA engine
-                with st.spinner("🤖 ADA sta generando la bozza email..."):
-                    # Import ADA chat function
-                    from ada_chat_enhanced import init_ada_engine, get_ada_response
+                # Generate email using Iris engine
+                with st.spinner("🤖 Iris sta generando la bozza email..."):
+                    # Import Iris chat function
+                    from src.iris.chat import init_iris_engine, get_iris_response
 
                     # Initialize engine if needed
-                    init_ada_engine()
+                    init_iris_engine()
 
-                    # Get response from ADA
-                    result = get_ada_response(prompt)
+                    # Get response from Iris
+                    result = get_iris_response(prompt)
 
                     if result.get("success"):
                         st.session_state.client_email_draft = result.get("response")
@@ -2404,13 +2376,13 @@ TASK: Modifica l'email secondo la richiesta mantenendo il formato:
 
 GENERA LA VERSIONE MODIFICATA ORA senza usare tool."""
 
-                        # Update email using ADA engine
-                        with st.spinner("🤖 ADA sta modificando l'email..."):
-                            # Import ADA chat function
-                            from ada_chat_enhanced import get_ada_response
+                        # Update email using Iris engine
+                        with st.spinner("🤖 Iris sta modificando l'email..."):
+                            # Import Iris chat function
+                            from src.iris.chat import get_iris_response
 
-                            # Get response from ADA
-                            result = get_ada_response(updated_prompt)
+                            # Get response from Iris
+                            result = get_iris_response(updated_prompt)
 
                             if result.get("success"):
                                 st.session_state.client_email_draft = result.get("response")
@@ -2421,7 +2393,7 @@ GENERA LA VERSIONE MODIFICATA ORA senza usare tool."""
 
         else:
             # ═══════════════════════════════════════════════════════════════════════════════
-            # NBO MAIN DASHBOARD VIEW
+            # POLICY ADVISOR MAIN DASHBOARD VIEW (formerly NBO)
             # ═══════════════════════════════════════════════════════════════════════════════
 
             # Get all recommendations with current weights
@@ -2468,6 +2440,76 @@ GENERA LA VERSIONE MODIFICATA ORA senza usare tool."""
                     value=top_area.split()[0] if top_area != "N/A" else "N/A",
                     delta=f"{area_counts.get(top_area, 0)} recs" if top_area != "N/A" else ""
                 )
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            # ═══════════════════════════════════════════════════════════════════════════════
+            # NBO WEIGHTS EXPLANATION CARD
+            # ═══════════════════════════════════════════════════════════════════════════════
+
+            # Get current weights
+            w_ret = st.session_state.nbo_weights['retention']
+            w_red = st.session_state.nbo_weights['redditivita']
+            w_pro = st.session_state.nbo_weights['propensione']
+            total_weight = w_ret + w_red + w_pro
+            weight_valid = abs(total_weight - 1.0) < 0.01
+
+            with st.expander("⚖️ Pesi delle Raccomandazioni — Configurazione Q1 2026", expanded=False):
+                st.markdown(f"""
+                <div style="background: linear-gradient(135deg, rgba(0, 160, 176, 0.06) 0%, rgba(0, 201, 212, 0.03) 100%); border-radius: 16px; padding: 1.5rem; margin-bottom: 1rem;">
+                    <h4 style="margin: 0 0 1rem 0; font-family: 'Inter', sans-serif; font-size: 1rem; font-weight: 700; color: #1B3A5F;">
+                        Come viene calcolato lo Score delle raccomandazioni
+                    </h4>
+                    <p style="color: #64748B; font-size: 0.9rem; line-height: 1.7; margin-bottom: 1.25rem;">
+                        Lo <strong>score di priorità</strong> determina quali clienti contattare per primo.
+                        È calcolato combinando tre fattori chiave, ciascuno con un peso specifico definito
+                        trimestralmente dalla direzione commerciale.
+                    </p>
+
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem;">
+                        <div style="background: white; border-radius: 12px; padding: 1rem; border: 1px solid #E2E8F0; text-align: center;">
+                            <p style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 1.75rem; font-weight: 700; color: #00A0B0;">{w_ret:.0%}</p>
+                            <p style="margin: 0.25rem 0 0 0; font-family: 'Inter', sans-serif; font-size: 0.7rem; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em;">Retention</p>
+                        </div>
+                        <div style="background: white; border-radius: 12px; padding: 1rem; border: 1px solid #E2E8F0; text-align: center;">
+                            <p style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 1.75rem; font-weight: 700; color: #00A0B0;">{w_red:.0%}</p>
+                            <p style="margin: 0.25rem 0 0 0; font-family: 'Inter', sans-serif; font-size: 0.7rem; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em;">Redditivita</p>
+                        </div>
+                        <div style="background: white; border-radius: 12px; padding: 1rem; border: 1px solid #E2E8F0; text-align: center;">
+                            <p style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 1.75rem; font-weight: 700; color: #00A0B0;">{w_pro:.0%}</p>
+                            <p style="margin: 0.25rem 0 0 0; font-family: 'Inter', sans-serif; font-size: 0.7rem; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em;">Propensione</p>
+                        </div>
+                    </div>
+
+                    <div style="background: white; border-radius: 12px; padding: 1.25rem; border: 1px solid #E2E8F0;">
+                        <div style="margin-bottom: 1rem;">
+                            <p style="margin: 0; font-family: 'Inter', sans-serif; font-size: 0.8rem; font-weight: 600; color: #1B3A5F;">🔄 Retention Gain</p>
+                            <p style="margin: 0.25rem 0 0 0; color: #64748B; font-size: 0.8rem; line-height: 1.5;">
+                                Misura quanto l'acquisto del prodotto ridurrebbe la probabilità di abbandono (churn) del cliente.
+                                Un valore alto indica che il prodotto è particolarmente efficace nel fidelizzare quel cliente.
+                            </p>
+                        </div>
+                        <div style="margin-bottom: 1rem;">
+                            <p style="margin: 0; font-family: 'Inter', sans-serif; font-size: 0.8rem; font-weight: 600; color: #1B3A5F;">💰 Redditività</p>
+                            <p style="margin: 0.25rem 0 0 0; color: #64748B; font-size: 0.8rem; line-height: 1.5;">
+                                Stima il valore economico atteso dalla vendita del prodotto, considerando premio, marginalità
+                                e probabilità di rinnovo negli anni successivi.
+                            </p>
+                        </div>
+                        <div>
+                            <p style="margin: 0; font-family: 'Inter', sans-serif; font-size: 0.8rem; font-weight: 600; color: #1B3A5F;">🎯 Propensione</p>
+                            <p style="margin: 0.25rem 0 0 0; color: #64748B; font-size: 0.8rem; line-height: 1.5;">
+                                Indica la probabilità che il cliente accetti l'offerta, basata sul suo profilo comportamentale,
+                                storico di risposta alle campagne e cluster di appartenenza.
+                            </p>
+                        </div>
+                    </div>
+
+                    <p style="color: #94A3B8; font-size: 0.75rem; margin-top: 1rem; font-style: italic; text-align: center;">
+                        I pesi vengono aggiornati ogni trimestre dalla Direzione Commerciale • Ultimo aggiornamento: Q1 2026
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
 
             st.markdown("<br>", unsafe_allow_html=True)
 

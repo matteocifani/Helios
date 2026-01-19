@@ -132,7 +132,7 @@ DB_CHUNK_SIZE: int = 1000              # Number of rows per API request
 DB_MAX_SEARCH_RESULTS: int = 20        # Max results for search queries
 
 # Cache TTL (Time To Live) in seconds
-CACHE_TTL_SHORT: int = 300             # 5 minutes (for frequently changing data)
+CACHE_TTL_SHORT: int = 1800            # 30 minutes (increased for better performance)
 CACHE_TTL_MEDIUM: int = 600            # 10 minutes (for reference data)
 CACHE_TTL_LONG: int = 3600             # 1 hour (for static data)
 
@@ -215,7 +215,7 @@ CLIENTI_COLUMNS: List[str] = [
 # A.D.A. SYSTEM PROMPT (Centralized for easier modification)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-ADA_SYSTEM_PROMPT: str = """Sei A.D.A., l'assistente AI avanzato di Generali Italia per il progetto Helios.
+IRIS_SYSTEM_PROMPT: str = """Sei Iris, l'assistente AI avanzato di Generali Italia per il progetto Helios.
 Sei uno strumento interno utilizzato da AGENTI ASSICURATIVI AUTORIZZATI.
 Hai PIENO ACCESSO a tutti i dati del cliente e PUOI visualizzare polizze, preventivi e dati sensibili.
 

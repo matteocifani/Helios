@@ -1,10 +1,10 @@
 """
 ╔═══════════════════════════════════════════════════════════════════════════════╗
-║                    A.D.A. - AUGMENTED DIGITAL ADVISOR                         ║
+║                          IRIS - INTELLIGENT ADVISOR                           ║
 ║                        Python Core Engine                                     ║
 ╚═══════════════════════════════════════════════════════════════════════════════╝
 
-Implementazione Python completa di A.D.A. con:
+Implementazione Python completa di Iris con:
 - Integrazione OpenRouter (Claude 3.5 Sonnet)
 - 6 Tools: Client Profile, Policies, Risk, Solar, RAG, Premium
 - Gestione conversazione multi-turn
@@ -48,7 +48,7 @@ from src.config.constants import (
     API_TIMEOUT_DEFAULT,
     API_TIMEOUT_EMBEDDING,
     MAX_CONVERSATION_HISTORY,
-    ADA_SYSTEM_PROMPT,
+    IRIS_SYSTEM_PROMPT,
     get_seismic_zone_info,
 )
 
@@ -56,17 +56,17 @@ load_dotenv()
 
 # VERIFY MODULE IS LOADED
 print("=" * 80)
-print("🔄 ADA_ENGINE.PY LOADED - PRODUCTION VERSION")
+print("🔄 IRIS_ENGINE.PY LOADED - PRODUCTION VERSION")
 print("=" * 80)
 
 
-class ADAEngine:
+class IrisEngine:
     """
-    Core engine per A.D.A. - Gestisce AI, tools e conversazione.
+    Core engine per Iris - Gestisce AI, tools e conversazione.
     """
     
     def __init__(self, supabase_client):
-        print("🎯 ADAEngine.__init__() called - Using FIXED version with tool calling")
+        print("🎯 IrisEngine.__init__() called - Using FIXED version with tool calling")
         self.supabase = supabase_client
         self.openrouter_key = os.getenv("OPENROUTER_API_KEY")
         self.model = "anthropic/claude-3.5-sonnet"
@@ -231,7 +231,7 @@ class ADAEngine:
     
     def chat(self, message: str, client_id: Optional[int] = None, history: Optional[List[Dict]] = None) -> Dict[str, Any]:
         """
-        Main chat interface - gestisce conversazione con A.D.A.
+        Main chat interface - gestisce conversazione con Iris.
         
         Args:
             message: User message
@@ -361,7 +361,7 @@ CONTESTO CLIENTE:
             "Authorization": f"Bearer {self.openrouter_key}",
             "Content-Type": "application/json",
             "HTTP-Referer": "https://helios-project.local",
-            "X-Title": "Helios A.D.A."
+            "X-Title": "Helios Iris"
         }
         
         payload = {
@@ -434,8 +434,8 @@ CONTESTO CLIENTE:
         return tools
     
     def _get_system_prompt(self) -> str:
-        """Get system prompt for A.D.A. from constants."""
-        return ADA_SYSTEM_PROMPT
+        """Get system prompt for Iris from constants."""
+        return IRIS_SYSTEM_PROMPT
 
     # ========================================================================
     # TOOLS IMPLEMENTATION

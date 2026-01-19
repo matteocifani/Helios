@@ -14,6 +14,7 @@ import pandas as pd
 from typing import Optional, Dict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
+import math
 
 # Import constants
 from src.config.constants import (
@@ -113,7 +114,7 @@ def _retry_query(func, *args, **kwargs):
 @st.cache_data(ttl=CACHE_TTL_SHORT)
 def fetch_abitazioni() -> pd.DataFrame:
     """
-    Fetch all abitazioni with risk scores from Supabase using chunked pagination.
+    Fetch all abitazioni with risk scores from Supabase using PARALLEL pagination.
 
     Returns:
         DataFrame with abitazioni data or empty DataFrame with expected columns
@@ -124,37 +125,49 @@ def fetch_abitazioni() -> pd.DataFrame:
         return pd.DataFrame(columns=ABITAZIONI_COLUMNS)
 
     try:
-        all_data = []
-        offset = 0
+        # 1. Get total count first to calculate chunks
+        count_response = _retry_query(
+            lambda: client.table("abitazioni").select("id", count="exact").limit(1).execute()
+        )
+        total_count = count_response.count
+        
+        if total_count == 0:
+            logger.warning("No abitazioni records found (count=0)")
+            return pd.DataFrame(columns=ABITAZIONI_COLUMNS)
 
-        while True:
+        num_chunks = math.ceil(total_count / DB_CHUNK_SIZE)
+        logger.info(f"Fetching {total_count} abitazioni records in {num_chunks} parallel chunks...")
+
+        all_data = []
+
+        # 2. Define fetch function for a single chunk
+        def fetch_chunk(chunk_idx):
+            start = chunk_idx * DB_CHUNK_SIZE
+            end = start + DB_CHUNK_SIZE - 1
             try:
                 response = _retry_query(
                     lambda: client.table("abitazioni").select(
                         "id, codice_cliente, citta, latitudine, longitudine, "
                         "zona_sismica, hydro_risk_p3, hydro_risk_p2, flood_risk_p4, flood_risk_p3, "
                         "risk_score, risk_category, solar_potential_kwh, updated_at"
-                    ).range(offset, offset + DB_CHUNK_SIZE - 1).execute()
+                    ).range(start, end).execute()
                 )
+                return response.data
+            except Exception as e:
+                logger.error(f"Error fetching chunk {chunk_idx}: {e}")
+                return []
 
-                data = response.data
-                if not data or len(data) == 0:
-                    break
-
-                all_data.extend(data)
-                logger.info(f"Fetched {len(data)} abitazioni records (offset: {offset})")
-
-                if len(data) < DB_CHUNK_SIZE:
-                    break
-
-                offset += DB_CHUNK_SIZE
-
-            except SupabaseQueryError as e:
-                logger.error(f"Error fetching abitazioni chunk at offset {offset}: {e}")
-                break
+        # 3. Execute in parallel (max 4-5 workers to avoid rate limits)
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = [executor.submit(fetch_chunk, i) for i in range(num_chunks)]
+            
+            for future in as_completed(futures):
+                data = future.result()
+                if data:
+                    all_data.extend(data)
 
         if not all_data:
-            logger.warning("No abitazioni data retrieved")
+            logger.warning("No abitazioni data retrieved after chunks")
             return pd.DataFrame(columns=ABITAZIONI_COLUMNS)
 
         df = pd.DataFrame(all_data)
@@ -170,7 +183,7 @@ def fetch_abitazioni() -> pd.DataFrame:
 @st.cache_data(ttl=CACHE_TTL_SHORT)
 def fetch_clienti() -> pd.DataFrame:
     """
-    Fetch client data with CLV and churn probability using chunked pagination.
+    Fetch client data with CLV and churn probability using PARALLEL pagination.
 
     Returns:
         DataFrame with client data or empty DataFrame with expected columns
@@ -181,36 +194,48 @@ def fetch_clienti() -> pd.DataFrame:
         return pd.DataFrame(columns=CLIENTI_COLUMNS)
 
     try:
-        all_data = []
-        offset = 0
+        # 1. Get total count first to calculate chunks
+        count_response = _retry_query(
+            lambda: client.table("clienti").select("codice_cliente", count="exact").limit(1).execute()
+        )
+        total_count = count_response.count
+        
+        if total_count == 0:
+            logger.warning("No client records found (count=0)")
+            return pd.DataFrame(columns=CLIENTI_COLUMNS)
 
-        while True:
+        num_chunks = math.ceil(total_count / DB_CHUNK_SIZE)
+        logger.info(f"Fetching {total_count} client records in {num_chunks} parallel chunks...")
+
+        all_data = []
+
+        # 2. Define fetch function
+        def fetch_chunk(chunk_idx):
+            start = chunk_idx * DB_CHUNK_SIZE
+            end = start + DB_CHUNK_SIZE - 1
             try:
                 response = _retry_query(
                     lambda: client.table("clienti").select(
                         "codice_cliente, nome, cognome, eta, professione, reddito, "
                         "churn_probability, clv_stimato, latitudine, longitudine, num_polizze"
-                    ).range(offset, offset + DB_CHUNK_SIZE - 1).execute()
+                    ).range(start, end).execute()
                 )
+                return response.data
+            except Exception as e:
+                logger.error(f"Error fetching client chunk {chunk_idx}: {e}")
+                return []
 
-                data = response.data
-                if not data or len(data) == 0:
-                    break
-
-                all_data.extend(data)
-                logger.info(f"Fetched {len(data)} client records (offset: {offset})")
-
-                if len(data) < DB_CHUNK_SIZE:
-                    break
-
-                offset += DB_CHUNK_SIZE
-
-            except SupabaseQueryError as e:
-                logger.error(f"Error fetching clienti chunk at offset {offset}: {e}")
-                break
+        # 3. Execute in parallel
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = [executor.submit(fetch_chunk, i) for i in range(num_chunks)]
+            
+            for future in as_completed(futures):
+                data = future.result()
+                if data:
+                    all_data.extend(data)
 
         if not all_data:
-            logger.warning("No client data retrieved")
+            logger.warning("No client data retrieved after chunks")
             return pd.DataFrame(columns=CLIENTI_COLUMNS)
 
         df = pd.DataFrame(all_data)

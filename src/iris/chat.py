@@ -1,6 +1,6 @@
 """
 ╔═══════════════════════════════════════════════════════════════════════════════╗
-║                    A.D.A. CHAT - Enhanced Python Version                      ║
+║                    IRIS CHAT - Enhanced Python Version                        ║
 ║                   Streamlit Interface con Engine Locale                       ║
 ╚═══════════════════════════════════════════════════════════════════════════════╝
 """
@@ -10,23 +10,23 @@ import streamlit as st
 from typing import Dict
 from dotenv import load_dotenv
 
-# Import production ADA engine
-print("📦 Importing ada_engine (production version)...")
-from src.ada.engine import ADAEngine
+# Import production Iris engine
+print("📦 Importing iris_engine (production version)...")
+from src.iris.engine import IrisEngine
 
 load_dotenv()
 
 
 
-ADA_VERSION = "1.1"  # Increment to force reload
+IRIS_VERSION = "1.0"  # Increment to force reload
 
-def init_ada_engine() -> None:
-    """Initialize A.D.A. engine with Supabase connection."""
+def init_iris_engine() -> None:
+    """Initialize Iris engine with Supabase connection."""
     # Check if engine exists or version changed
-    if "ada_engine" not in st.session_state or st.session_state.get("ada_version") != ADA_VERSION:
+    if "iris_engine" not in st.session_state or st.session_state.get("iris_version") != IRIS_VERSION:
         try:
             print("=" * 80)
-            print(f"🔧 INITIALIZING A.D.A. ENGINE (v{ADA_VERSION})")
+            print(f"🔧 INITIALIZING IRIS ENGINE (v{IRIS_VERSION})")
             print("=" * 80)
 
             # Import here to avoid circular dependency
@@ -34,224 +34,160 @@ def init_ada_engine() -> None:
 
             supabase = get_supabase_client()
             if supabase:
-                st.session_state.ada_engine = ADAEngine(supabase)
-                st.session_state.ada_mode = "python"
-                st.session_state.ada_version = ADA_VERSION
-                print(f"✅ A.D.A. Engine v{ADA_VERSION} initialized successfully")
+                st.session_state.iris_engine = IrisEngine(supabase)
+                st.session_state.iris_mode = "python"
+                st.session_state.iris_version = IRIS_VERSION
+                print(f"✅ Iris Engine v{IRIS_VERSION} initialized successfully")
             else:
-                st.session_state.ada_engine = None
-                st.session_state.ada_mode = "fallback"
+                st.session_state.iris_engine = None
+                st.session_state.iris_mode = "fallback"
                 print("❌ Supabase connection failed, using fallback mode")
         except Exception as e:
-            st.error(f"⚠️ Errore inizializzazione A.D.A.: {e}")
-            st.session_state.ada_engine = None
-            st.session_state.ada_mode = "fallback"
+            st.error(f"⚠️ Errore inizializzazione Iris: {e}")
+            st.session_state.iris_engine = None
+            st.session_state.iris_mode = "fallback"
 
 
-def render_ada_chat() -> None:
+def render_iris_chat() -> None:
     """
-    Render the A.D.A. chat interface with Python engine.
+    Render the Iris chat interface with Python engine.
+    Optimized for sidebar display (compact mode).
     """
-    # Apply Vita Sicura Light Theme CSS for chat
+    # Apply Vita Sicura Light Theme CSS for sidebar chat
     st.markdown("""
     <style>
-        /* Chat container styling */
-        [data-testid="stChatMessage"] {
-            background: rgba(255, 255, 255, 0.85) !important;
+        /* Sidebar-optimized chat styling */
+        [data-testid="stSidebar"] [data-testid="stChatMessage"] {
+            background: rgba(255, 255, 255, 0.9) !important;
             border: 1px solid #E2E8F0 !important;
-            border-radius: 16px !important;
-            padding: 1rem !important;
-            margin-bottom: 0.75rem !important;
-            box-shadow: 0 2px 4px rgba(27, 58, 95, 0.05) !important;
+            border-radius: 12px !important;
+            padding: 0.6rem !important;
+            margin-bottom: 0.5rem !important;
+            box-shadow: 0 1px 2px rgba(27, 58, 95, 0.04) !important;
         }
 
-        /* User message */
-        [data-testid="stChatMessage"][data-testid*="user"] {
-            background: linear-gradient(135deg, rgba(0, 160, 176, 0.08) 0%, rgba(0, 201, 212, 0.05) 100%) !important;
-            border: 1px solid rgba(0, 160, 176, 0.15) !important;
+        /* User message in sidebar */
+        [data-testid="stSidebar"] [data-testid="stChatMessage"][data-testid*="user"] {
+            background: linear-gradient(135deg, rgba(0, 160, 176, 0.08) 0%, rgba(0, 201, 212, 0.04) 100%) !important;
+            border: 1px solid rgba(0, 160, 176, 0.12) !important;
         }
 
-        /* Chat input */
-        [data-testid="stChatInput"] {
-            border-radius: 16px !important;
+        /* Chat input in sidebar */
+        [data-testid="stSidebar"] [data-testid="stChatInput"] {
+            border-radius: 12px !important;
         }
 
-        [data-testid="stChatInput"] > div {
+        [data-testid="stSidebar"] [data-testid="stChatInput"] > div {
             background: #FFFFFF !important;
             border: 1px solid #E2E8F0 !important;
-            border-radius: 16px !important;
-            box-shadow: 0 2px 8px rgba(27, 58, 95, 0.08) !important;
+            border-radius: 12px !important;
+            box-shadow: 0 1px 4px rgba(27, 58, 95, 0.06) !important;
         }
 
-        [data-testid="stChatInput"] input {
+        [data-testid="stSidebar"] [data-testid="stChatInput"] input {
             font-family: 'Inter', sans-serif !important;
+            font-size: 0.8rem !important;
             color: #1B3A5F !important;
         }
 
-        [data-testid="stChatInput"] input::placeholder {
+        [data-testid="stSidebar"] [data-testid="stChatInput"] input::placeholder {
             color: #94A3B8 !important;
+            font-size: 0.75rem !important;
         }
 
-        /* Chat message text */
-        [data-testid="stChatMessage"] p,
-        [data-testid="stChatMessage"] span,
-        [data-testid="stChatMessage"] li {
+        /* Chat message text in sidebar */
+        [data-testid="stSidebar"] [data-testid="stChatMessage"] p,
+        [data-testid="stSidebar"] [data-testid="stChatMessage"] span,
+        [data-testid="stSidebar"] [data-testid="stChatMessage"] li {
             color: #1B3A5F !important;
             font-family: 'Inter', sans-serif !important;
+            font-size: 0.8rem !important;
+            line-height: 1.4 !important;
         }
 
-        [data-testid="stChatMessage"] strong {
+        [data-testid="stSidebar"] [data-testid="stChatMessage"] strong {
             color: #00A0B0 !important;
         }
 
-        /* Expander in chat */
-        [data-testid="stChatMessage"] .streamlit-expanderHeader {
+        /* Expander in sidebar chat */
+        [data-testid="stSidebar"] [data-testid="stChatMessage"] .streamlit-expanderHeader {
             background: rgba(243, 244, 246, 0.8) !important;
             border: 1px solid #E2E8F0 !important;
-            border-radius: 8px !important;
-            font-size: 0.8rem !important;
+            border-radius: 6px !important;
+            font-size: 0.7rem !important;
+            padding: 0.4rem !important;
         }
 
-        /* Code blocks in chat */
-        [data-testid="stChatMessage"] code {
+        /* Code blocks in sidebar chat */
+        [data-testid="stSidebar"] [data-testid="stChatMessage"] code {
             background: #F3F4F6 !important;
             color: #1B3A5F !important;
             border: 1px solid #E2E8F0 !important;
-            border-radius: 6px !important;
+            border-radius: 4px !important;
             font-family: 'JetBrains Mono', monospace !important;
+            font-size: 0.7rem !important;
         }
 
-        /* ADA header styling */
-        .ada-header {
-            background: linear-gradient(135deg, rgba(0, 160, 176, 0.1) 0%, rgba(0, 201, 212, 0.05) 100%);
-            border: 1px solid rgba(0, 160, 176, 0.2);
-            border-radius: 16px;
-            padding: 1rem 1.5rem;
-            margin-bottom: 1rem;
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-
-        .ada-avatar {
-            width: 48px;
-            height: 48px;
-            background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.5rem;
-        }
-
-        .ada-info h3 {
-            margin: 0;
-            font-family: 'Inter', sans-serif;
-            font-size: 1.1rem;
-            font-weight: 700;
-            color: #1B3A5F;
-        }
-
-        .ada-info p {
-            margin: 0.25rem 0 0;
-            font-family: 'Inter', sans-serif;
-            font-size: 0.8rem;
-            color: #64748B;
-        }
-
-        .ada-status {
-            margin-left: auto;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.4rem 0.8rem;
-            background: rgba(16, 185, 129, 0.1);
-            border: 1px solid rgba(16, 185, 129, 0.2);
-            border-radius: 100px;
-            font-family: 'Inter', sans-serif;
-            font-size: 0.7rem;
-            font-weight: 500;
-            color: #10B981;
-        }
-
-        .ada-status-dot {
-            width: 6px;
-            height: 6px;
-            background: #10B981;
-            border-radius: 50%;
+        /* Chat avatar sizing for sidebar */
+        [data-testid="stSidebar"] [data-testid="stChatMessage"] img,
+        [data-testid="stSidebar"] [data-testid="stChatMessage"] [data-testid="stChatMessageAvatar"] {
+            width: 24px !important;
+            height: 24px !important;
         }
     </style>
     """, unsafe_allow_html=True)
 
     # Initialize engine
-    init_ada_engine()
+    init_iris_engine()
 
     # Initialize chat history
-    if "ada_messages" not in st.session_state:
-        st.session_state.ada_messages = [
+    if "iris_messages" not in st.session_state:
+        st.session_state.iris_messages = [
             {
                 "role": "assistant",
-                "content": get_welcome_message()
+                "content": get_welcome_message_compact()
             }
         ]
 
-    # Display mode indicator with styled header
-    mode_emoji = "🐍" if st.session_state.get("ada_mode") == "python" else "⚙️" if st.session_state.get("ada_mode") == "n8n" else "💤"
-    mode_text = "Python Engine" if st.session_state.get("ada_mode") == "python" else "n8n Webhook" if st.session_state.get("ada_mode") == "n8n" else "Fallback Mode"
+    # Check for auto-prompt from map selection (compact for sidebar)
+    if st.session_state.get('iris_auto_prompt'):
+        auto_prompt = st.session_state.iris_auto_prompt
 
-    st.markdown(f"""
-    <div class="ada-header">
-        <div class="ada-avatar">☀️</div>
-        <div class="ada-info">
-            <h3>A.D.A. - Augmented Digital Advisor</h3>
-            <p>Assistente intelligente per analisi geo-rischio e consulenza assicurativa</p>
+        st.markdown(f"""
+        <div style="background: #FEF3C7; border-radius: 8px; padding: 0.5rem; margin-bottom: 0.5rem; font-size: 0.75rem;">
+            <strong>💡 Prompt suggerito</strong>
         </div>
-        <div class="ada-status">
-            <span class="ada-status-dot"></span>
-            {mode_emoji} {mode_text}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
-    # Check for auto-prompt from map selection (styled)
-    if st.session_state.get('ada_auto_prompt'):
-        auto_prompt = st.session_state.ada_auto_prompt
+        if st.button("🚀 Esegui", key="use_auto_prompt", type="primary", use_container_width=True):
+            # Add user message with auto-prompt
+            st.session_state.iris_messages.append({"role": "user", "content": auto_prompt})
 
-        st.info(f"💡 **Prompt dalla mappa:** {auto_prompt}")
+            # Get response
+            result = get_iris_response(auto_prompt)
+            response = result.get("response", "Errore di elaborazione.")
+            tools_used = result.get("tools_used", [])
 
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            if st.button("🚀 Usa questo prompt", key="use_auto_prompt", type="primary", use_container_width=True):
-                # Add user message with auto-prompt
-                st.session_state.ada_messages.append({"role": "user", "content": auto_prompt})
+            # Add to history
+            st.session_state.iris_messages.append({
+                "role": "assistant",
+                "content": response,
+                "tools_used": tools_used
+            })
 
-                # Get response
-                result = get_ada_response(auto_prompt)
-                response = result.get("response", "Errore di elaborazione.")
-                tools_used = result.get("tools_used", [])
-
-                # Add to history
-                st.session_state.ada_messages.append({
-                    "role": "assistant",
-                    "content": response,
-                    "tools_used": tools_used
-                })
-
-                # Clear auto-prompt
-                st.session_state.ada_auto_prompt = None
-                st.rerun()
-
-        if st.button("❌ Ignora", key="ignore_auto_prompt"):
-            st.session_state.ada_auto_prompt = None
+            # Clear auto-prompt
+            st.session_state.iris_auto_prompt = None
             st.rerun()
 
-        st.markdown("---")
+        if st.button("✕ Ignora", key="ignore_auto_prompt", use_container_width=True):
+            st.session_state.iris_auto_prompt = None
+            st.rerun()
 
     # Chat container
     chat_container = st.container()
     
     with chat_container:
-        for msg in st.session_state.ada_messages:
+        for msg in st.session_state.iris_messages:
             avatar = "☀️" if msg["role"] == "assistant" else "👤"
             with st.chat_message(msg["role"], avatar=avatar):
                 st.markdown(msg["content"])
@@ -263,17 +199,17 @@ def render_ada_chat() -> None:
                             st.code(tool, language="text")
     
     # Input
-    if prompt := st.chat_input("Chiedi ad A.D.A..."):
+    if prompt := st.chat_input("Scrivi qui..."):
         # Add user message
-        st.session_state.ada_messages.append({"role": "user", "content": prompt})
+        st.session_state.iris_messages.append({"role": "user", "content": prompt})
         
         with st.chat_message("user", avatar="👤"):
             st.markdown(prompt)
         
         # Get response
         with st.chat_message("assistant", avatar="☀️"):
-            with st.spinner("A.D.A. sta elaborando..."):
-                result = get_ada_response(prompt)
+            with st.spinner("Iris sta elaborando..."):
+                result = get_iris_response(prompt)
                 
                 response = result.get("response", "Errore di elaborazione.")
                 tools_used = result.get("tools_used", [])
@@ -287,24 +223,24 @@ def render_ada_chat() -> None:
                             st.code(tool, language="text")
                 
                 # Add to history
-                st.session_state.ada_messages.append({
+                st.session_state.iris_messages.append({
                     "role": "assistant",
                     "content": response,
                     "tools_used": tools_used
                 })
 
 
-def get_ada_response(prompt: str) -> Dict:
+def get_iris_response(prompt: str) -> Dict:
     """
-    Get response from A.D.A. - tries Python engine, falls back to local.
+    Get response from Iris - tries Python engine, falls back to local.
     """
     client_id = st.session_state.get("selected_client_id")
-    history = st.session_state.ada_messages
+    history = st.session_state.iris_messages
     
     # Try Python engine
-    if st.session_state.get("ada_engine"):
+    if st.session_state.get("iris_engine"):
         try:
-            result = st.session_state.ada_engine.chat(
+            result = st.session_state.iris_engine.chat(
                 message=prompt,
                 client_id=client_id,
                 history=history
@@ -313,7 +249,7 @@ def get_ada_response(prompt: str) -> Dict:
             if result.get("success"):
                 return result
         except Exception as e:
-            st.error(f"A.D.A. Engine error: {e}")
+            st.error(f"Iris Engine error: {e}")
     
     # Fallback to local response
     return {
@@ -324,8 +260,8 @@ def get_ada_response(prompt: str) -> Dict:
 
 
 def get_welcome_message() -> str:
-    """Generate welcome message for A.D.A. chatbot."""
-    return """Ciao! Sono **A.D.A.**, il tuo Augmented Digital Advisor. 🌞
+    """Generate welcome message for Iris chatbot."""
+    return """Ciao! Sono **Iris**, il tuo Intelligent Advisor. 🌞
 
 Posso aiutarti a:
 - 📊 **Analizzare il rischio** di specifici clienti o aree geografiche
@@ -337,9 +273,22 @@ Posso aiutarti a:
 Come posso assisterti oggi?"""
 
 
+def get_welcome_message_compact() -> str:
+    """Generate compact welcome message for sidebar chat."""
+    return """Ciao! Sono **Iris**. 🌞
+
+Posso aiutarti con:
+• Analisi rischio clienti
+• Preventivi polizze
+• Dati potenziale solare
+• Info prodotti
+
+Come posso aiutarti?"""
+
+
 def get_local_response(prompt: str) -> str:
     """
-    Generate local fallback response when A.D.A. engine is not available.
+    Generate local fallback response when Iris engine is not available.
 
     Args:
         prompt: User's message
@@ -449,7 +398,7 @@ Esempio: "Ci sono stati problemi per il cliente 100?"
     elif any(word in prompt_lower for word in ["puoi", "aiut", "funzion", "cosa fai", "capacità"]):
         return """🎯 **Le Mie Capacità**
 
-Sono A.D.A., specializzato in:
+Sono Iris, specializzato in:
 
 **Analisi & Valutazioni:**
 - 📊 Risk assessment (sismico, idro, alluvioni)
@@ -475,7 +424,7 @@ Esempio: "Analizza il cliente 100 e suggerisci polizze"
     else:
         return """Grazie per la tua domanda! 
 
-Sono A.D.A., il tuo Augmented Digital Advisor. Per aiutarti al meglio, ho bisogno di più dettagli.
+Sono Iris, il tuo Intelligent Advisor. Per aiutarti al meglio, ho bisogno di più dettagli.
 
 📝 **Prova a chiedermi:**
 - "Analizza il rischio del cliente [ID]"
@@ -489,6 +438,6 @@ Oppure dimmi semplicemente cosa ti serve e cercherò di aiutarti! 😊"""
 
 # For standalone testing
 if __name__ == "__main__":
-    st.set_page_config(page_title="A.D.A. Chat", page_icon="☀️", layout="wide")
-    st.title("☀️ A.D.A. - Augmented Digital Advisor")
-    render_ada_chat()
+    st.set_page_config(page_title="Iris Chat", page_icon="☀️", layout="wide")
+    st.title("☀️ Iris - Intelligent Advisor")
+    render_iris_chat()

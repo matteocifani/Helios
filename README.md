@@ -9,7 +9,7 @@
 **FluidView** è la dashboard interattiva del Progetto Helios, un ecosistema assicurativo geo-cognitivo che integra:
 
 - 🛰️ **SkyGuard**: Intelligence geospaziale con dati INGV/ISPRA
-- 🤖 **A.D.A.**: Augmented Digital Advisor powered by AI
+- 🤖 **Iris**: Intelligent Advisor powered by AI
 - 📊 **Analytics**: Visualizzazioni avanzate del portafoglio rischio
 
 ---
@@ -21,7 +21,7 @@
 | 🗺️ **Mappa Geo-Rischio** | Visualizzazione 3D con PyDeck, heatmap, tooltip interattivi |
 | 📊 **Analytics** | Distribuzione rischio, zone sismiche, idrogeologico, CLV vs Risk |
 | 🔍 **Ricerca Clienti** | Full-text search, filtri avanzati, card dettaglio |
-| 🤖 **A.D.A. Chat** | Interfaccia conversazionale AI per analisi e preventivi |
+| 🤖 **Iris Chat** | Interfaccia conversazionale AI per analisi e preventivi |
 
 ---
 
@@ -35,7 +35,7 @@ pip install -r requirements.txt
 
 # Configura ambiente
 cp .env.template .env
-# Modifica .env con le tue credenziali Supabase
+# Modifica .env con le tue credenziali Supabase e OpenRouter
 
 # Avvia dashboard
 streamlit run app.py
@@ -55,7 +55,7 @@ docker compose up -d --build
 |----------|-------------|----------|
 | `SUPABASE_URL` | URL progetto Supabase | ✅ |
 | `SUPABASE_KEY` | Chiave anon Supabase | ✅ |
-| `N8N_WEBHOOK_URL` | Webhook n8n per A.D.A. | ❌ |
+| `OPENROUTER_API_KEY` | API Key per Iris AI | ✅ |
 | `MAPBOX_TOKEN` | Token Mapbox (mappe avanzate) | ❌ |
 
 ---
@@ -80,8 +80,10 @@ docker compose up -d --build
 ```
 helios_dashboard/
 ├── app.py              # Main Streamlit app
-├── db_utils.py         # Supabase utilities
-├── ada_chat.py         # A.D.A. chat module
+├── src/
+│   ├── iris/           # Iris AI module
+│   ├── config/         # Constants
+│   └── data/           # Data utilities
 ├── requirements.txt    # Dependencies
 ├── Dockerfile          
 ├── docker-compose.yml  
