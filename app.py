@@ -52,7 +52,7 @@ def genera_coefficienti_polizza(cliente_meta: dict, tipo_polizza: str, codice_cl
 
     Loss ratio target:
     - Casa: 65% (-10% rispetto a standard)
-    - Salute: 24%
+    - Salute: 24% (Attuale)
 
     Ritorna None per polizze non supportate (Vita, Pensione, etc.)
     """
@@ -3309,11 +3309,12 @@ Mantieni formato **Oggetto:** e corpo email. GENERA ORA senza tool."""
 
                     if coeff:
                         # Polizza con coefficienti (Casa o Salute)
-                        gap_color = "#059669" if coeff['gap_relativo_perc'] >= 0 else "#DC2626"
+                        # Amaranto per Under Pricing (vantaggio cliente), Verde/Teal chiaro per Premium Surplus (vantaggio compagnia)
+                        gap_color = "#14B8A6" if coeff['gap_relativo_perc'] >= 0 else "#9D174D"
                         gap_sign = "+" if coeff['gap_relativo_perc'] >= 0 else ""
-                        # Label: Under Pricing (negativo) o Premium Surplus (positivo)
+                        # Label e icona freccia
                         scarto_label = "Premium Surplus" if coeff['gap_relativo_perc'] >= 0 else "Under Pricing"
-                        scarto_icon = "🟢" if coeff['gap_relativo_perc'] >= 0 else "🔴"
+                        scarto_icon = "↑" if coeff['gap_relativo_perc'] >= 0 else "↓"
 
                         polizze_html += f"""
                         <div style='margin-bottom:1rem; padding:0.75rem; background:#F8FAFC; border-radius:8px; border:1px solid #E2E8F0;'>
