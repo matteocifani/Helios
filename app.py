@@ -382,7 +382,12 @@ st.markdown("""
     /* ═══════════════════════════════════════════════════════════════════════
        UNIFIED HTML CARD STYLING & BUTTON HACKS
     ═══════════════════════════════════════════════════════════════════════ */
-    
+
+    /* Fix: Allinea colonne Streamlit in alto invece di stretch */
+    [data-testid="stHorizontalBlock"] {
+        align-items: flex-start !important;
+    }
+
     /* Standard Card Definition */
     .standard-card {
         background: #FFFFFF;
