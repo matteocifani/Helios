@@ -45,16 +45,26 @@ import hashlib
 # FUNZIONE COEFFICIENTI ATTUARIALI (simulati ma realistici)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def genera_coefficienti_polizza(cliente_meta: dict, tipo_polizza: str, codice_cliente: str = None) -> dict:
+def genera_coefficienti_polizza(cliente_meta: dict, tipo_polizza: str, codice_cliente: str = None) -> dict | None:
     """
-    Genera coefficienti attuariali realistici per una polizza.
+    Genera coefficienti attuariali realistici per polizze CASA e SALUTE.
     Usa un seed deterministico basato sul codice cliente per consistenza.
 
-    Basato sui modelli:
-    - Frequenza: logit(P) = β0 + β1*Età + β2*Metratura + β3*Zona + ...
-    - Severità: log(E[Costo]) = β0 + β1*log(Metratura) + β2*Zona + ...
-    - Premio tecnico = premio_puro * (1 + loading) / loss_ratio_target
+    Loss ratio target:
+    - Casa: 65% (-10% rispetto a standard)
+    - Salute: 24%
+
+    Ritorna None per polizze non supportate (Vita, Pensione, etc.)
     """
+    tipo_lower = tipo_polizza.lower()
+
+    # Solo Casa e Salute sono supportate
+    is_casa = 'casa' in tipo_lower or 'abitazione' in tipo_lower
+    is_salute = 'salute' in tipo_lower or 'infortuni' in tipo_lower
+
+    if not is_casa and not is_salute:
+        return None
+
     # Seed deterministico per consistenza
     seed_str = f"{codice_cliente}_{tipo_polizza}" if codice_cliente else tipo_polizza
     seed = int(hashlib.md5(seed_str.encode()).hexdigest()[:8], 16)
@@ -82,14 +92,14 @@ def genera_coefficienti_polizza(cliente_meta: dict, tipo_polizza: str, codice_cl
         except:
             zona_sismica = 3
 
-    tipo_lower = tipo_polizza.lower()
-
-    # Loading e loss ratio standard
+    # Loading standard
     loading = 0.30
-    loss_ratio_target = 0.70
 
-    if 'casa' in tipo_lower or 'abitazione' in tipo_lower:
-        # Polizza Casa/Abitazione
+    if is_casa:
+        # Polizza Casa/Abitazione - Loss Ratio Target: 65%
+        loss_ratio_target = 0.65
+        loss_ratio_label = "65% (-10%)"
+
         # Frequenza base: 1.5% - 4% annuo
         freq_base = 0.015 + (metratura / 15000) + (4 - zona_sismica) * 0.005
         freq_base += rng.uniform(-0.005, 0.012)
@@ -100,20 +110,11 @@ def genera_coefficienti_polizza(cliente_meta: dict, tipo_polizza: str, codice_cl
         sev_base += rng.uniform(-150, 400)
         sev_base = max(400, min(8000, sev_base))
 
-    elif 'vita' in tipo_lower:
-        # Polizza Vita
-        # Frequenza (mortalità): molto bassa, cresce con età
-        freq_base = 0.001 + (eta / 8000) + (eta ** 2) / 500000
-        freq_base += rng.uniform(-0.0005, 0.002)
-        freq_base = max(0.0005, min(0.05, freq_base))
+    else:  # is_salute
+        # Polizza Salute/Infortuni - Loss Ratio Target: 24%
+        loss_ratio_target = 0.24
+        loss_ratio_label = "24%"
 
-        # Severità: capitale assicurato medio €20k - €100k
-        sev_base = 25000 + eta * 300
-        sev_base += rng.uniform(-5000, 15000)
-        sev_base = max(15000, min(150000, sev_base))
-
-    elif 'salute' in tipo_lower or 'infortuni' in tipo_lower:
-        # Polizza Salute/Infortuni
         # Frequenza: 5% - 15% annuo (più frequente ma meno severa)
         freq_base = 0.05 + (eta / 1000)
         freq_base += rng.uniform(-0.02, 0.05)
@@ -123,24 +124,6 @@ def genera_coefficienti_polizza(cliente_meta: dict, tipo_polizza: str, codice_cl
         sev_base = 300 + eta * 15
         sev_base += rng.uniform(-100, 500)
         sev_base = max(150, min(5000, sev_base))
-
-    elif 'pension' in tipo_lower or 'risparmio' in tipo_lower:
-        # Polizza Pensione/Risparmio
-        # Frequenza riscatto anticipato: 2% - 8%
-        freq_base = 0.02 + rng.uniform(0, 0.04)
-        freq_base = max(0.01, min(0.10, freq_base))
-
-        # Severità: valore medio riscatto
-        sev_base = 8000 + eta * 100
-        sev_base += rng.uniform(-2000, 5000)
-        sev_base = max(5000, min(50000, sev_base))
-
-    else:
-        # Polizza generica
-        freq_base = 0.02 + rng.uniform(-0.005, 0.015)
-        freq_base = max(0.01, min(0.08, freq_base))
-        sev_base = 1000 + rng.uniform(-200, 800)
-        sev_base = max(500, min(5000, sev_base))
 
     # Calcoli premio
     premio_puro = freq_base * sev_base
@@ -154,15 +137,12 @@ def genera_coefficienti_polizza(cliente_meta: dict, tipo_polizza: str, codice_cl
     gap_relativo = (gap_assoluto / premio_tecnico) * 100 if premio_tecnico > 0 else 0
 
     return {
-        'frequenza_perc': freq_base * 100,
-        'severita': sev_base,
-        'premio_puro': premio_puro,
         'premio_tecnico': premio_tecnico,
         'premio_pagato': premio_pagato,
         'gap_assoluto': gap_assoluto,
         'gap_relativo_perc': gap_relativo,
-        'loading_perc': loading * 100,
-        'loss_ratio_perc': loss_ratio_target * 100
+        'loss_ratio_label': loss_ratio_label,
+        'tipo': 'casa' if is_casa else 'salute'
     }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -3065,7 +3045,7 @@ Le email devono essere personalizzate per ogni cliente, non identiche."""
             # Show call form if open
             if st.session_state.get('show_call_form', False):
                 st.markdown("---")
-                st.markdown("##### 📞 Dettagli della chiamata")
+                st.markdown("##### 📞 Hai proposto la polizza raccomandata?")
 
                 top_recommendation = None
                 if client_data.get('raccomandazioni'):
@@ -3329,7 +3309,7 @@ Mantieni formato **Oggetto:** e corpo email. GENERA ORA senza tool."""
                 """, unsafe_allow_html=True)
                 
             with col2:
-                # Build polizze html con coefficienti attuariali
+                # Build polizze html con coefficienti attuariali (solo Casa e Salute)
                 polizze_html = ""
                 if prodotti:
                     for p in prodotti:
@@ -3340,32 +3320,43 @@ Mantieni formato **Oggetto:** e corpo email. GENERA ORA senza tool."""
                         elif 'pension' in prod_lower: icon = '🎯'
                         else: icon = '📋'
 
-                        # Genera coefficienti attuariali per questa polizza
+                        # Genera coefficienti attuariali (solo per Casa e Salute)
                         coeff = genera_coefficienti_polizza(ana, p, codice_cliente_ada)
 
-                        # Colore gap: verde se pagano di più (positivo per compagnia), rosso se pagano meno
-                        gap_color = "#059669" if coeff['gap_relativo_perc'] >= 0 else "#DC2626"
-                        gap_sign = "+" if coeff['gap_relativo_perc'] >= 0 else ""
+                        if coeff:
+                            # Polizza con coefficienti (Casa o Salute)
+                            gap_color = "#059669" if coeff['gap_relativo_perc'] >= 0 else "#DC2626"
+                            gap_sign = "+" if coeff['gap_relativo_perc'] >= 0 else ""
 
-                        polizze_html += f"""
-                        <div style='margin-bottom:1rem; padding:0.75rem; background:#F8FAFC; border-radius:8px; border:1px solid #E2E8F0;'>
-                            <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;'>
+                            polizze_html += f"""
+                            <div style='margin-bottom:1rem; padding:0.75rem; background:#F8FAFC; border-radius:8px; border:1px solid #E2E8F0;'>
+                                <div style='display:flex; justify-content:space-between; align-items:center;'>
+                                    <span>{icon} <strong>{p}</strong></span>
+                                    <span style='background:#D1FAE5;color:#059669;padding:2px 8px;border-radius:12px;font-size:0.7rem;'>Attiva</span>
+                                </div>
+                                <div style='font-size:0.7rem; color:#94A3B8; margin:0.25rem 0 0.5rem 0;'>Loss Ratio Target: {coeff['loss_ratio_label']}</div>
+                                <div style='display:grid; grid-template-columns:1fr 1fr; gap:0.5rem; font-size:0.8rem;'>
+                                    <div style='background:#FFF; padding:0.4rem; border-radius:6px; border:1px solid #E2E8F0;'>
+                                        <div style='color:#64748B; font-size:0.7rem;'>Premio Pagato</div>
+                                        <div style='color:#1B3A5F; font-weight:600;'>€{coeff['premio_pagato']:,.0f}</div>
+                                    </div>
+                                    <div style='background:#FFF; padding:0.4rem; border-radius:6px; border:1px solid #E2E8F0;'>
+                                        <div style='color:#64748B; font-size:0.7rem;'>Premio Tecnico</div>
+                                        <div style='color:#1B3A5F; font-weight:600;'>€{coeff['premio_tecnico']:,.0f}</div>
+                                    </div>
+                                </div>
+                                <div style='margin-top:0.5rem; padding:0.4rem; background:{gap_color}15; border-radius:6px; display:flex; justify-content:space-between; align-items:center;'>
+                                    <span style='font-size:0.75rem; color:#64748B;'>Scarto: <strong style="color:{gap_color}">€{coeff['gap_assoluto']:+,.0f}</strong></span>
+                                    <span style='font-size:0.85rem; font-weight:700; color:{gap_color};'>{gap_sign}{coeff['gap_relativo_perc']:.1f}%</span>
+                                </div>
+                            </div>"""
+                        else:
+                            # Polizza senza coefficienti (Vita, Pensione, etc.)
+                            polizze_html += f"""
+                            <div style='margin-bottom:0.5rem; padding:0.5rem 0.75rem; background:#F8FAFC; border-radius:8px; border:1px solid #E2E8F0; display:flex; justify-content:space-between; align-items:center;'>
                                 <span>{icon} <strong>{p}</strong></span>
                                 <span style='background:#D1FAE5;color:#059669;padding:2px 8px;border-radius:12px;font-size:0.7rem;'>Attiva</span>
-                            </div>
-                            <div style='display:grid; grid-template-columns:1fr 1fr; gap:0.4rem; font-size:0.75rem; color:#64748B;'>
-                                <div>📊 Freq: <strong style="color:#1B3A5F">{coeff['frequenza_perc']:.2f}%</strong></div>
-                                <div>💰 Sev: <strong style="color:#1B3A5F">€{coeff['severita']:,.0f}</strong></div>
-                                <div>📋 P.Puro: <strong style="color:#1B3A5F">€{coeff['premio_puro']:,.0f}</strong></div>
-                                <div>🎯 P.Tecnico: <strong style="color:#1B3A5F">€{coeff['premio_tecnico']:,.0f}</strong></div>
-                            </div>
-                            <div style='margin-top:0.5rem; padding-top:0.5rem; border-top:1px dashed #E2E8F0; font-size:0.75rem;'>
-                                <div style='display:flex; justify-content:space-between;'>
-                                    <span>Premio pagato: <strong>€{coeff['premio_pagato']:,.0f}</strong></span>
-                                    <span style='color:{gap_color}; font-weight:600;'>Gap: {gap_sign}{coeff['gap_relativo_perc']:.1f}%</span>
-                                </div>
-                            </div>
-                        </div>"""
+                            </div>"""
                 else:
                     polizze_html = "<em style='color:#94A3B8;'>Nessuna polizza attiva</em>"
 
