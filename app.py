@@ -3321,14 +3321,14 @@ Mantieni formato **Oggetto:** e corpo email. GENERA ORA senza tool."""
                                 <span>{icon} <strong>{p}</strong></span>
                                 <span style='background:#D1FAE5;color:#059669;padding:2px 8px;border-radius:12px;font-size:0.7rem;'>Attiva</span>
                             </div>
-                            <div style='font-size:0.7rem; color:#94A3B8; margin:0.25rem 0 0.75rem 0;'>Loss Ratio Target: {coeff['loss_ratio_label']}</div>
+                            <div style='font-size:0.7rem; color:#94A3B8; margin:0.25rem 0 0.5rem 0; padding-bottom:0.5rem; border-bottom:1px solid #E2E8F0;'>Loss Ratio Target: {coeff['loss_ratio_label']}</div>
                             <div style='display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:0.75rem;'>
                                 <div>
-                                    <div style='color:#94A3B8; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em;'>Premio Pagato</div>
+                                    <div style='color:#64748B; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em;'>Premio Pagato</div>
                                     <div style='color:#1B3A5F; font-size:1.1rem; font-weight:700;'>€{coeff['premio_pagato']:,.0f}</div>
                                 </div>
                                 <div>
-                                    <div style='color:#94A3B8; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em;'>Premio Tecnico</div>
+                                    <div style='color:#64748B; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em;'>Premio Tecnico</div>
                                     <div style='color:#1B3A5F; font-size:1.1rem; font-weight:700;'>€{coeff['premio_tecnico']:,.0f}</div>
                                 </div>
                             </div>
