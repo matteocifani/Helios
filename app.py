@@ -1933,8 +1933,8 @@ with header_col1:
     st.markdown(f"""
     <div style="text-align: center; padding-left: 10%;">
         <div style="display: flex; flex-direction: column; align-items: center; gap: 0.25rem;">
-            <span style="font-family: 'Inter', sans-serif; font-size: 5rem; font-weight: 800; background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: -0.02em; line-height: 1;">HELIOS</span>
-            <span style="font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 500; color: #64748B; letter-spacing: 0.15em; text-transform: uppercase;">Geo-Cognitive Intelligence</span>
+            <div style="font-family: 'Inter', sans-serif; font-size: 5rem; font-weight: 800; background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: -0.02em; line-height: 1;">HELIOS</div>
+            <div style="font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 500; color: #64748B; letter-spacing: 0.15em; text-transform: uppercase;">Geo-Cognitive Intelligence</div>
         </div>
         <h1 style="font-family: 'Playfair Display', serif; font-size: 1.5rem; font-weight: 700; color: #1B3A5F; margin: 0.75rem 0 0; letter-spacing: -0.02em;">{page_title}</h1>
         <p style="font-family: 'Inter', sans-serif; font-size: 0.85rem; color: #64748B; margin-top: 0.25rem; font-weight: 400;">{page_description}</p>
@@ -2153,7 +2153,7 @@ if st.session_state.dashboard_mode == 'Analytics':
             
         if st.session_state.analytics_client_id:
             with helio_spinner("Recupero profilo cliente..."):
-                detail_data = get_client_detail(st.session_state.analytics_client_id)
+                detail_data = get_client_detail(st.session_state.analytics_client_id, include_satellite=False)
             
             if "error" in detail_data:
                 st.error(f"Errore nel caricamento: {detail_data['error']}")

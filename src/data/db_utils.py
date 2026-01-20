@@ -386,7 +386,7 @@ def fetch_hydro_zones() -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def get_client_detail(codice_cliente: int) -> Dict:
+def get_client_detail(codice_cliente: int, include_satellite: bool = True) -> Dict:
     """
     Get detailed information for a specific client using concurrent requests
     to solve N+1 query problem.
@@ -466,9 +466,12 @@ def get_client_detail(codice_cliente: int) -> Dict:
                 executor.submit(fetch_client_info),
                 executor.submit(fetch_abitazioni_info),
                 executor.submit(fetch_polizze_info),
-                executor.submit(fetch_sinistri_info),
-                executor.submit(fetch_satellite_info)
+                executor.submit(fetch_sinistri_info)
             ]
+            
+            # Only fetch satellite if needed
+            if include_satellite:
+                futures.append(executor.submit(fetch_satellite_info))
 
             for future in as_completed(futures):
                 try:

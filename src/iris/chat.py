@@ -10,9 +10,8 @@ import streamlit as st
 from typing import Dict
 from dotenv import load_dotenv
 
-# Import production Iris engine
-print("📦 Importing iris_engine (production version)...")
-from src.iris.engine import IrisEngine
+# Import will be deferred to init_iris_engine for lazy loading
+# from src.iris.engine import IrisEngine
 from src.utils.ui import helio_spinner
 
 load_dotenv()
@@ -23,6 +22,9 @@ IRIS_VERSION = "1.0"  # Increment to force reload
 
 def init_iris_engine() -> None:
     """Initialize Iris engine with Supabase connection."""
+    # Lazy import to defer heavy module loading
+    from src.iris.engine import IrisEngine
+    
     # Check if engine exists or version changed
     if "iris_engine" not in st.session_state or st.session_state.get("iris_version") != IRIS_VERSION:
         try:
@@ -59,15 +61,17 @@ def render_iris_chat() -> None:
     st.markdown("""
     <style>
         .typing-indicator {
-            display: inline-flex;
+            display: flex;
             align-items: center;
             justify-content: center;
             gap: 5px;
-            padding: 12px 16px;
+            padding: 8px 16px;
             background: #F3F4F6;
             border-radius: 16px;
             border-bottom-left-radius: 4px;
-            min-height: 24px;
+            height: 32px;
+            line-height: 1;
+            width: fit-content;
         }
         
         .typing-dot {
@@ -84,6 +88,13 @@ def render_iris_chat() -> None:
         @keyframes typing {
             0%, 100% { transform: scale(0.5); opacity: 0.5; }
             50% { transform: scale(1); opacity: 1; }
+        }
+
+        /* Force vertical centering for chat message content containing typing indicator */
+        [data-testid="stSidebar"] [data-testid="stChatMessage"]:has(.typing-indicator) [data-testid="stChatMessageContent"] {
+            display: flex !important;
+            align-items: center !important;
+            min-height: 32px !important;
         }
 
         /* Sidebar-optimized chat styling */
@@ -317,15 +328,15 @@ Come posso assisterti oggi?"""
 
 def get_welcome_message_compact() -> str:
     """Generate compact welcome message for sidebar chat."""
-    return """Ciao! Sono **Iris**. 🌞
+    return """Ciao! Sono **Iris**, il tuo assistente intelligente. 🌞
 
 Posso aiutarti con:
-• Analisi rischio clienti
-• Preventivi polizze
-• Dati potenziale solare
-• Info prodotti
+• Dati e polizze clienti
+• Valutazione rischi abitazioni
+• Preventivi assicurativi
+• Storico interazioni
 
-Come posso aiutarti?"""
+Indica un codice cliente per iniziare!"""
 
 
 def get_local_response(prompt: str) -> str:
