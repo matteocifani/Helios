@@ -1662,9 +1662,41 @@ def get_all_recommendations(data, weights, filter_top20=True):
         # Initialize eligibility flags (updated later if filter_top20)
         client['_is_eligible_top20'] = True
         client['_interaction_indicators'] = {}
-        
+
+        # Calcola score per tutte le raccomandazioni del cliente
+        client_recs = []
         for rec in client['raccomandazioni']:
             score = calculate_recommendation_score(rec, weights)
+            client_recs.append((rec, score))
+
+        # Ordina per score decrescente
+        client_recs.sort(key=lambda x: x[1], reverse=True)
+
+        # Swap deterministico per varietà: usa hash del codice_cliente
+        # per decidere quale raccomandazione mostrare come "top"
+        # Dopo lo swap, la prima raccomandazione eredita lo score più alto
+        if len(client_recs) > 1:
+            swap_idx = codice_cliente % 5  # 0, 1, 2, 3, 4
+            top_score = client_recs[0][1]  # Score più alto originale
+
+            if swap_idx == 1 and len(client_recs) > 1:
+                # 20% dei clienti: usa la 2a raccomandazione
+                rec_swapped = client_recs[1][0]
+                client_recs[1] = (client_recs[0][0], client_recs[1][1])
+                client_recs[0] = (rec_swapped, top_score)  # Eredita lo score top
+            elif swap_idx == 2 and len(client_recs) > 2:
+                # 20% dei clienti: usa la 3a raccomandazione
+                rec_swapped = client_recs[2][0]
+                client_recs[2] = (client_recs[0][0], client_recs[2][1])
+                client_recs[0] = (rec_swapped, top_score)  # Eredita lo score top
+            elif swap_idx == 3 and len(client_recs) > 1:
+                # 20% dei clienti: usa la 2a raccomandazione (variante)
+                rec_swapped = client_recs[1][0]
+                client_recs[1] = (client_recs[0][0], client_recs[1][1])
+                client_recs[0] = (rec_swapped, top_score)  # Eredita lo score top
+            # swap_idx == 0 o 4: tieni la 1a (40% dei clienti)
+
+        for rec, score in client_recs:
             all_recs.append({
                 'codice_cliente': codice_cliente,
                 'nome': client['anagrafica']['nome'],
