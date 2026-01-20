@@ -1,96 +1,101 @@
-# ☀️ Progetto Helios - FluidView Dashboard
+# ☀️ HELIOS - Geo-Cognitive Intelligence
 
-**Ecosistema Assicurativo Geo-Cognitivo** | Generali AI Challenge 2024
+**Piattaforma avanzata di consulenza assicurativa aumentata dall'AI**
+Generali AI Challenge 2024
 
 ---
 
 ## 🌟 Overview
 
-**FluidView** è la dashboard interattiva del Progetto Helios, un ecosistema assicurativo geo-cognitivo che integra:
+**Helios** è l'assistente intelligente per l'agente del futuro. Progettata per **Mario Rossi** (Agenzia di Bologna), la dashboard integra dati geospaziali, analitica avanzata e intelligenza artificiale generativa per trasformare il modo in cui gli agenti interagiscono con il loro portafoglio clienti.
 
-- 🛰️ **SkyGuard**: Intelligence geospaziale con dati INGV/ISPRA
-- 🤖 **Iris**: Intelligent Advisor powered by AI
-- 📊 **Analytics**: Visualizzazioni avanzate del portafoglio rischio
+La piattaforma combina la potenza di **SkyGuard** (intelligence satellitare) con **Iris** (AI Advisor) per offrire raccomandazioni proattive e analisi del rischio iper-localizzate.
 
 ---
 
-## ✨ Features
+## ✨ Key Features
 
-| Feature | Descrizione |
-|---------|-------------|
-| 🗺️ **Mappa Geo-Rischio** | Visualizzazione 3D con PyDeck, heatmap, tooltip interattivi |
-| 📊 **Analytics** | Distribuzione rischio, zone sismiche, idrogeologico, CLV vs Risk |
-| 🔍 **Ricerca Clienti** | Full-text search, filtri avanzati, card dettaglio |
-| 🤖 **Iris Chat** | Interfaccia conversazionale AI per analisi e preventivi |
+### 🤵 Policy Advisor (NBO)
+Il cuore pulsante dell'attività commerciale quotidiana.
+- **Clienti Premium**: Identificazione automatica dei Top 5 clienti per valore (CLV) e potenziale di vendita.
+- **Top 20 Opportunità**: Lista prioritaria di raccomandazioni "Next Best Offer" basate su algoritmi di propensione, ritenzione e redditività.
+- **Schede Cliente Avanzate**: Vista a 360° con icone polizze intuitive, score di opportunità e analisi dei bisogni.
+
+### 🗺️ Analytics & Geo-Rischio
+Visualizzazione strategica del territorio emiliano-romagnolo.
+- **Mappa 3D Interattiva**: Analisi granulare del rischio (sismico, idrogeologico, alluvioni) su Bologna e provincia.
+- **Distribuzione Portafoglio**: Heatmap della concentrazione clienti e premi.
+- **Filtri Regionali**: Focus automatico sull'Emilia Romagna per una gestione territoriale efficiente.
+
+### 🤖 Iris AI Assistant
+Il copilota virtuale sempre disponibile.
+- **Chat Interattiva**: Analisi del portafoglio in linguaggio naturale.
+- **Supporto Decisionale**: Suggerimenti in tempo reale basati sui dati del cliente e del territorio.
+
+---
+
+## 🎨 Design System: "Aurora Borealis"
+
+L'interfaccia utilizza un linguaggio visivo moderno e fluido, ispirato ai colori dell'aurora e della tecnologia affidabile.
+
+- **Primary**: `Aurora Teal` (#00A0B0) to `Electric Cyan` (#00C9D4)
+- **Secondary**: `Deep Navy` (#1B3A5F)
+- **Risk Palette**:
+  - 🔴 Critico: `#FF453A`
+  - 🟠 Alto: `#FF9F0A`
+  - 🟡 Medio: `#F59E0B`
+  - 🟢 Basso: `#10B981`
 
 ---
 
 ## 🚀 Quick Start
 
-### Installazione Locale
+### Requisiti
+- Python 3.9+
+- Chiavi API per Supabase e OpenRouter (LLM)
+
+### Installazione
 
 ```bash
-# Installa dipendenze
+# 1. Clona il repository
+git clone https://github.com/tuo-username/helios-dashboard.git
+cd helios-dashboard
+
+# 2. Crea ambiente virtuale
+python -m venv .venv
+source .venv/bin/activate  # Mac/Linux
+# .venv\Scripts\activate  # Windows
+
+# 3. Installa dipendenze
 pip install -r requirements.txt
 
-# Configura ambiente
+# 4. Configura variabili d'ambiente
 cp .env.template .env
-# Modifica .env con le tue credenziali Supabase e OpenRouter
+# Edita .env con le tue credenziali
+```
 
-# Avvia dashboard
+### Avvio
+
+```bash
 streamlit run app.py
 ```
 
-### Docker Deployment
-
-```bash
-docker compose up -d --build
-```
-
 ---
 
-## ⚙️ Environment Variables
-
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `SUPABASE_URL` | URL progetto Supabase | ✅ |
-| `SUPABASE_KEY` | Chiave anon Supabase | ✅ |
-| `OPENROUTER_API_KEY` | API Key per Iris AI | ✅ |
-| `MAPBOX_TOKEN` | Token Mapbox (mappe avanzate) | ❌ |
-
----
-
-## 🎨 Design System
-
-**Palette "Aurora Borealis":**
-- Helios Sun: `#FF6B35`
-- Aurora Cyan: `#00E5CC`
-- Deep Space: `#0D1117`
-
-**Risk Colors:**
-- 🔴 Critico: `#FF453A`
-- 🟠 Alto: `#FF9F0A`
-- 🟡 Medio: `#FFD60A`
-- 🟢 Basso: `#30D158`
-
----
-
-## 📁 Structure
+## 📁 Struttura del Progetto
 
 ```
-helios_dashboard/
-├── app.py              # Main Streamlit app
+helios/
+├── app.py                  # Main Application Entry Point
 ├── src/
-│   ├── iris/           # Iris AI module
-│   ├── config/         # Constants
-│   └── data/           # Data utilities
-├── requirements.txt    # Dependencies
-├── Dockerfile          
-├── docker-compose.yml  
-└── .env.template       
+│   ├── config/            # Costanti (Icone, Palette, Mapping)
+│   ├── data/              # Gestione Dati e Connessione DB
+│   └── iris/              # Modulo AI Assistant
+├── Data/                  # Dataset locali (CSV/GeoJSON)
+├── .env.template          # Template configurazione
+└── requirements.txt       # Dipendenze Python
 ```
 
 ---
 
-**Built with ❤️ for Generali AI Challenge 2024**
-
+**Sviluppato con ❤️ per Generali AI Challenge**
