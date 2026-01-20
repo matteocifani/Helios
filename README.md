@@ -1,21 +1,21 @@
 # ☀️ HELIOS - Geo-Cognitive Intelligence
 
 **Piattaforma avanzata di consulenza assicurativa aumentata dall'AI**
-Generali AI Challenge 2024
+Generali AI Challenge 2026
 
 ---
 
 ## 🌟 Overview
 
-**Helios** è l'assistente intelligente per l'agente del futuro. Progettata per **Mario Rossi** (Agenzia di Bologna), la dashboard integra dati geospaziali, analitica avanzata e intelligenza artificiale generativa per trasformare il modo in cui gli agenti interagiscono con il loro portafoglio clienti.
+**Helios** è l'assistente intelligente per l'agente del futuro. La dashboard integra dati geospaziali, analitica avanzata e intelligenza artificiale generativa per trasformare il modo in cui gli agenti interagiscono con il loro portafoglio clienti.
 
-La piattaforma combina la potenza di **SkyGuard** (intelligence satellitare) con **Iris** (AI Advisor) per offrire raccomandazioni proattive e analisi del rischio iper-localizzate.
+La piattaforma combina la potenza di **Policy Advisor** con **Iris** (AI Advisor) per offrire raccomandazioni proattive e analisi del rischio iper-localizzate.
 
 ---
 
 ## ✨ Key Features
 
-### 🤵 Policy Advisor (NBO)
+### 🤵 Policy Advisor
 Il cuore pulsante dell'attività commerciale quotidiana.
 - **Clienti Premium**: Identificazione automatica dei Top 5 clienti per valore (CLV) e potenziale di vendita.
 - **Top 20 Opportunità**: Lista prioritaria di raccomandazioni "Next Best Offer" basate su algoritmi di propensione, ritenzione e redditività.
@@ -23,7 +23,7 @@ Il cuore pulsante dell'attività commerciale quotidiana.
 
 ### 🗺️ Analytics & Geo-Rischio
 Visualizzazione strategica del territorio emiliano-romagnolo.
-- **Mappa 3D Interattiva**: Analisi granulare del rischio (sismico, idrogeologico, alluvioni) su Bologna e provincia.
+- **Mappa Interattiva**: Analisi granulare del rischio (sismico, idrogeologico, alluvioni) su Bologna e provincia.
 - **Distribuzione Portafoglio**: Heatmap della concentrazione clienti e premi.
 - **Filtri Regionali**: Focus automatico sull'Emilia Romagna per una gestione territoriale efficiente.
 
