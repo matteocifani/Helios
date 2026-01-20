@@ -1926,7 +1926,7 @@ with header_col1:
     <div style="text-align: center; padding-left: 10%;">
         <div style="display: flex; flex-direction: column; align-items: center; gap: 0.25rem;">
             <span style="font-family: 'Inter', sans-serif; font-size: 5rem; font-weight: 800; background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: -0.02em; line-height: 1;">HELIOS</span>
-            <span style="font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 500; color: #64748B; letter-spacing: 0.15em; text-transform: uppercase;">Geo-Cognitive Intelligence</span>
+            <span style="font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 500; color: #64748B; letter-spacing: 0.15em; text-transform: uppercase;">Vita Sicura Intelligence</span>
         </div>
         <h1 style="font-family: 'Playfair Display', serif; font-size: 1.5rem; font-weight: 700; color: #1B3A5F; margin: 0.75rem 0 0; letter-spacing: -0.02em;">{page_title}</h1>
         <p style="font-family: 'Inter', sans-serif; font-size: 0.85rem; color: #64748B; margin-top: 0.25rem; font-weight: 400;">{page_description}</p>
@@ -3791,10 +3791,10 @@ st.markdown(f"""
     <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 2rem;">
         <div style="flex: 1; min-width: 200px;">
             <p style="font-family: 'Inter', sans-serif; font-size: 0.7rem; font-weight: 600; color: #1B3A5F; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Data Sources</p>
-            <p style="font-family: 'Inter', sans-serif; font-size: 0.8rem; color: #64748B; line-height: 1.6; margin: 0;">
                 🌍 INGV - Classificazione Sismica<br>
                 💧 ISPRA - IdroGEO Platform<br>
-                ☀️ EC PVGIS - Solar Potential
+                ☀️ EC PVGIS - Solar Potential<br>
+                🛰️ Copernicus - Sentinel Imagery
             </p>
         </div>
         <div style="flex: 1; min-width: 200px; text-align: center;">
@@ -3816,19 +3816,19 @@ st.markdown(f"""
                 <span style="font-family: 'Inter', sans-serif; font-size: 1rem; font-weight: 700; color: #1B3A5F;">HELIOS</span>
             </div>
             <p style="font-family: 'Inter', sans-serif; font-size: 0.75rem; color: #64748B; margin: 0;">
-                Ecosistema Assicurativo Geo-Cognitivo
+                Vita Sicura Intelligence
             </p>
             <p style="font-family: 'Inter', sans-serif; font-size: 0.7rem; color: #94A3B8; margin-top: 0.25rem;">
-                Powered by <strong style="color: #1B3A5F;">Vita Sicura</strong> • Generali AI Challenge
+                Powered by <strong style="color: #1B3A5F;">Vita Sicura</strong>
             </p>
         </div>
         <div style="flex: 1; min-width: 200px; text-align: right;">
             <p style="font-family: 'Inter', sans-serif; font-size: 0.7rem; font-weight: 600; color: #1B3A5F; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Last Update</p>
             <p style="font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: #64748B; margin: 0;">
-                {datetime.now().strftime('%d/%m/%Y %H:%M')}
+                20/01/2026 02:10
             </p>
             <p style="font-family: 'Inter', sans-serif; font-size: 0.75rem; color: #94A3B8; margin-top: 0.25rem;">
-                v2.0.0 Vita Sicura Edition
+                v2.1.0
             </p>
         </div>
     </div>

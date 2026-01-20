@@ -59,15 +59,17 @@ def render_iris_chat() -> None:
     st.markdown("""
     <style>
         .typing-indicator {
-            display: inline-flex;
+            display: flex;
             align-items: center;
             justify-content: center;
             gap: 5px;
-            padding: 12px 16px;
+            padding: 8px 16px;
             background: #F3F4F6;
             border-radius: 16px;
             border-bottom-left-radius: 4px;
-            min-height: 24px;
+            height: 32px;
+            line-height: 1;
+            width: fit-content;
         }
         
         .typing-dot {
