@@ -17,6 +17,8 @@ import folium
 from streamlit_folium import folium_static
 from dotenv import load_dotenv
 import os
+import random
+import hashlib
 
 # Load environment variables (Mapbox API Key)
 load_dotenv()
@@ -40,6 +42,137 @@ from src.data.db_utils import (
     get_client_satellite
 )
 from src.utils.ui import helio_spinner
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# FUNZIONE COEFFICIENTI ATTUARIALI (simulati ma realistici)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def genera_coefficienti_polizza(cliente_meta: dict, tipo_polizza: str, codice_cliente: str = None) -> dict | None:
+    """
+    Genera coefficienti attuariali realistici per polizze CASA e SALUTE.
+    Usa un seed deterministico basato sul codice cliente per consistenza.
+
+    Loss ratio target:
+    - Casa: 65% (-10% rispetto a standard)
+    - Salute: 24% (Attuale)
+
+    Ritorna None per polizze non supportate (Vita, Pensione, etc.)
+    """
+    tipo_lower = tipo_polizza.lower()
+
+    # Supporto esteso per demo
+    is_casa = 'casa' in tipo_lower or 'abitazione' in tipo_lower
+    is_salute = 'salute' in tipo_lower or 'infortuni' in tipo_lower
+    is_vita = 'vita' in tipo_lower or 'investimento' in tipo_lower or 'risparmio' in tipo_lower
+    is_pension = 'pension' in tipo_lower or 'previdenza' in tipo_lower
+
+    if not (is_casa or is_salute or is_vita or is_pension):
+        return None
+
+    # Seed deterministico per consistenza
+    seed_str = f"{codice_cliente}_{tipo_polizza}" if codice_cliente else tipo_polizza
+    seed = int(hashlib.md5(seed_str.encode()).hexdigest()[:8], 16)
+    rng = random.Random(seed)
+
+    # Estrai dati cliente
+    eta = cliente_meta.get('eta', 45)
+    if isinstance(eta, str):
+        try:
+            eta = int(eta)
+        except:
+            eta = 45
+
+    metratura = cliente_meta.get('metratura', 100)
+    if isinstance(metratura, str):
+        try:
+            metratura = int(metratura)
+        except:
+            metratura = 100
+
+    zona_sismica = cliente_meta.get('zona_sismica', 3)
+    if isinstance(zona_sismica, str):
+        try:
+            zona_sismica = int(zona_sismica)
+        except:
+            zona_sismica = 3
+
+    # Loading standard
+    loading = 0.30
+
+    if is_casa:
+        # Polizza Casa/Abitazione - Loss Ratio Target: 65%
+        loss_ratio_target = 0.65
+        
+        # Premio base
+        base_premium = 150 + (metratura * 1.5)
+        
+        # Fattore sismico
+        seismic_factor = 1.0
+        if zona_sismica == 1: seismic_factor = 1.8
+        elif zona_sismica == 2: seismic_factor = 1.4
+        elif zona_sismica == 3: seismic_factor = 1.1
+        
+        # Premio Tecnico (Risk Premium)
+        risk_premium = base_premium * seismic_factor * rng.uniform(0.9, 1.2)
+        
+        pricing_strategy = rng.choice(['surplus', 'discount', 'fair'])
+        if pricing_strategy == 'surplus':
+            commercial_premium = risk_premium * (1 + loading) * rng.uniform(1.1, 1.3)
+        elif pricing_strategy == 'discount':
+            commercial_premium = risk_premium * (1 + loading) * rng.uniform(0.8, 0.95)
+        else:
+            commercial_premium = risk_premium * (1 + loading)
+
+    elif is_salute:
+        # Polizza Salute - Loss Ratio Target: 24%
+        loss_ratio_target = 0.24
+        base_premium = 200 + (eta * 8)
+        health_factor = rng.uniform(0.8, 1.5)
+        risk_premium = base_premium * health_factor
+        
+        pricing_strategy = rng.choice(['surplus', 'discount', 'fair'])
+        if pricing_strategy == 'surplus':
+            commercial_premium = risk_premium * (1 + loading) * rng.uniform(1.2, 1.5)
+        elif pricing_strategy == 'discount':
+            commercial_premium = risk_premium * (1 + loading) * rng.uniform(0.85, 0.95)
+        else:
+            commercial_premium = risk_premium * (1 + loading)
+            
+    elif is_vita:
+        # Polizza Vita - Loss Ratio Target: 75%
+        loss_ratio_target = 0.75
+        base_premium = 1200 # Premio medio annuo
+        risk_premium = base_premium * rng.uniform(0.9, 1.1)
+        
+        pricing_strategy = rng.choice(['surplus', 'fair']) # Meno sconti sul vita
+        if pricing_strategy == 'surplus':
+            commercial_premium = risk_premium * (1 + loading) * rng.uniform(1.05, 1.15)
+        else:
+            commercial_premium = risk_premium * (1 + loading)
+
+    else: # Pension
+        # Polizza Pensione - Loss Ratio Target: 85%
+        loss_ratio_target = 0.85
+        base_premium = 2400 # Versamento annuo
+        risk_premium = base_premium * rng.uniform(0.95, 1.05)
+        
+        # Spesso fee fisse, quindi surplus
+        pricing_strategy = 'surplus'
+        commercial_premium = risk_premium * (1 + loading) * rng.uniform(1.02, 1.10)
+            
+    # Calcolo gaps
+    gap_assoluto = commercial_premium - (risk_premium * (1 + loading))
+    gap_relativo_perc = (gap_assoluto / commercial_premium) * 100
+    
+    return {
+        'loss_ratio_target': loss_ratio_target,
+        'loss_ratio_label': f"{loss_ratio_target:.0%}",
+        'premio_tecnico': risk_premium * (1+loading),
+        'premio_pagato': commercial_premium,
+        'gap_assoluto': gap_assoluto,
+        'gap_relativo_perc': gap_relativo_perc,
+        'is_casa': is_casa
+    }
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CONFIGURAZIONE PAGINA
@@ -2134,8 +2267,9 @@ if st.session_state.dashboard_mode == 'Analytics':
             # Quick stats
             st.markdown(f"""
             <div style="text-align: center; padding: 0.5rem;">
-                <p style="font-family: 'JetBrains Mono', monospace; font-size: 1.5rem; font-weight: 700; background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin: 0; line-height: 1;">{len(filtered_df):,}</p>
-                <p style="font-family: 'Inter', sans-serif; font-size: 0.65rem; color: #94A3B8; margin: 0;">di {len(df):,}</p>
+                <p style="font-family: 'JetBrains Mono', monospace; font-size: 1.5rem; font-weight: 700; background: linear-gradient(135deg, #00A0B0 0%, #00C9D4 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin: 0; line-height: 1;">{filtered_df['citta'].nunique():,}</p>
+                <p style="font-family: 'Inter', sans-serif; font-size: 0.65rem; color: #94A3B8; margin: 0;">di {df['citta'].nunique():,}</p>
+                <p style="font-family: 'Inter', sans-serif; font-size: 0.55rem; color: #CBD5E1; margin: 0; text-transform: uppercase; letter-spacing: 0.05em;">Comuni</p>
             </div>
             """, unsafe_allow_html=True)
     
@@ -2243,6 +2377,14 @@ if st.session_state.dashboard_mode == 'Analytics':
             else:
                 # 1. Prepare Colors based on Mode
                 
+                # Fill NaNs for safety to ensure tooltips work
+                if 'hydro_risk_p3' in map_df.columns:
+                    map_df['hydro_risk_p3'] = map_df['hydro_risk_p3'].fillna(0)
+                if 'flood_risk_p3' in map_df.columns:
+                    map_df['flood_risk_p3'] = map_df['flood_risk_p3'].fillna(0)
+
+                tooltip_html = ""
+
                 if map_mode == "Rischio Composito":
                     RISK_COLOR_MAP = {
                         'Critico': [220, 38, 38, 200],   # Red
@@ -2253,6 +2395,7 @@ if st.session_state.dashboard_mode == 'Analytics':
                     DEFAULT_COLOR = [22, 163, 74, 180]
                     map_df['color'] = map_df['risk_category'].apply(lambda x: RISK_COLOR_MAP.get(x, DEFAULT_COLOR))
                     weight_col = "risk_score"
+                    tooltip_html = "<b>Città:</b> {citta}<br/><b>Rischio:</b> {risk_score}<br/><b>Categoria:</b> {risk_category}<br/><b>Cliente:</b> {codice_cliente}"
                     
                 elif map_mode == "Rischio Sismico":
                     # Zone 1 (Red) -> Zone 4 (Green)
@@ -2263,32 +2406,47 @@ if st.session_state.dashboard_mode == 'Analytics':
                         4: [22, 163, 74, 180]
                     }
                     map_df['color'] = map_df['zona_sismica'].apply(lambda x: SEISMIC_COLORS.get(int(x) if pd.notna(x) else 4, [200, 200, 200, 100]))
-                    weight_col = "zona_sismica" # Not perfect for heatmap but ok
+                    weight_col = "zona_sismica" 
+                    tooltip_html = "<b>Città:</b> {citta}<br/><b>Zona Sismica:</b> {zona_sismica}<br/><b>Cliente:</b> {codice_cliente}"
                     
                 elif map_mode == "Rischio Idrogeologico":
-                    # P4/P3 = High, P2 = Med, P1 = Low
-                    HYDRO_COLORS = {
-                        'P4': [220, 38, 38, 200],
-                        'P3': [234, 88, 12, 200],
-                        'P2': [202, 138, 4, 180],
-                        'P1': [22, 163, 74, 180]
-                    }
-                    # Check column name, usually hydro_risk_p3 contains the class string? Or float?
-                    # DB scheme likely has string 'P3', 'P2' etc or just the value. Assuming string or mapped.
-                    # If content is like "Molto Elevata (P4)", we might need parsing. 
-                    # For now assume direct mapping or simple fallback.
-                    map_df['color'] = map_df['hydro_risk_p3'].apply(lambda x: HYDRO_COLORS.get(str(x)[:2], [200, 200, 200, 100])) 
+                    # Numeric binning for Hydro Risk (P3)
+                    # < 5.0: Low (Green)
+                    # < 20.0: Medium (Orange)
+                    # >= 20.0: High (Red)
+                    
+                    def get_hydro_color(val):
+                        try:
+                            v = float(val)
+                            if v < 5.0: return [22, 163, 74, 180]    # Green
+                            if v < 20.0: return [202, 138, 4, 180]   # Orange
+                            return [220, 38, 38, 200]                # Red
+                        except:
+                            return [200, 200, 200, 100]              # Grey
+
+                    map_df['color'] = map_df['hydro_risk_p3'].apply(get_hydro_color) 
                     weight_col = "risk_score"
+                    tooltip_html = "<b>Città:</b> {citta}<br/><b>Idrogeologico (P3):</b> {hydro_risk_p3}<br/><b>Categoria:</b> {risk_category}<br/><b>Cliente:</b> {codice_cliente}"
                 
                 else: # Flood
-                    FLOOD_COLORS = {
-                        'P3': [220, 38, 38, 200],
-                        'P2': [234, 88, 12, 200],
-                        'P1': [22, 163, 74, 180]
-                    }
-                    map_df['color'] = map_df['flood_risk_p3'].apply(lambda x: FLOOD_COLORS.get(str(x)[:2], [200, 200, 200, 100]))
+                    # Numeric binning for Flood Risk (P3)
+                    # < 10.0: Low (Green)
+                    # < 30.0: Medium (Orange)
+                    # >= 30.0: High (Red)
+                    
+                    def get_flood_color(val):
+                        try:
+                            v = float(val)
+                            if v < 10.0: return [22, 163, 74, 180]   # Green
+                            if v < 30.0: return [202, 138, 4, 180]   # Orange
+                            return [220, 38, 38, 200]                # Red
+                        except:
+                            return [200, 200, 200, 100]              # Grey
+
+                    map_df['color'] = map_df['flood_risk_p3'].apply(get_flood_color)
                     weight_col = "risk_score"
-    
+                    tooltip_html = "<b>Città:</b> {citta}<br/><b>Alluvione (P3):</b> {flood_risk_p3}<br/><b>Categoria:</b> {risk_category}<br/><b>Cliente:</b> {codice_cliente}"
+
                 
                 # 2. PyDeck Layers
                 
@@ -2299,7 +2457,7 @@ if st.session_state.dashboard_mode == 'Analytics':
                     zoom=5.5,
                     pitch=0,
                 )
-    
+
                 # Layer 1: Heatmap (Density/Intensity)
                 heatmap_layer = pdk.Layer(
                     "HeatmapLayer",
@@ -2311,7 +2469,7 @@ if st.session_state.dashboard_mode == 'Analytics':
                     intensity=1,
                     threshold=0.2
                 )
-    
+
                 # Layer 2: Scatterplot (Individual Points)
                 scatter_layer = pdk.Layer(
                     "ScatterplotLayer",
@@ -2326,7 +2484,7 @@ if st.session_state.dashboard_mode == 'Analytics':
                     stroked=True,
                     get_line_color=[255, 255, 255, 100]
                 )
-    
+
                 # Render Chart
                 st.pydeck_chart(pdk.Deck(
                     map_style='mapbox://styles/mapbox/light-v10',
@@ -2334,10 +2492,7 @@ if st.session_state.dashboard_mode == 'Analytics':
                     initial_view_state=view_state,
                     layers=[heatmap_layer, scatter_layer],
                     tooltip={
-                        "html": "<b>Città:</b> {citta}<br/>"
-                                "<b>Rischio:</b> {risk_score}<br/>"
-                                "<b>Categoria:</b> {risk_category}<br/>"
-                                "<b>Cliente:</b> {codice_cliente}",
+                        "html": tooltip_html,
                         "style": {"backgroundColor": "steelblue", "color": "white"}
                     }
                 ))
@@ -3170,7 +3325,7 @@ Mantieni formato **Oggetto:** e corpo email. GENERA ORA senza tool."""
             st.markdown("<br>", unsafe_allow_html=True)
 
             # ═══════════════════════════════════════════════════════════════════
-            # GRID LAYOUT (Pure HTML for Equal Heights)
+            # FULL WIDTH CARDS LAYOUT (Redesigned)
             # ═══════════════════════════════════════════════════════════════════
             
             # Prepare data
@@ -3178,119 +3333,146 @@ Mantieni formato **Oggetto:** e corpo email. GENERA ORA senza tool."""
             prodotti = meta.get('prodotti_posseduti', [])
             if prodotti and isinstance(prodotti, str):
                 prodotti = [prodotti]
-            
-            # Row 1: Anagrafica (Left) + Polizze Attive (Right)
-            col1, col2 = st.columns(2, gap="medium")
-            
-            with col1:
-                st.markdown(f"""
-                <div class="standard-card">
-                     <h5 style="margin-bottom: 1rem;">👤 Anagrafica</h5>
-                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; flex: 1;">
+
+            # 1. ANAGRAFICA (Full Width Horizontal)
+            # 1. ANAGRAFICA (Full Width Horizontal)
+            # 1. ANAGRAFICA (Full Width Horizontal - Better Distribution)
+            # 1. ANAGRAFICA (Full Width Horizontal - Better Distribution)
+            # 1. ANAGRAFICA (Full Width Horizontal - Better Distribution)
+            st.markdown(f"""
+            <div class="standard-card">
+                 <div style="display: flex; align-items: center; gap: 2rem; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 1rem; min-width: 220px;">
+                        <div style="width: 56px; height: 56px; background: #F1F5F9; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.75rem;">👤</div>
                         <div>
-                            <p style="margin:0; font-size:0.9rem;"><strong>🎂 Età:</strong> {ana.get('eta', 'N/D')} anni</p>
-                            <p style="margin:0.5rem 0 0 0; font-size:0.9rem;"><strong>🏙️ Città:</strong> {ana.get('citta', 'N/D')}</p>
+                            <h5 style="margin: 0; color: #1B3A5F; font-size: 1.1rem;">Anagrafica</h5>
+                            <p style="margin: 0; font-size: 0.85rem; color: #64748B;">Dati personali principali</p>
                         </div>
-                        <div>
-                            <p style="margin:0; font-size:0.9rem;"><strong>🏠 Indirizzo:</strong> {ana.get('indirizzo', 'N/D')}</p>
-                            <p style="margin:0.5rem 0 0 0; font-size:0.9rem;"><strong>📍 Provincia:</strong> {ana.get('provincia', 'N/D')}</p>
+                    </div>
+                    <div style="height: 48px; width: 1px; background: #E2E8F0;"></div>
+                    <div style="flex: 1; display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                        <div style="flex: 1; min-width: 100px;">
+                            <p style="margin:0; font-size:0.75rem; color:#94A3B8; text-transform:uppercase; letter-spacing:0.05em; margin-bottom: 0.2rem;">Età</p>
+                            <p style="margin:0; font-size:1.1rem; font-weight:600; color:#334155;">{ana.get('eta') or 'N.A.'} anni</p>
                         </div>
-                     </div>
+                        <div style="flex: 1; min-width: 100px;">
+                            <p style="margin:0; font-size:0.75rem; color:#94A3B8; text-transform:uppercase; letter-spacing:0.05em; margin-bottom: 0.2rem;">Città</p>
+                            <p style="margin:0; font-size:1.1rem; font-weight:600; color:#334155;">{ana.get('citta') or 'N.A.'}</p>
+                        </div>
+                        <div style="flex: 1; min-width: 150px;">
+                            <p style="margin:0; font-size:0.75rem; color:#94A3B8; text-transform:uppercase; letter-spacing:0.05em; margin-bottom: 0.2rem;">Indirizzo</p>
+                            <p style="margin:0; font-size:1.1rem; font-weight:600; color:#334155;">{ana.get('indirizzo') or 'N.A.'}</p>
+                        </div>
+                         <div style="flex: 1; min-width: 100px;">
+                            <p style="margin:0; font-size:0.75rem; color:#94A3B8; text-transform:uppercase; letter-spacing:0.05em; margin-bottom: 0.2rem;">Provincia</p>
+                            <p style="margin:0; font-size:1.1rem; font-weight:600; color:#334155;">{ana.get('provincia') or 'N.A.'}</p>
+                        </div>
+                    </div>
+                 </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # 2. POLIZZE ATTIVE (Renamed & Improved Space Usage)
+            # Build polizze html
+            polizze_cards_html = ""
+            if prodotti:
+                for p in prodotti:
+                    prod_lower = p.lower()
+                    if 'casa' in prod_lower: icon = '🏠'
+                    elif 'vita' in prod_lower: icon = '💚'
+                    elif 'salute' in prod_lower: icon = '🏥'
+                    elif 'pension' in prod_lower: icon = '🎯'
+                    else: icon = '📋'
+
+                    # Genera coefficienti attuariali (solo per Casa e Salute)
+                    coeff = genera_coefficienti_polizza(ana, p, codice_cliente_ada)
+
+                    if coeff:
+                        gap_color = "#14B8A6" if coeff['gap_relativo_perc'] >= 0 else "#9D174D"
+                        gap_sign = "+" if coeff['gap_relativo_perc'] >= 0 else ""
+                        scarto_label = "Premium Surplus" if coeff['gap_relativo_perc'] >= 0 else "Under Pricing"
+                        scarto_icon = "↑" if coeff['gap_relativo_perc'] >= 0 else "↓"
+
+                        # New Layout: Row based for better space usage on wide screens
+                        polizze_cards_html += f"""<div style='width: 100%; padding: 1.25rem; background: #F8FAFC; border-radius: 12px; border: 1px solid #E2E8F0; transition: all 0.2s; display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: center;'><div style='flex: 2; min-width: 250px;'><div style='display:flex; align-items:center; gap:0.75rem; margin-bottom: 0.5rem;'><span style='font-size: 1.5rem;'>{icon}</span><span style='font-weight: 700; color: #1B3A5F; font-size: 1.1rem;'>{p}</span></div><span style='background:#D1FAE5;color:#059669;padding:4px 10px;border-radius:12px;font-size:0.75rem; font-weight: 600; white-space: nowrap;'>Polizza Attiva</span></div><div style='flex: 3; display: flex; gap: 2rem; align-items: center; justify-content: flex-end; flex-wrap: wrap;'><div style='text-align: right;'><div style='color:#64748B; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em;'>Premio Pagato</div><div style='color:#1B3A5F; font-size:1.2rem; font-weight:700;'>€{coeff['premio_pagato']:,.0f}</div></div><div style='text-align: right;'><div style='color:#64748B; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em;'>Premio Tecnico</div><div style='color:#1B3A5F; font-size:1.2rem; font-weight:700;'>€{coeff['premio_tecnico']:,.0f}</div></div><div style='padding-left: 1rem; border-left: 1px solid #E2E8F0;'><div style='color:#64748B; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em; margin-bottom: 2px;'>Performance</div><div style='color:{gap_color}; font-size:0.9rem; font-weight:700;'>{scarto_icon} {scarto_label} <br><span style='font-size:0.8rem; opacity: 0.9;'>€{coeff['gap_assoluto']:+,.0f} ({gap_sign}{coeff['gap_relativo_perc']:.1f}%)</span></div></div></div></div>"""
+                    else:
+                         polizze_cards_html += f"""<div style='width: 100%; padding: 1.25rem; background: #F8FAFC; border-radius: 12px; border: 1px solid #E2E8F0; display:flex; align-items:center; gap: 1.5rem;'><span style='font-size: 2rem;'>{icon}</span><div><p style='margin:0; font-weight: 700; color: #1B3A5F; font-size: 1.1rem;'>{p}</p><span style='background:#D1FAE5;color:#059669;padding:4px 10px;border-radius:12px;font-size:0.75rem; font-weight: 600;'>Polizza Attiva</span></div></div>"""
+            else:
+                polizze_cards_html = "<div style='padding: 1.5rem; width: 100%; text-align: center; color: #94A3B8; background: #F8FAFC; border-radius: 12px; border: 1px dashed #E2E8F0;'>Nessuna polizza attiva per questo cliente.</div>"
+
+            st.markdown(f"""
+            <div class="standard-card">
+                <h5 style="margin-bottom: 1rem;">📦 Polizze Attive</h5>
+                <div style="display: flex; flex-direction: column; gap: 1rem;">
+                    {polizze_cards_html}
                 </div>
-                """, unsafe_allow_html=True)
-                
-            with col2:
-                # Build polizze html
-                polizze_html = ""
-                if prodotti:
-                    for p in prodotti:
-                        prod_lower = p.lower()
-                        if 'casa' in prod_lower: icon = '🏠'
-                        elif 'vita' in prod_lower: icon = '💚'
-                        elif 'salute' in prod_lower: icon = '🏥'
-                        elif 'pension' in prod_lower: icon = '🎯'
-                        else: icon = '📋'
-                        polizze_html += f"<div style='margin-bottom:0.5rem;'>{icon} <strong>{p}</strong> <span style='background:#D1FAE5;color:#059669;padding:2px 8px;border-radius:12px;font-size:0.75rem;margin-left:8px;'>Attiva</span></div>"
+            </div>
+            """, unsafe_allow_html=True)
+
+            # 3. STATO INTERAZIONI (Explicit Status)
+            chip_html = "<div style='display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; justify-content: space-between;'>"
+            chip_data = [
+                ("Email (5gg)", indicators.get('email_last_5_days', False), "✉️"),
+                ("Chiamata (10gg)", indicators.get('call_last_10_days', False), "📞"),
+                ("Polizza (30gg)", indicators.get('new_policy_last_30_days', False), "📋"),
+                ("Reclamo Aperto", indicators.get('open_complaint', False), "⚠️"),
+                ("Sinistro (60gg)", indicators.get('claim_last_60_days', False), "🚗")
+            ]
+            
+            for label, value, icon in chip_data:
+                # Active Status
+                if value:
+                    if "Reclamo" in label:
+                        status_bg = "#FEE2E2"
+                        status_border = "#F87171"
+                        status_color = "#B91C1C"
+                        status_text = "PRESENTE"
+                        status_icon_display = "⚠️"
+                    else:
+                        status_bg = "#DCFCE7"
+                        status_border = "#4ADE80"
+                        status_color = "#15803D"
+                        status_text = "RILEVATA"
+                        status_icon_display = "✅"
+                    opacity = "1"
                 else:
-                    polizze_html = "<em>Nessuna polizza attiva</em>"
-                    
-                st.markdown(f"""
-                <div class="standard-card">
-                    <h5 style="margin-bottom: 1rem;">📦 Polizze Attive</h5>
-                    <div style="flex: 1;">{polizze_html}</div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-            # Row 2: Stato Interazioni (Left) + Prodotto Consigliato (Right)
-            col3, col4 = st.columns(2, gap="medium")
+                    # Inactive Status
+                    status_bg = "#F8FAFC"
+                    status_border = "#E2E8F0"
+                    status_color = "#94A3B8"
+                    status_text = "NESSUNA"
+                    status_icon_display = "➖"
+                    opacity = "0.7"
+
+                # Flattened HTML string to prevent Markdown code block interpretation
+                chip_html += f"""<div style="flex: 1; min-width: 140px; display: flex; flex-direction: column; align-items: center; gap: 0.5rem; padding: 1rem 0.5rem; background: {status_bg}; border: 1px solid {status_border}; border-radius: 12px; transition: all 0.2s; text-align: center; opacity: {opacity};"><div style="font-size: 1.5rem; margin-bottom: -0.25rem;">{icon}</div><div style="font-size: 0.85rem; font-weight: 600; color: #334155; white-space: nowrap;">{label}</div><div style="margin-top: 0.25rem; font-size: 0.7rem; font-weight: 700; color: {status_color}; background: rgba(255,255,255,0.6); padding: 2px 8px; border-radius: 4px; display: flex; align-items: center; gap: 4px;">{status_icon_display} {status_text}</div></div>"""
+            chip_html += "</div>"
             
-            with col3:
-                # Chips HTML logic - Redesigned as List
-                chip_html = "<div style='display: flex; flex-direction: column; gap: 0.75rem;'>"
-                chip_data = [
-                    ("Email (5gg)", indicators.get('email_last_5_days', False), "✉️"),
-                    ("Chiamata (10gg)", indicators.get('call_last_10_days', False), "📞"),
-                    ("Polizza (30gg)", indicators.get('new_policy_last_30_days', False), "📋"),
-                    ("Reclamo Aperto", indicators.get('open_complaint', False), "⚠️"),
-                    ("Sinistro (60gg)", indicators.get('claim_last_60_days', False), "🚗")
-                ]
+            st.markdown(f"""
+            <div class="standard-card">
+                <h5 style="margin-bottom: 1rem;">📋 Stato Interazioni</h5>
+                {chip_html}
+            </div>
+            """, unsafe_allow_html=True)
+
+            # 4. PRODOTTO CONSIGLIATO (Uniform Style & Beautified Metrics)
+            rec_tag = ""
+            if recommendation:
+                comp = recommendation['componenti']
                 
-                for label, value, icon in chip_data:
-                    bg_color = "#FEF2F2" if value and "Reclamo" in label else "#ECFDF5" if not value else "#FFF7ED" # Red if complaint, Green if clean, Orange if active interaction
-                    text_color = "#B91C1C" if value and "Reclamo" in label else "#047857" if not value else "#C2410C"
-                    border_color = "#FECACA" if value and "Reclamo" in label else "#A7F3D0" if not value else "#FFEDD5"
-                    
-                    # Logic: "No" is usually good for Reclamo/Sinistro. "Sì" is good for Email/Chiamata/Polizza? 
-                    # Actually, red/green logic depends on context. For now, let's just show status clearly.
-                    status_text = "Sì" if value else "No"
-                    status_bg = "#EF4444" if value and "Reclamo" in label else "#10B981" if value else "#94A3B8"
-                    
-                    # Cleaner Row Design
-                    chip_html += f"""<div style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0.75rem; background: #F8FAFC; border-radius: 8px; border: 1px solid #E2E8F0;">
-    <div style="display: flex; align-items: center; gap: 0.5rem;">
-        <span>{icon}</span>
-        <span style="font-size: 0.85rem; font-weight: 500; color: #334155;">{label}</span>
-    </div>
-    <span style="font-size: 0.75rem; font-weight: 600; color: {status_bg};">{status_text}</span>
-</div>"""
-                chip_html += "</div>"
-                
-                st.markdown(f"""
-                <div class="standard-card">
-                    <h5 style="margin-bottom: 1rem;">📋 Stato Interazioni</h5>
-                    <div style="flex: 1;">{chip_html}</div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-            with col4:
-                # Rec HTML
-                rec_html = "<em>Nessuna raccomandazione</em>"
-                if recommendation:
-                    comp = recommendation['componenti']
-                    rec_html = f"""<div>
-    <span style='background:linear-gradient(135deg,#00A0B0,#00C9D4);color:white;padding:4px 12px;border-radius:6px;font-size:0.7rem;font-weight:700;'>RACCOMANDAZIONE AI</span>
-    <p style='margin:0.5rem 0; font-weight:700;'>{recommendation['prodotto']}</p>
-    <p style='margin:0 0 1rem 0; font-size:0.85rem; color:#64748B;'>📌 {recommendation['area_bisogno']}</p>
-    <div style='display:grid; grid-template-columns: 1fr 1fr; gap:0.5rem;'>
-        <div><small>🔄 RETENTION</small><div style='height:6px;width:100%;background:#F3F4F6;border-radius:10px;'><div style='height:100%;width:{min(comp['retention_gain'], 100)}%;background:#00A0B0;border-radius:10px;'></div></div><small><strong>{comp['retention_gain']:.1f}%</strong></small></div>
-        <div><small>💰 REDDITIVITÀ</small><div style='height:6px;width:100%;background:#F3F4F6;border-radius:10px;'><div style='height:100%;width:{min(comp['redditivita'], 100)}%;background:#00A0B0;border-radius:10px;'></div></div><small><strong>{comp['redditivita']:.1f}%</strong></small></div>
-        <div><small>🎯 PROPENSIONE</small><div style='height:6px;width:100%;background:#F3F4F6;border-radius:10px;'><div style='height:100%;width:{min(comp['propensione'], 100)}%;background:#00A0B0;border-radius:10px;'></div></div><small><strong>{comp['propensione']:.1f}%</strong></small></div>
-        <div><small>👥 AFFINITÀ</small><div style='height:6px;width:100%;background:#F3F4F6;border-radius:10px;'><div style='height:100%;width:{min(comp['affinita_cluster'], 100)}%;background:#00A0B0;border-radius:10px;'></div></div><small><strong>{comp['affinita_cluster']:.1f}%</strong></small></div>
-    </div>
-</div>"""
-                st.markdown(f"""
-                <div class="standard-card">
-                    <h5 style="margin-bottom: 1rem;">🎯 Prodotto Consigliato</h5>
-                    <div style="flex: 1;">{rec_html}</div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-            # Spacing before expander
-            st.markdown("<br>", unsafe_allow_html=True)
+                # Double-card layout: Left side (Details), Right side (Metrics) - Both styled as cards
+                rec_content = f"""<div style="display: flex; gap: 1.5rem; flex-wrap: wrap;"><div style="flex: 1; min-width: 300px;"><div style='height: 100%; width: 100%; padding: 1.5rem; background: #F8FAFC; border-radius: 12px; border: 1px solid #E2E8F0; display: flex; flex-direction: column; gap: 1rem;'><div style="display: flex; align-items: center; gap: 0.75rem;"><span style="font-size: 2rem;">💡</span><div><div style="font-size: 0.7rem; font-weight: 700; color: #00A0B0; text-transform: uppercase; letter-spacing: 0.05em;">AI Recommendation</div><h4 style="margin: 0; color: #1B3A5F; font-size: 1.25rem; line-height: 1.3;">{recommendation['prodotto']}</h4></div></div><div style="display: inline-block;"><span style="background: #E0F2FE; color: #0284C7; padding: 4px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 700;">📌 {recommendation['area_bisogno']}</span></div><div style="padding-top: 1rem; border-top: 1px solid #E2E8F0; margin-top: auto;"><p style="margin: 0 0 0.5rem 0; font-size: 0.7rem; font-weight: 700; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.05em;">Motivazione Strategica</p><p style="margin: 0; color: #334155; font-size: 0.95rem; line-height: 1.5;">"Questo prodotto risponde perfettamente alle esigenze di copertura a lungo termine del cliente, migliorando significativamente la retention."</p></div></div></div><div style="flex: 1; min-width: 300px;"><div style='height: 100%; width: 100%; padding: 1.5rem; background: #FFF; border-radius: 12px; border: 1px solid #E2E8F0; display: flex; flex-direction: column; justify-content: center; box-shadow: 0 1px 2px rgba(0,0,0,0.05);'><div style="display: grid; grid-template-columns: 1fr; gap: 1.25rem;"><div style="display: flex; align-items: center; gap: 1rem;"><div style="flex: 1;"><div style="display:flex; justify-content:space-between; margin-bottom:0.25rem;"><small style="color:#64748B; font-weight:600; font-size: 0.75rem;">RETENTION</small><small style="color:#1B3A5F; font-weight:700;">{comp['retention_gain']:.1f}%</small></div><div style='height:6px;width:100%;background:#F1F5F9;border-radius:10px;overflow:hidden;'><div style='height:100%;width:{min(comp['retention_gain'], 100)}%;background:linear-gradient(90deg, #00A0B0, #00C9D4);border-radius:10px;'></div></div></div></div><div style="display: flex; align-items: center; gap: 1rem;"><div style="flex: 1;"><div style="display:flex; justify-content:space-between; margin-bottom:0.25rem;"><small style="color:#64748B; font-weight:600; font-size: 0.75rem;">REDDITIVITÀ</small><small style="color:#1B3A5F; font-weight:700;">{comp['redditivita']:.1f}%</small></div><div style='height:6px;width:100%;background:#F1F5F9;border-radius:10px;overflow:hidden;'><div style='height:100%;width:{min(comp['redditivita'], 100)}%;background:linear-gradient(90deg, #00A0B0, #00C9D4);border-radius:10px;'></div></div></div></div><div style="display: flex; align-items: center; gap: 1rem;"><div style="flex: 1;"><div style="display:flex; justify-content:space-between; margin-bottom:0.25rem;"><small style="color:#64748B; font-weight:600; font-size: 0.75rem;">PROPENSIONE</small><small style="color:#1B3A5F; font-weight:700;">{comp['propensione']:.1f}%</small></div><div style='height:6px;width:100%;background:#F1F5F9;border-radius:10px;overflow:hidden;'><div style='height:100%;width:{min(comp['propensione'], 100)}%;background:linear-gradient(90deg, #00A0B0, #00C9D4);border-radius:10px;'></div></div></div></div><div style="display: flex; align-items: center; gap: 1rem;"><div style="flex: 1;"><div style="display:flex; justify-content:space-between; margin-bottom:0.25rem;"><small style="color:#64748B; font-weight:600; font-size: 0.75rem;">AFFINITÀ</small><small style="color:#1B3A5F; font-weight:700;">{comp['affinita_cluster']:.1f}%</small></div><div style='height:6px;width:100%;background:#F1F5F9;border-radius:10px;overflow:hidden;'><div style='height:100%;width:{min(comp['affinita_cluster'], 100)}%;background:linear-gradient(90deg, #00A0B0, #00C9D4);border-radius:10px;'></div></div></div></div></div></div></div></div>"""
+            else:
+                rec_content = "<em>Nessuna raccomandazione disponibile.</em>"
+
+            st.markdown(f"""
+            <div class="standard-card">
+                <h5 style="margin-bottom: 1.5rem;">🎯 Prodotto Consigliato</h5>
+                {rec_content}
+            </div>
+            """, unsafe_allow_html=True)
             
-            # Expander for details
-            with st.expander("📊 Dettagli Avanzati", expanded=False):
-                 st.markdown(f"**Churn:** {meta.get('churn_attuale', 0):.4f} | **Cluster NBA:** {meta.get('cluster_nba', 'N/D')}")
+
 
             # ═══════════════════════════════════════════════════════════════════
             # ABITAZIONE CLIENT (HTML Standard + Fix Overflow)
@@ -3336,14 +3518,46 @@ Mantieni formato **Oggetto:** e corpo email. GENERA ORA senza tool."""
                      """, unsafe_allow_html=True)
                  
             with ac2:
-                # Features card - HEIGHT 100% enforced
+                # Features card - HEIGHT 100% enforced with GRID Layout
                 st.markdown(f"""
-                <div class="standard-card" style="height: 100%; display: flex; flex-direction: column;">
-                    <h5 style="margin-bottom: 1rem;">Caratteristiche Rilevate (CV)</h5>
-                    <div style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; flex: 1;">
-                         <div style="flex: 1; min-width: 120px; padding: 1rem; border-radius: 12px; background: {'#D1FAE5' if has_solar_panels else '#F3F4F6'}; color: {'#059669' if has_solar_panels else '#6B7280'}; text-align: center;">{'✅' if has_solar_panels else '❌'} Pannelli Solari</div>
-                         <div style="flex: 1; min-width: 120px; padding: 1rem; border-radius: 12px; background: {'#D1FAE5' if has_pool else '#F3F4F6'}; color: {'#059669' if has_pool else '#6B7280'}; text-align: center;">{'✅' if has_pool else '❌'} Piscina</div>
-                         <div style="flex: 1; min-width: 120px; padding: 1rem; border-radius: 12px; background: {'#D1FAE5' if has_garden else '#F3F4F6'}; color: {'#059669' if has_garden else '#6B7280'}; text-align: center;">{'✅' if has_garden else '❌'} Giardino</div>
+                <div class="standard-card" style="height: 100%; display: flex; flex-direction: column; justify-content: center;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;">
+                         <h5 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+                            <span>👁️</span> Analisi Proprietà (Computer Vision)
+                         </h5>
+                         <span style="background: #E0F2FE; color: #0284C7; font-size: 0.65rem; padding: 4px 8px; border-radius: 12px; font-weight: 700;">VLM: SAT-2A</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; width: 100%;">
+                         <div style="padding: 1rem; border-radius: 12px; background: {'#F0FDF4' if has_solar_panels else '#F8FAFC'}; border: 1px solid {'#DCFCE7' if has_solar_panels else '#E2E8F0'}; text-align: center;">
+                            <div style="font-size: 1.5rem; margin-bottom: 0.25rem;">⚡</div>
+                            <div style="font-size: 0.75rem; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em;">Pannelli Solari</div>
+                            <div style="font-weight: 700; color: {'#166534' if has_solar_panels else '#94A3B8'}; font-size: 0.95rem;">{'Presenti' if has_solar_panels else 'Non Rilevati'}</div>
+                         </div>
+                         <div style="padding: 1rem; border-radius: 12px; background: {'#F0FDF4' if has_pool else '#F8FAFC'}; border: 1px solid {'#DCFCE7' if has_pool else '#E2E8F0'}; text-align: center;">
+                            <div style="font-size: 1.5rem; margin-bottom: 0.25rem;">🏊</div>
+                            <div style="font-size: 0.75rem; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em;">Piscina</div>
+                            <div style="font-weight: 700; color: {'#166534' if has_pool else '#94A3B8'}; font-size: 0.95rem;">{'Presente' if has_pool else 'Non Rilevata'}</div>
+                         </div>
+                         <div style="padding: 1rem; border-radius: 12px; background: {'#F0FDF4' if has_garden else '#F8FAFC'}; border: 1px solid {'#DCFCE7' if has_garden else '#E2E8F0'}; text-align: center;">
+                            <div style="font-size: 1.5rem; margin-bottom: 0.25rem;">🌳</div>
+                            <div style="font-size: 0.75rem; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em;">Giardino</div>
+                            <div style="font-weight: 700; color: {'#166534' if has_garden else '#94A3B8'}; font-size: 0.95rem;">{'Presente' if has_garden else 'Non Rilevato'}</div>
+                         </div>
+                         <div style="padding: 1rem; border-radius: 12px; background: #F8FAFC; border: 1px solid #E2E8F0; text-align: center;">
+                            <div style="font-size: 1.5rem; margin-bottom: 0.25rem;">🏠</div>
+                            <div style="font-size: 0.75rem; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em;">Tipo Tetto</div>
+                            <div style="font-weight: 700; color: #1B3A5F; font-size: 0.95rem;">A Falde</div>
+                         </div>
+                         <div style="padding: 1rem; border-radius: 12px; background: #F8FAFC; border: 1px solid #E2E8F0; text-align: center;">
+                            <div style="font-size: 1.5rem; margin-bottom: 0.25rem;">🏘️</div>
+                            <div style="font-size: 0.75rem; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em;">Contesto</div>
+                            <div style="font-weight: 700; color: #1B3A5F; font-size: 0.95rem;">Residenziale</div>
+                         </div>
+                         <div style="padding: 1rem; border-radius: 12px; background: #F8FAFC; border: 1px solid #E2E8F0; text-align: center;">
+                            <div style="font-size: 1.5rem; margin-bottom: 0.25rem;">🚗</div>
+                            <div style="font-size: 0.75rem; color: #64748B; text-transform: uppercase; letter-spacing: 0.05em;">Posto Auto</div>
+                            <div style="font-weight: 700; color: #1B3A5F; font-size: 0.95rem;">Privato Visibile</div>
+                         </div>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -3419,12 +3633,12 @@ Mantieni formato **Oggetto:** e corpo email. GENERA ORA senza tool."""
                     <div class="metric-divider"></div>
                     <div class="metric-item">
                         <div class="metric-label">Redditività</div>
-                        <div class="metric-value" style="font-weight: 700; color: #64748B;">{w_red:.0%}</div>
+                        <div class="metric-value" style="font-weight: 700; color: #1B3A5F;">{w_red:.0%}</div>
                     </div>
                     <div class="metric-divider"></div>
                     <div class="metric-item">
                         <div class="metric-label">Propensione</div>
-                        <div class="metric-value" style="font-weight: 700; color: #64748B;">{w_pro:.0%}</div>
+                        <div class="metric-value" style="font-weight: 700; color: #1B3A5F;">{w_pro:.0%}</div>
                     </div>
                 </div>
             </div>
