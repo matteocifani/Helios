@@ -60,13 +60,11 @@ def genera_coefficienti_polizza(cliente_meta: dict, tipo_polizza: str, codice_cl
     """
     tipo_lower = tipo_polizza.lower()
 
-    # Supporto esteso per demo
+    # Solo Casa e Salute sono supportate
     is_casa = 'casa' in tipo_lower or 'abitazione' in tipo_lower
     is_salute = 'salute' in tipo_lower or 'infortuni' in tipo_lower
-    is_vita = 'vita' in tipo_lower or 'investimento' in tipo_lower or 'risparmio' in tipo_lower
-    is_pension = 'pension' in tipo_lower or 'previdenza' in tipo_lower
 
-    if not (is_casa or is_salute or is_vita or is_pension):
+    if not (is_casa or is_salute):
         return None
 
     # Seed deterministico per consistenza
@@ -137,28 +135,6 @@ def genera_coefficienti_polizza(cliente_meta: dict, tipo_polizza: str, codice_cl
             commercial_premium = risk_premium * (1 + loading) * rng.uniform(0.85, 0.95)
         else:
             commercial_premium = risk_premium * (1 + loading)
-            
-    elif is_vita:
-        # Polizza Vita - Loss Ratio Target: 75%
-        loss_ratio_target = 0.75
-        base_premium = 1200 # Premio medio annuo
-        risk_premium = base_premium * rng.uniform(0.9, 1.1)
-        
-        pricing_strategy = rng.choice(['surplus', 'fair']) # Meno sconti sul vita
-        if pricing_strategy == 'surplus':
-            commercial_premium = risk_premium * (1 + loading) * rng.uniform(1.05, 1.15)
-        else:
-            commercial_premium = risk_premium * (1 + loading)
-
-    else: # Pension
-        # Polizza Pensione - Loss Ratio Target: 85%
-        loss_ratio_target = 0.85
-        base_premium = 2400 # Versamento annuo
-        risk_premium = base_premium * rng.uniform(0.95, 1.05)
-        
-        # Spesso fee fisse, quindi surplus
-        pricing_strategy = 'surplus'
-        commercial_premium = risk_premium * (1 + loading) * rng.uniform(1.02, 1.10)
             
     # Calcolo gaps
     gap_assoluto = commercial_premium - (risk_premium * (1 + loading))
@@ -3091,7 +3067,7 @@ Le email devono essere personalizzate per ogni cliente, non identiche."""
             # Show call form if open
             if st.session_state.get('show_call_form', False):
                 st.markdown("---")
-                st.markdown("##### 📞 Dettagli della chiamata")
+                st.markdown("##### 📞 Hai proposto la polizza suggerita?")
 
                 top_recommendation = None
                 if client_data.get('raccomandazioni'):
@@ -3178,7 +3154,7 @@ Le email devono essere personalizzate per ogni cliente, non identiche."""
                         <p class="client-stat-value teal">€{clv:,.0f}</p>
                     </div>
                     <div class="client-stat-item">
-                        <p class="client-stat-label">Polizze Attive</p>
+                        <p class="client-stat-label">Polizze Possedute</p>
                         <p class="client-stat-value">{num_polizze}</p>
                     </div>
                     <div class="client-stat-item">
@@ -3186,7 +3162,7 @@ Le email devono essere personalizzate per ogni cliente, non identiche."""
                         <p class="client-stat-value {churn_class}">{churn:.1%}</p>
                     </div>
                     <div class="client-stat-item">
-                        <p class="client-stat-label">Cluster</p>
+                        <p class="client-stat-label">Cluster Risposta</p>
                         <p class="client-stat-value">{cluster.replace('_', ' ').split()[0] if cluster != 'N/D' else 'N/D'}</p>
                     </div>
                 </div>
@@ -3394,9 +3370,9 @@ Mantieni formato **Oggetto:** e corpo email. GENERA ORA senza tool."""
                         scarto_icon = "↑" if coeff['gap_relativo_perc'] >= 0 else "↓"
 
                         # New Layout: Row based for better space usage on wide screens
-                        polizze_cards_html += f"""<div style='width: 100%; padding: 1.25rem; background: #F8FAFC; border-radius: 12px; border: 1px solid #E2E8F0; transition: all 0.2s; display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: center;'><div style='flex: 2; min-width: 250px;'><div style='display:flex; align-items:center; gap:0.75rem; margin-bottom: 0.5rem;'><span style='font-size: 1.5rem;'>{icon}</span><span style='font-weight: 700; color: #1B3A5F; font-size: 1.1rem;'>{p}</span></div><span style='background:#D1FAE5;color:#059669;padding:4px 10px;border-radius:12px;font-size:0.75rem; font-weight: 600; white-space: nowrap;'>Polizza Attiva</span></div><div style='flex: 3; display: flex; gap: 2rem; align-items: center; justify-content: flex-end; flex-wrap: wrap;'><div style='text-align: right;'><div style='color:#64748B; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em;'>Premio Pagato</div><div style='color:#1B3A5F; font-size:1.2rem; font-weight:700;'>€{coeff['premio_pagato']:,.0f}</div></div><div style='text-align: right;'><div style='color:#64748B; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em;'>Premio Tecnico</div><div style='color:#1B3A5F; font-size:1.2rem; font-weight:700;'>€{coeff['premio_tecnico']:,.0f}</div></div><div style='padding-left: 1rem; border-left: 1px solid #E2E8F0;'><div style='color:#64748B; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em; margin-bottom: 2px;'>Performance</div><div style='color:{gap_color}; font-size:0.9rem; font-weight:700;'>{scarto_icon} {scarto_label} <br><span style='font-size:0.8rem; opacity: 0.9;'>€{coeff['gap_assoluto']:+,.0f} ({gap_sign}{coeff['gap_relativo_perc']:.1f}%)</span></div></div></div></div>"""
+                        polizze_cards_html += f"""<div style='width: 100%; padding: 1.25rem; background: #F8FAFC; border-radius: 12px; border: 1px solid #E2E8F0; transition: all 0.2s; display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: center;'><div style='flex: 2; min-width: 250px;'><div style='display:flex; align-items:center; gap:0.75rem; margin-bottom: 0.5rem;'><span style='font-size: 1.5rem; width: 2rem; text-align: center;'>{icon}</span><span style='font-weight: 700; color: #1B3A5F; font-size: 1.1rem;'>{p}</span></div><span style='background:#D1FAE5;color:#059669;padding:4px 10px;border-radius:12px;font-size:0.75rem; font-weight: 600; white-space: nowrap;'>Polizza Attiva</span></div><div style='flex: 3; display: flex; gap: 2rem; align-items: center; justify-content: flex-end; flex-wrap: nowrap;'><div style='text-align: right; min-width: 100px;'><div style='color:#64748B; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em;'>Premio Pagato</div><div style='color:#1B3A5F; font-size:1.2rem; font-weight:700;'>€{coeff['premio_pagato']:,.0f}</div></div><div style='text-align: right; min-width: 100px;'><div style='color:#64748B; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em;'>Premio Tecnico</div><div style='color:#1B3A5F; font-size:1.2rem; font-weight:700;'>€{coeff['premio_tecnico']:,.0f}</div></div><div style='padding-left: 1rem; border-left: 1px solid #E2E8F0; min-width: 140px;'><div style='color:#64748B; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em; margin-bottom: 2px;'>Performance</div><div style='color:{gap_color}; font-size:0.9rem; font-weight:700;'>{scarto_icon} {scarto_label} <br><span style='font-size:0.8rem; opacity: 0.9;'>€{coeff['gap_assoluto']:+,.0f} ({gap_sign}{coeff['gap_relativo_perc']:.1f}%)</span></div></div></div></div>"""
                     else:
-                         polizze_cards_html += f"""<div style='width: 100%; padding: 1.25rem; background: #F8FAFC; border-radius: 12px; border: 1px solid #E2E8F0; display:flex; align-items:center; gap: 1.5rem;'><span style='font-size: 2rem;'>{icon}</span><div><p style='margin:0; font-weight: 700; color: #1B3A5F; font-size: 1.1rem;'>{p}</p><span style='background:#D1FAE5;color:#059669;padding:4px 10px;border-radius:12px;font-size:0.75rem; font-weight: 600;'>Polizza Attiva</span></div></div>"""
+                         polizze_cards_html += f"""<div style='width: 100%; padding: 1.25rem; background: #F8FAFC; border-radius: 12px; border: 1px solid #E2E8F0; display:flex; align-items:center; gap: 1.5rem;'><span style='font-size: 1.5rem; width: 2rem; text-align: center;'>{icon}</span><div><p style='margin:0; font-weight: 700; color: #1B3A5F; font-size: 1.1rem;'>{p}</p><span style='background:#D1FAE5;color:#059669;padding:4px 10px;border-radius:12px;font-size:0.75rem; font-weight: 600;'>Polizza Attiva</span></div></div>"""
             else:
                 polizze_cards_html = "<div style='padding: 1.5rem; width: 100%; text-align: center; color: #94A3B8; background: #F8FAFC; border-radius: 12px; border: 1px dashed #E2E8F0;'>Nessuna polizza attiva per questo cliente.</div>"
 
