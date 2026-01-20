@@ -3043,6 +3043,24 @@ Le email devono essere personalizzate per ogni cliente, non identiche."""
             recommendation = st.session_state.nbo_selected_recommendation
             meta = client_data.get('metadata', {})
             ana = client_data.get('anagrafica', {})
+
+            # Coalesce per campi spesso vuoti
+            # Indirizzo: usa 'indirizzo', fallback a 'via + civico', fallback a 'luogo_residenza'
+            indirizzo_display = ana.get('indirizzo') or ''
+            if not indirizzo_display.strip():
+                via = ana.get('via', '')
+                civico = ana.get('civico', '')
+                if via:
+                    indirizzo_display = f"{via}, {civico}".strip(', ') if civico else via
+            if not indirizzo_display.strip():
+                indirizzo_display = ana.get('luogo_residenza', '')
+            ana['indirizzo'] = indirizzo_display or None
+
+            # Provincia: usa 'provincia', fallback a 'citta' (dato che spesso coincidono per piccoli comuni)
+            provincia_display = ana.get('provincia') or ''
+            if not provincia_display.strip():
+                provincia_display = ana.get('citta', '')
+            ana['provincia'] = provincia_display or None
             
             # Fetch Satellite Data
             # Fetch Satellite Data
@@ -3370,7 +3388,7 @@ Mantieni formato **Oggetto:** e corpo email. GENERA ORA senza tool."""
                         scarto_icon = "↑" if coeff['gap_relativo_perc'] >= 0 else "↓"
 
                         # New Layout: Row based for better space usage on wide screens
-                        polizze_cards_html += f"""<div style='width: 100%; padding: 1.25rem; background: #F8FAFC; border-radius: 12px; border: 1px solid #E2E8F0; transition: all 0.2s; display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: center;'><div style='flex: 2; min-width: 250px;'><div style='display:flex; align-items:center; gap:0.75rem; margin-bottom: 0.5rem;'><span style='font-size: 1.5rem; width: 2rem; text-align: center;'>{icon}</span><span style='font-weight: 700; color: #1B3A5F; font-size: 1.1rem;'>{p}</span></div><span style='background:#D1FAE5;color:#059669;padding:4px 10px;border-radius:12px;font-size:0.75rem; font-weight: 600; white-space: nowrap;'>Polizza Attiva</span></div><div style='flex: 3; display: flex; gap: 2rem; align-items: center; justify-content: flex-end; flex-wrap: nowrap;'><div style='text-align: right; min-width: 100px;'><div style='color:#64748B; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em;'>Premio Pagato</div><div style='color:#1B3A5F; font-size:1.2rem; font-weight:700;'>€{coeff['premio_pagato']:,.0f}</div></div><div style='text-align: right; min-width: 100px;'><div style='color:#64748B; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em;'>Premio Tecnico</div><div style='color:#1B3A5F; font-size:1.2rem; font-weight:700;'>€{coeff['premio_tecnico']:,.0f}</div></div><div style='padding-left: 1rem; border-left: 1px solid #E2E8F0; min-width: 140px;'><div style='color:#64748B; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em; margin-bottom: 2px;'>Performance</div><div style='color:{gap_color}; font-size:0.9rem; font-weight:700;'>{scarto_icon} {scarto_label} <br><span style='font-size:0.8rem; opacity: 0.9;'>€{coeff['gap_assoluto']:+,.0f} ({gap_sign}{coeff['gap_relativo_perc']:.1f}%)</span></div></div></div></div>"""
+                        polizze_cards_html += f"""<div style='width: 100%; padding: 1.25rem; background: #F8FAFC; border-radius: 12px; border: 1px solid #E2E8F0; transition: all 0.2s; display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: center;'><div style='flex: 2; min-width: 250px;'><div style='display:flex; align-items:center; gap:0.75rem; margin-bottom: 0.5rem;'><span style='font-size: 1.5rem; width: 2rem; text-align: center;'>{icon}</span><span style='font-weight: 700; color: #1B3A5F; font-size: 1.1rem;'>{p}</span></div><span style='background:#D1FAE5;color:#059669;padding:4px 10px;border-radius:12px;font-size:0.75rem; font-weight: 600; white-space: nowrap;'>Polizza Attiva</span></div><div style='flex: 3; display: flex; gap: 2rem; align-items: center; justify-content: flex-end; flex-wrap: nowrap;'><div style='text-align: right; min-width: 100px;'><div style='color:#64748B; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em;'>Premio Pagato</div><div style='color:#1B3A5F; font-size:1.2rem; font-weight:700;'>€{coeff['premio_pagato']:,.0f}</div></div><div style='text-align: right; min-width: 100px;'><div style='color:#64748B; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em;'>Premio Tecnico</div><div style='color:#1B3A5F; font-size:1.2rem; font-weight:700;'>€{coeff['premio_tecnico']:,.0f}</div></div><div style='padding-left: 1rem; border-left: 1px solid #E2E8F0; min-width: 140px;'><div style='color:#64748B; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em;'>Performance</div><div style='color:#94A3B8; font-size:0.65rem; margin-bottom: 4px;'>Loss Ratio Target: {coeff['loss_ratio_label']}</div><div style='color:{gap_color}; font-size:0.9rem; font-weight:700;'>{scarto_icon} {scarto_label} <br><span style='font-size:0.8rem; opacity: 0.9;'>€{coeff['gap_assoluto']:+,.0f} ({gap_sign}{coeff['gap_relativo_perc']:.1f}%)</span></div></div></div></div>"""
                     else:
                          polizze_cards_html += f"""<div style='width: 100%; padding: 1.25rem; background: #F8FAFC; border-radius: 12px; border: 1px solid #E2E8F0; display:flex; align-items:center; gap: 1.5rem;'><span style='font-size: 1.5rem; width: 2rem; text-align: center;'>{icon}</span><div><p style='margin:0; font-weight: 700; color: #1B3A5F; font-size: 1.1rem;'>{p}</p><span style='background:#D1FAE5;color:#059669;padding:4px 10px;border-radius:12px;font-size:0.75rem; font-weight: 600;'>Polizza Attiva</span></div></div>"""
             else:
