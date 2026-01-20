@@ -3056,11 +3056,17 @@ Le email devono essere personalizzate per ogni cliente, non identiche."""
                 indirizzo_display = ana.get('luogo_residenza', '')
             ana['indirizzo'] = indirizzo_display or None
 
-            # Provincia: usa 'provincia', fallback a 'citta' (dato che spesso coincidono per piccoli comuni)
-            provincia_display = ana.get('provincia') or ''
-            if not provincia_display.strip():
-                provincia_display = ana.get('citta', '')
-            ana['provincia'] = provincia_display or None
+            # Provincia: crea sigla (es. "MI") se presente, altrimenti None
+            provincia_raw = ana.get('provincia') or ''
+            provincia_sigla = None
+            if provincia_raw.strip():
+                # Se è già una sigla (2 caratteri), usala
+                if len(provincia_raw.strip()) == 2:
+                    provincia_sigla = provincia_raw.strip().upper()
+                else:
+                    # Prendi le prime 2 lettere come sigla
+                    provincia_sigla = provincia_raw.strip()[:2].upper()
+            ana['provincia_sigla'] = provincia_sigla
             
             # Fetch Satellite Data
             # Fetch Satellite Data
@@ -3351,15 +3357,11 @@ Mantieni formato **Oggetto:** e corpo email. GENERA ORA senza tool."""
                         </div>
                         <div style="flex: 1; min-width: 100px;">
                             <p style="margin:0; font-size:0.75rem; color:#94A3B8; text-transform:uppercase; letter-spacing:0.05em; margin-bottom: 0.2rem;">Città</p>
-                            <p style="margin:0; font-size:1.1rem; font-weight:600; color:#334155;">{ana.get('citta') or 'N.A.'}</p>
+                            <p style="margin:0; font-size:1.1rem; font-weight:600; color:#334155;">{ana.get('citta') or 'N.A.'}{f" ({ana.get('provincia_sigla')})" if ana.get('provincia_sigla') else ''}</p>
                         </div>
                         <div style="flex: 1; min-width: 150px;">
                             <p style="margin:0; font-size:0.75rem; color:#94A3B8; text-transform:uppercase; letter-spacing:0.05em; margin-bottom: 0.2rem;">Indirizzo</p>
                             <p style="margin:0; font-size:1.1rem; font-weight:600; color:#334155;">{ana.get('indirizzo') or 'N.A.'}</p>
-                        </div>
-                         <div style="flex: 1; min-width: 100px;">
-                            <p style="margin:0; font-size:0.75rem; color:#94A3B8; text-transform:uppercase; letter-spacing:0.05em; margin-bottom: 0.2rem;">Provincia</p>
-                            <p style="margin:0; font-size:1.1rem; font-weight:600; color:#334155;">{ana.get('provincia') or 'N.A.'}</p>
                         </div>
                     </div>
                  </div>
