@@ -927,6 +927,28 @@ st.markdown("""
         margin-bottom: 2rem;
     }
 
+    /* Force equal height columns for Top 5 cards */
+    .top5-cards-container [data-testid="stHorizontalBlock"] {
+        align-items: stretch !important;
+    }
+
+    .top5-cards-container [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
+    .top5-cards-container [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] > [data-testid="stVerticalBlockBorderWrapper"] {
+        flex: 1 !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
+    .top5-cards-container [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] > [data-testid="stVerticalBlockBorderWrapper"] > div {
+        flex: 1 !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
     .top5-card {
         background: linear-gradient(180deg, #FFFFFF 0%, #FAFAFA 100%);
         border: 1px solid #E2E8F0;
@@ -939,6 +961,7 @@ st.markdown("""
         position: relative;
         overflow: hidden;
         height: 100%;
+        min-height: 280px;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
     }
 
@@ -3681,10 +3704,11 @@ Mantieni formato **Oggetto:** e corpo email. GENERA ORA senza tool."""
             # TOP 5 CLIENTS GRID
             # ═══════════════════════════════════════════════════════════════════════════════
             st.markdown("### 🌟 Top 5 Clienti ad Alto Potenziale")
-            
+
             top5_recs = all_recs[:5]
-            
-            # Create 5 columns for the cards
+
+            # Create 5 columns for the cards - wrapped in container for CSS targeting
+            st.markdown('<div class="top5-cards-container">', unsafe_allow_html=True)
             cols = st.columns(5)
             
             for i, rec in enumerate(top5_recs):
@@ -3692,8 +3716,8 @@ Mantieni formato **Oggetto:** e corpo email. GENERA ORA senza tool."""
                     # Standardize color to dashboard Teal for consistency
                     score_color = "#00A0B0" 
                     
-                    # HTML Card Visuals - FLATTENED STRING without indentation to prevent code block rendering
-                    st.markdown(f"""<div class="top5-card" style="box-shadow: 0 4px 20px rgba(0,0,0,0.05); border: 1px solid #E2E8F0; border-radius: 16px; overflow: hidden; height: 100%; display: flex; flex-direction: column; justify-content: space-between;"><div style="background: linear-gradient(135deg, {score_color}15 0%, #FFFFFF 100%); padding: 1.25rem; border-bottom: 1px solid #F1F5F9; position: relative;"><div style="position: absolute; top: 0; right: 0; background: {score_color}; color: white; padding: 0.25rem 0.6rem; border-bottom-left-radius: 12px; font-weight: 700; font-size: 0.8rem;">#{i+1}</div><h4 style="margin: 0; color: #1B3A5F; font-size: 1.1rem; font-weight: 700; line-height: 1.2;">{rec['nome']}<br>{rec['cognome']}</h4><p style="margin: 0.25rem 0 0 0; color: #64748B; font-size: 0.75rem; font-family: 'JetBrains Mono', monospace;">{rec['codice_cliente']}</p></div><div style="padding: 1.25rem; flex: 1;"><div style="margin-bottom: 1rem;"><p style="margin: 0; font-size: 0.65rem; text-transform: uppercase; color: #94A3B8; letter-spacing: 0.05em; font-weight: 600;">Prodotto Consigliato</p><p style="margin: 0.25rem 0 0 0; font-size: 0.9rem; color: #334155; line-height: 1.4; font-weight: 500;">{rec['prodotto']}</p></div><div style="display: flex; align-items: flex-end; justify-content: space-between;"><div><p style="margin: 0; font-size: 0.65rem; text-transform: uppercase; color: #94A3B8; letter-spacing: 0.05em; font-weight: 600;">Score</p><p style="margin: 0; font-size: 1.5rem; font-weight: 700; color: {score_color}; line-height: 1;">{rec['score']:.1f}</p></div><div style="width: 40px; height: 40px; border-radius: 50%; background: {score_color}15; display: flex; align-items: center; justify-content: center;"><span style="font-size: 1.2rem;">⚡</span></div></div></div></div>""", unsafe_allow_html=True)
+                    # HTML Card Visuals - Fixed height ensures all cards align perfectly
+                    st.markdown(f"""<div class="top5-card" style="box-shadow: 0 4px 20px rgba(0,0,0,0.05); border: 1px solid #E2E8F0; border-radius: 16px; overflow: hidden; height: 380px; display: flex; flex-direction: column;"><div style="background: linear-gradient(135deg, {score_color}15 0%, #FFFFFF 100%); padding: 1.25rem; border-bottom: 1px solid #F1F5F9; position: relative;"><div style="position: absolute; top: 0; right: 0; background: {score_color}; color: white; padding: 0.25rem 0.6rem; border-bottom-left-radius: 12px; font-weight: 700; font-size: 0.8rem;">#{i+1}</div><h4 style="margin: 0; color: #1B3A5F; font-size: 1.1rem; font-weight: 700; line-height: 1.2;">{rec['nome']}<br>{rec['cognome']}</h4><p style="margin: 0.25rem 0 0 0; color: #64748B; font-size: 0.75rem; font-family: 'JetBrains Mono', monospace;">{rec['codice_cliente']}</p></div><div style="padding: 1.25rem; flex: 1; display: flex; flex-direction: column; justify-content: space-between;"><div><p style="margin: 0; font-size: 0.65rem; text-transform: uppercase; color: #94A3B8; letter-spacing: 0.05em; font-weight: 600;">Prodotto Consigliato</p><p style="margin: 0.25rem 0 0 0; font-size: 0.9rem; color: #334155; line-height: 1.4; font-weight: 500;">{rec['prodotto']}</p></div><div style="display: flex; align-items: flex-end; justify-content: space-between;"><div><p style="margin: 0; font-size: 0.65rem; text-transform: uppercase; color: #94A3B8; letter-spacing: 0.05em; font-weight: 600;">Score</p><p style="margin: 0; font-size: 1.5rem; font-weight: 700; color: {score_color}; line-height: 1;">{rec['score']:.1f}</p></div><div style="width: 40px; height: 40px; border-radius: 50%; background: {score_color}15; display: flex; align-items: center; justify-content: center;"><span style="font-size: 1.2rem;">⚡</span></div></div></div></div>""", unsafe_allow_html=True)
                     
                     # Attached Button Style
                     st.markdown("<div style='margin-top: -16px;'></div>", unsafe_allow_html=True)
@@ -3705,6 +3729,7 @@ Mantieni formato **Oggetto:** e corpo email. GENERA ORA senza tool."""
                         st.session_state.nbo_selected_recommendation = rec['recommendation']
                         st.rerun()
 
+            st.markdown('</div>', unsafe_allow_html=True)  # Close top5-cards-container
             st.markdown("<br><hr><br>", unsafe_allow_html=True)
 
             # ═══════════════════════════════════════════════════════════════════════════════

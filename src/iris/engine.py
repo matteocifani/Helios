@@ -12,6 +12,7 @@ Implementazione Python completa di Iris con:
 
 import os
 import json
+import re
 import requests
 from typing import Optional, Dict, List, Any
 from datetime import datetime
@@ -414,7 +415,45 @@ CONTESTO CLIENTE:
         """Extract text response from Claude."""
         choice = response.get("choices", [{}])[0]
         message = choice.get("message", {})
-        return message.get("content", "Nessuna risposta generata.")
+        text = message.get("content", "Nessuna risposta generata.")
+        return self._sanitize_response(text)
+
+    def _sanitize_response(self, text: str) -> str:
+        """Remove any tool references or malformed emoji from response."""
+        if not text:
+            return text
+
+        # Remove tool reference patterns FIRST (before emoji cleanup)
+        # These are the most aggressive patterns to catch all variations
+        patterns_to_remove = [
+            r'_arrow_right_?\s*Tools?\s*utilizzat[io].*',  # _arrow_rightTools utilizzati...
+            r'→\s*Tools?\s*utilizzat[io].*',  # → Tools utilizzati...
+            r':arrow_right:\s*Tools?\s*utilizzat[io].*',  # :arrow_right: Tools utilizzati...
+            r'Tools?\s*utilizzat[io][:\s].*',  # Tools utilizzati: ...
+            r'Ho usato i[l]?\s*tools?\s*[\w_,\s]+',  # Ho usato il tool X
+            r'Usando\s*i[l]?\s*tools?\s*[\w_]+',  # Usando il tool X
+            r'\(tools?:?\s*[\w_]+\)',  # (tool: X)
+            r'Strument[io]\s*utilizzat[io].*',  # Strumenti utilizzati
+        ]
+
+        for pattern in patterns_to_remove:
+            text = re.sub(pattern, '', text, flags=re.IGNORECASE | re.DOTALL)
+
+        # Remove Discord-style emoji that render as _name_ or :name:
+        text = re.sub(r':arrow_right:', '', text)
+        text = re.sub(r'_arrow_right_?', '', text)
+        text = re.sub(r':[\w_]+:', '', text)  # Remove any :emoji_name: patterns
+
+        # Remove standalone arrows followed by nothing useful
+        text = re.sub(r'→\s*$', '', text, flags=re.MULTILINE)
+
+        # Clean up multiple consecutive newlines
+        text = re.sub(r'\n{3,}', '\n\n', text)
+
+        # Clean up trailing whitespace on lines
+        text = re.sub(r'[ \t]+$', '', text, flags=re.MULTILINE)
+
+        return text.strip()
     
     def _extract_tools_used(self, response: Dict) -> List[str]:
         """Extract list of tools used from response."""

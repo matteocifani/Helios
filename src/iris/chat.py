@@ -207,13 +207,11 @@ def render_iris_chat() -> None:
             # Get response
             result = get_iris_response(auto_prompt)
             response = result.get("response", "Errore di elaborazione.")
-            tools_used = result.get("tools_used", [])
 
             # Add to history
             st.session_state.iris_messages.append({
                 "role": "assistant",
-                "content": response,
-                "tools_used": tools_used
+                "content": response
             })
 
             # Clear auto-prompt
@@ -232,12 +230,6 @@ def render_iris_chat() -> None:
             avatar = "☀️" if msg["role"] == "assistant" else "👤"
             with st.chat_message(msg["role"], avatar=avatar):
                 st.markdown(msg["content"])
-                
-                # Show tools used if present
-                if "tools_used" in msg and msg["tools_used"]:
-                    with st.expander("🔧 Tools utilizzati"):
-                        for tool in msg["tools_used"]:
-                            st.code(tool, language="text")
     
     # Input
     if prompt := st.chat_input("Scrivi qui..."):
@@ -261,24 +253,15 @@ def render_iris_chat() -> None:
             
             # Generate response
             result = get_iris_response(prompt)
-            
             response = result.get("response", "Errore di elaborazione.")
-            tools_used = result.get("tools_used", [])
-            
+
             # Overwrite placeholder with response
             message_placeholder.markdown(response)
-            
-            # Show tools if used
-            if tools_used:
-                with st.expander("🔧 Tools utilizzati"):
-                    for tool in tools_used:
-                        st.code(tool, language="text")
-            
+
             # Add to history
             st.session_state.iris_messages.append({
                 "role": "assistant",
-                "content": response,
-                "tools_used": tools_used
+                "content": response
             })
 
 
@@ -328,15 +311,16 @@ Come posso assisterti oggi?"""
 
 def get_welcome_message_compact() -> str:
     """Generate compact welcome message for sidebar chat."""
-    return """Ciao! Sono **Iris**, il tuo assistente intelligente. 🌞
-
-Posso aiutarti con:
-• Dati e polizze clienti
-• Valutazione rischi abitazioni
-• Preventivi assicurativi
-• Storico interazioni
-
-Indica un codice cliente per iniziare!"""
+    # Using explicit newlines in list for proper markdown rendering
+    return (
+        "Ciao! Sono **Iris**, il tuo assistente intelligente. 🌞\n\n"
+        "Posso aiutarti con:\n"
+        "- Dati e polizze clienti\n"
+        "- Valutazione rischi abitazioni\n"
+        "- Preventivi assicurativi\n"
+        "- Storico interazioni\n\n"
+        "Indica un codice cliente per iniziare!"
+    )
 
 
 def get_local_response(prompt: str) -> str:
